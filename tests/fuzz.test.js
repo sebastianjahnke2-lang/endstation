@@ -49,6 +49,18 @@ function pruefeZustand(z, wo) {
     }
   }
 
+  // Steht der Spieler auf Rot, gibt es für jedes Muster einen Schritt hinaus: ein Nachbarfeld
+  // ohne Hindernis, das nicht zum Muster gehört und auf dem nicht der Angreifer selbst steht.
+  for (const g of z.gegner) {
+    if (!g.ansage || !g.ansage.some((f) => f.x === s.x && f.y === s.y)) continue;
+    const ausweg = RICHTUNGSNAMEN.some((n) => {
+      const x = s.x + RICHTUNG[n].x;
+      const y = s.y + RICHTUNG[n].y;
+      return imFeld(x, y) && !istHindernis(z, x, y) && !(g.x === x && g.y === y) && !g.ansage.some((m) => m.x === x && m.y === y);
+    });
+    assert.ok(ausweg, `${wo}: Aus dem Muster von ${g.typ} führt bei ${s.x},${s.y} kein Schritt hinaus`);
+  }
+
   // Tür immer erreichbar, alle freien Felder verbunden
   const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y));
   for (let y = 0; y < HOEHE; y++) {

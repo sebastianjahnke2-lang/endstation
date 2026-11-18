@@ -5,27 +5,29 @@ description: Die drei Bots (Kämpfer, Ausweicher, Ausgewogener) über viele Fahr
 
 # Balance prüfen
 
-Stand Etappe 0: Bots und der Befehl `npm run balance` entstehen in Etappe 1. Bis dahin gibt es nichts auszuführen. Am Ende von Etappe 1 wird dieser Skill an den echten Befehl und seine Ausgabe angepasst.
+Die Bots stehen in `tests/bots.js`, der Bericht in `tests/balance.js`, die festen Grenzen in `tests/bots.test.js`.
 
 ## Ablauf
 
 1. `npm test` muss grün sein. Ein roter Fuzz-Test wird zuerst behoben, vorher sind Balance-Zahlen wertlos.
-2. `npm run balance` ausführen. Der Lauf nutzt feste Seeds (Fahrt 1 bis 500 je Bot), damit zwei Läufe vergleichbar sind.
-3. Die Zahlen mit den Zielen unten vergleichen.
-4. Weicht etwas ab: **eine** Zahl ändern, neu laufen lassen, vergleichen. Nie mehrere Stellschrauben auf einmal.
-5. Jede Änderung in `docs/ENTSCHEIDUNGEN.md` notieren: vorher, nachher, warum.
-6. Dem Auftraggeber in drei bis fünf Sätzen berichten, ohne Tabelle und ohne Fachsprache.
+2. `npm run balance` ausführen. Der Lauf nutzt feste Seeds (Fahrt 1 bis 500 je Bot), damit zwei Läufe vergleichbar sind. Der ausgewogene Bot läuft zweimal: fehlerfrei und mit Unachtsamkeit (jeder zwölfte Zug zufällig). Für die Abnahme zählt der zweite Lauf.
+3. Überrascht eine Zahl, die Fahrt mit `node werkzeug/spur.mjs <bot> <seed>` Zug für Zug ansehen, bevor etwas geändert wird. Oft steckt ein Fehler im Wagen oder im Bot dahinter und keine falsche Zahl.
+4. Die Zahlen mit den Zielen unten vergleichen.
+5. Weicht etwas ab: **eine** Zahl ändern, neu laufen lassen, vergleichen. Nie mehrere Stellschrauben auf einmal.
+6. Jede Änderung in `docs/ENTSCHEIDUNGEN.md` notieren: vorher, nachher, warum.
+7. Dem Auftraggeber in drei bis fünf Sätzen berichten, ohne Tabelle und ohne Fachsprache.
 
-## Was der Lauf ausgeben soll
+## Was der Bericht zeigt
 
-Je Bot:
-- Anteil der Fahrten, die den Halt erreichen
-- Anteil je Wagen, der ihn übersteht
-- mittlere Züge je Wagen
-- mittlere Herzen am Wagenende
-- häufigste Todesursachen (Gegnertyp und Wagen)
-- Anteil der Züge mit voller Ruhe
-- größte Zahl gleichzeitiger Gegner
+Je Bot eine Kopfzeile (Halt erreicht, hängende Fahrten, ungültige Züge, Anteil der Züge mit voller Ruhe) und je Wagen eine Zeile:
+
+- erreicht und geschafft: Anteil aller Fahrten
+- Züge: Mittel und Spanne der geschafften Wagen
+- Treffer und ausgewichen: Mittel je Fahrt in diesem Wagen
+- Herzen: Mittel am Ende des Wagens
+- Gegner: größte Zahl gleichzeitig
+
+Darunter stehen die häufigsten Tode nach Wagen und Gegnertyp.
 
 ## Ziele
 
@@ -33,13 +35,14 @@ Die festen Ziele stehen im Fahrplan. Die Zahlen in Klammern sind unsere Auslegun
 
 | Maß | Ziel |
 |---|---|
-| Ausgewogener erreicht den Halt | etwa die Hälfte (40 bis 60 %) |
+| Ausgewogener mit Unachtsamkeit erreicht den Halt | etwa die Hälfte (40 bis 60 %) |
 | Ausgewogener übersteht Wagen 1 und 2 | fast immer (mindestens 95 %) |
-| Kämpfer und Ausweicher | jeder kann den Halt erreichen (jeweils mindestens 15 %) |
-| Abstand zwischen den drei Stilen | kein Stil läuft den anderen davon (höchstens 25 Punkte) |
+| Kämpfer und Ausweicher | ab Etappe 3: jeder kann den Halt erreichen (jeweils mindestens 15 %). Stand Etappe 1: Kämpfer 0 %, Ausweicher 55 % |
+| Abstand zwischen den drei Stilen | ab Etappe 3: kein Stil läuft den anderen davon (höchstens 25 Punkte) |
 | Dauer je Wagen | 30 bis 90 Sekunden (25 bis 75 Züge bei etwa 1,2 Sekunden je Zug) |
 | Gegner gleichzeitig | nie mehr als sechs |
-| Anstieg | Die Quote sinkt von Wagen zu Wagen, ohne Klippe (kein Wagen kostet allein mehr als 20 Punkte) |
+| Anstieg | Die Treffer je Wagen steigen von Wagen zu Wagen. Die meisten Fahrten enden im letzten Wagen, weil Herzen sich nicht erholen |
+| Hänger | keine Fahrt bleibt hängen, kein Bot macht ungültige Züge |
 
 ## Grenzen
 

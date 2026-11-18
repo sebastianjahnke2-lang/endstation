@@ -25,6 +25,11 @@ test('index.html lädt nichts nach und spricht mit keinem Netz', () => {
   }
 });
 
+test('alles Geschriebene läuft über die Punktmatrix-Schrift', () => {
+  // Systemschriften sähen auf jedem Gerät anders aus und gingen am Ton-Test vorbei.
+  assert.equal(gebaut.match(/\b(?:fillText|strokeText)\s*\(/), null);
+});
+
 // Der Build hängt Module ohne echten Bündler aneinander. Was er nicht kann,
 // muss er laut ablehnen, statt still etwas Falsches zu bauen.
 

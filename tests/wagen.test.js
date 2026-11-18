@@ -68,6 +68,17 @@ for (let nr = 0; nr < WAGENZAHL; nr++) {
         }
       }
 
+      // keine Sackgassen, keine einspurigen Gänge: Jedes freie Feld hat einen freien Nachbarn
+      // in der Waagerechten und einen in der Senkrechten. Nur so lässt sich jedes Muster verlassen.
+      const offen = (x, y) => x >= 0 && x < BREITE && y >= 0 && y < HOEHE && !hindernis(x, y);
+      for (let y = 0; y < HOEHE; y++) {
+        for (let x = 0; x < BREITE; x++) {
+          if (hindernis(x, y)) continue;
+          assert.ok(offen(x - 1, y) || offen(x + 1, y), `${wo}: Feld ${x},${y} hat links und rechts keinen Ausweg`);
+          assert.ok(offen(x, y - 1) || offen(x, y + 1), `${wo}: Feld ${x},${y} hat oben und unten keinen Ausweg`);
+        }
+      }
+
       assert.ok(gegner.length >= 1 && gegner.length <= 6, `${wo}: ${gegner.length} Gegner`);
       const belegt = new Set();
       for (const g of gegner) {

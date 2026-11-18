@@ -7,12 +7,12 @@ description: Alle Texte und Symbole des Spiels gegen den Ton und die harten Rege
 
 ## Ablauf
 
-1. `npm test` ausführen. `tests/ton.test.js` fängt die verbotenen Wörter. Das ist nur der Boden, nicht die Prüfung.
+1. `npm test` ausführen. `tests/ton.test.js` fängt die verbotenen Wörter, fehlende Zeichen in der Punktmatrix-Schrift und Texte, die bei 360 Pixel nicht auf die Anzeige passen. Das ist nur der Boden, nicht die Prüfung.
 2. In `docs/VISION.md` die Abschnitte „Ton" und „Harte Regeln" neu lesen, nicht aus dem Gedächtnis prüfen.
 3. Sammeln:
    - alle Zeichenketten in `src/texte.js`
-   - Texte, die sich im Code verstecken: nach `fillText(` mit festem Text suchen und nach `src/texte.js` verschieben
-   - alle gezeichneten Symbole und Figuren
+   - Texte, die sich im Code verstecken: in `src/anzeige/` nach `schreibe(` und `schreibeMittig(` mit festem Text suchen und nach `src/texte.js` verschieben. `fillText` darf im Spiel gar nicht vorkommen
+   - alle gezeichneten Symbole und Figuren: `src/anzeige/figuren.js`, `kulisse.js` und `karte.js`. Ansehen mit `node werkzeug/schau.mjs`
 4. Jeden Text und jedes Symbol einzeln durch die Fragen unten führen.
 5. Ändern, was durchfällt. Grenzfälle mit Begründung auflisten.
 6. Bericht: was geändert wurde, was grenzwertig bleibt und warum. Ändert ein Grenzfall den Charakter des Spiels, den Auftraggeber fragen.

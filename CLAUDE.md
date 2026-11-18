@@ -13,10 +13,11 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
-- Etappe 1, Der Kern muss allein Spaß machen: **als Nächstes**, noch nicht begonnen.
-- Etappen 2 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
+- Etappe 1, Der Kern muss allein Spaß machen: **gebaut, wartet auf die Rückmeldung des Auftraggebers.** Erst seine Antwort auf die vier Prüffragen im Fahrplan schließt die Etappe ab.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: als Nächstes, aber erst auf sein Wort.
+- Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 
-Bisher gibt es keinen Spielcode. `index.html` zeigt nur eine Anzeige mit „Zug wird bereitgestellt".
+Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
 
 ## Wie wir arbeiten
 - Der Auftraggeber ist kein Entwickler und arbeitet am Handy. Claude baut, er testet und gibt Rückmeldung zum Gefühl. Antworten auf Deutsch, kurz, ohne Fachsprache.
@@ -64,36 +65,56 @@ Der Ton (symbolisch, real, trocken komisch, leise melancholisch, nie kitschig) s
 ## Architektur
 
 ```
-index.html        gebautes Spiel, eingecheckt, wird von GitHub Pages ausgeliefert
-build.js          hängt src/ zu einer Datei zusammen, ohne Abhängigkeiten
+index.html          gebautes Spiel, eingecheckt, wird von GitHub Pages ausgeliefert
+build.js            hängt src/ zu einer Datei zusammen, ohne Abhängigkeiten
 src/
-  vorlage.html    Seitengerüst mit den Marken /*__CSS__*/ und /*__JS__*/
-  style.css       nur Seitenrahmen, alles Sichtbare zeichnet der Canvas
-  texte.js        alle sichtbaren Texte, einzige Quelle
-  main.js         Einstieg
+  vorlage.html      Seitengerüst mit den Marken /*__CSS__*/ und /*__JS__*/
+  style.css         nur Seitenrahmen, alles Sichtbare zeichnet der Canvas
+  texte.js          alle sichtbaren Texte, einzige Quelle
+  main.js           Einstieg: verbindet Kern, Anzeige, Eingabe, Ton, Speicher
+  eingabe.js        Wischen, Tippen, Tastatur
+  speicher.js       localStorage, immer in try/catch
+  ton.js            erzeugte Klänge über Web Audio
+  kern/             reine Logik ohne DOM
+    feld.js         Raster 5x8, Richtungen, Breitensuche
+    zufall.js       Zufall mit Seed, Stand liegt im Zustand
+    wagen.js        die fünf Wagen: Plan, Gegner, Bauregel
+    lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
+    gegner.js       Verhalten von Pendler, Reisegruppe, Drängler
+    spiel.js        erzeugeSpiel(seed) -> { zustand, act(aktion) }
+  anzeige/          Canvas, spielt Ereignisse ab
+    anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
+    layout.js       Bildschirmaufteilung ab 360 x 600
+    kulisse.js      Wagen, Tür, Lichter, Herzen, Ruhe, Uhr
+    figuren.js      Figuren und Hindernisse
+    karte.js        Endkarte mit Bahnsteig
+    matrix.js       Punktmatrix-Schrift
+    formen.js       Farben und Zeichenhilfen
 tests/
-  build.test.js   index.html aktuell, eine Datei, kein Netz, Build-Regeln
-  ton.test.js     verbotene Wörter in den Texten
-.claude/skills/   neue-szene, balance-pruefen, ton-check
+  regeln.test.js    jede Regel aus Etappe 1 als kleine Szene
+  fuzz.test.js      Zufallsfahrten, Regelprüfung nach jeder Eingabe
+  wagen.test.js     jede Auslosung jedes Wagens
+  bots.test.js      Abnahme der Schwierigkeit
+  ton.test.js       verbotene Wörter, Schrift, Textlängen
+  build.test.js     index.html aktuell, eine Datei, kein Netz, Build-Regeln
+  bots.js           die drei Bots und fahre()
+  balance.js        Balance-Bericht
+werkzeug/           Selbstkontrolle im Browser, kein Teil des Spiels
+.claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
 
-Geplant ab Etappe 1 (noch nicht vorhanden, Namen sind Vorschlag):
-
-```
-src/kern/         reines Logikmodul ohne DOM: Zustand, act(aktion) -> Ereignisliste, Zufall mit Seed
-src/anzeige/      Canvas-Renderer, spielt Ereignislisten ab
-src/eingabe.js    Wischen, Tippen, Tastatur, Eingabepuffer
-src/speicher.js   localStorage, immer in try/catch
-src/ton.js        erzeugte Klänge über Web Audio
-tests/            Fuzz-Test, drei Bots (Kämpfer, Ausweicher, Ausgewogener), Balance-Bericht
-```
+So läuft ein Zug (`src/kern/spiel.js`):
+1. Phase 0: Der Spieler bewegt sich, schlägt oder wartet. Ungültiges kostet keinen Zug.
+2. Phase 1: Alle angekündigten Angriffe treffen ein. Höchstens ein Herz je Zug.
+3. Phase 2: Gegner bewegen sich oder kündigen an. Ein Gegner tut je Zug nur eines von beiden: Wer herantritt, überlässt dem Spieler den ersten Schlag.
 
 Feste Regeln der Architektur:
 - `src/kern/` kennt weder `window` noch `document`. Tests laden es direkt in Node.
-- Der Kern ändert den Zustand nur in `act(aktion)` und gibt eine Ereignisliste zurück. Der Renderer entscheidet nie über Spielregeln.
-- Zufall kommt nur aus dem Seed-Generator, nie aus `Math.random()`.
+- Der Kern ändert den Zustand nur in `act(aktion)` und gibt eine Ereignisliste zurück. Die Anzeige entscheidet nie über Spielregeln.
+- Zufall im Kern kommt nur aus `zufall.js`, nie aus `Math.random()`. Gegner handeln ganz ohne Zufall.
 - Jeder sichtbare Text steht in `src/texte.js`, als Zeichenkette mit Platzhaltern wie `{n}`.
 - Fachbegriffe im Code heißen wie im Fahrplan (Wagen, Ruhe, Lochung, Pendler).
+- Bauregel für Wagen: Jedes freie Feld hat einen freien Nachbarn links oder rechts und einen oben oder unten. Keine Sackgassen, keine einspurigen Gänge. Nur so lässt sich jede Ankündigung mit einem Schritt verlassen.
 
 Regeln des Build-Skripts (Verstöße brechen den Build ab):
 - Nur benannte Importe aus relativen Pfaden: `import { a, b } from './x.js';`
@@ -104,16 +125,21 @@ Regeln des Build-Skripts (Verstöße brechen den Build ab):
 ## Befehle
 
 ```
-npm run build     baut index.html aus src/
-npm test          alle Tests (Node-eigener Testläufer, keine Pakete)
+npm run build                          baut index.html aus src/
+npm test                               alle Tests (Node-eigener Testläufer, keine Pakete)
+npm run balance                        Bericht: drei Bots, 500 Fahrten je Bot
+node werkzeug/spur.mjs <bot> <seed>    eine Bot-Fahrt Zug für Zug als Textbild
+node werkzeug/bedienung.mjs 390x700    Wischen, Tippen, Tasten, Endkarte im echten Browser
+node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
 ```
 
 `index.html` nie von Hand ändern. Nach jeder Änderung in `src/` bauen, sonst schlägt `npm test` fehl.
+Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich.
 
 ## Abschluss einer Etappe
 1. `npm run build` und `npm test`, alles grün.
-2. Selbstkontrolle im Browser bei 390×700 und 360×600: Screenshots ansehen, Wischen, Tippen und Tastatur durchspielen. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
-3. Skill `ton-check` über alle neuen Texte und Symbole, ab Etappe 1 Skill `balance-pruefen`.
+2. Selbstkontrolle im Browser bei 390×700 und 360×600: `node werkzeug/bedienung.mjs` in beiden Größen und `node werkzeug/schau.mjs`, dann die Bilder ansehen. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
+3. Skill `ton-check` über alle neuen Texte und Symbole, Skill `balance-pruefen` nach jeder Änderung an Zahlen.
 4. Etappenstand hier und in `docs/FAHRPLAN.md` aktualisieren, Entscheidungen notieren.
 5. Committen und pushen. Pull Request nur, wenn der Auftraggeber es sagt.
 6. Dem Auftraggeber melden: was neu ist, was er antippen muss, worauf er achten soll.

@@ -7,7 +7,7 @@ description: Einen Wagen, eine Autorität oder eine Szene ins Spiel bringen. Fü
 
 Gilt für jeden neuen Wagen (Kampfwagen, Autoritätswagen, Speisewagen, leerer Wagen, Spiegelwagen, Kraftprobe), jede neue Autorität und jeden neuen Gegnertyp.
 
-Stand Etappe 0: Die genannten Ordner und Tests entstehen erst in Etappe 1. Am Ende von Etappe 1 wird dieser Skill an die echten Dateinamen angepasst.
+Stand Etappe 1: Es gibt fünf Kampfwagen und drei Gegnertypen. Vorbild für alles Neue sind `src/kern/wagen.js` und `src/kern/gegner.js`.
 
 ## 1. Darf sie hinein?
 
@@ -16,7 +16,7 @@ Stand Etappe 0: Die genannten Ordner und Tests entstehen erst in Etappe 1. Am En
 
 ## 2. Steckbrief vor dem Code
 
-Als Kommentar am Kopf der Szenendatei:
+Als Kommentar über dem Eintrag in `src/kern/wagen.js` oder über dem Verhalten in `src/kern/gegner.js`:
 
 - **Name** für die Zuganzeige, aus dem Bahnalltag, kein Markenname.
 - **Typ**: einer der sechs Szenentypen.
@@ -47,6 +47,8 @@ Kein Weg wird gelobt oder getadelt. Jeder hat Folgen, keiner eine Strafe.
 - Jedes Muster lässt sich mit einem Schritt verlassen.
 - Stirbt ein Gegner, verfällt sein angekündigter Angriff. Gegner blockieren einander und treffen sich nicht.
 - Alle freien Felder sind erreichbar, die Tür immer.
+- Bauregel: Jedes freie Feld hat einen freien Nachbarn links oder rechts und einen oben oder unten. Keine Sackgassen, keine einspurigen Gänge.
+- Ein Gegner tritt heran oder kündigt an, nie beides im selben Zug. Höchstens ein Herz je Zug.
 - Höchstens sechs Gegner gleichzeitig.
 - Ein Wagen dauert 30 bis 90 Sekunden.
 - Im Speisewagen und jedem anderen sicheren Ort passiert nie etwas Schlimmes.
@@ -54,25 +56,27 @@ Kein Weg wird gelobt oder getadelt. Jeder hat Folgen, keiner eine Strafe.
 
 ## 5. Bauen
 
-- Regeln nur in `src/kern/`, ohne `window` und `document`. Die Szene meldet Ereignisse, `src/anzeige/` spielt sie ab.
-- Zufall nur aus dem Seed-Generator.
+- **Wagen:** Eintrag in `WAGENPLAENE` in `src/kern/wagen.js` (Plan mit 8 Zeilen zu 5 Zeichen, Gegner mit möglichen Startplätzen). Name für die Anzeige in `TEXTE.wagen` in `src/texte.js`. Ein neues Hindernis braucht ein Zeichen im Plan und ein Bild in `maleHindernis` in `src/anzeige/figuren.js`.
+- **Gegner:** Werte in `GEGNERWERTE`, Zustand in `neuerGegner`, Angriff in `loeseAnsagenEin`, Bewegung und Ankündigung in `planeGegner`, alles in `src/kern/gegner.js`. Jede Handlung meldet ein Ereignis mit Phase 1 oder 2. Bild in `MALER` in `src/anzeige/figuren.js`, Abspielen des Ereignisses in `wendeAn` in `src/anzeige/anzeige.js`.
+- Regeln nur in `src/kern/`, ohne `window` und `document`. Zufall nur aus `src/kern/zufall.js`, Gegner handeln ganz ohne Zufall.
 - Texte nur in `src/texte.js`. Hinweise haben höchstens drei Worte und erscheinen erst, wenn die Situation eintritt.
 - Figuren: Gegner ohne Gesicht, mit einer kleinen menschlichen Geste im Stand, als Umriss erkennbar. Keine Tiere.
-- Keine Animation über 150 ms, alles Überspringbare ist überspringbar, kein Zwischenbildschirm.
+- Keine Bewegung über 150 ms, alles Überspringbare ist überspringbar, kein Zwischenbildschirm.
+- Namen auf oberster Ebene müssen im ganzen Projekt eindeutig sein, sonst bricht der Build ab.
 
 ## 6. Tests
 
 Keine Mechanik ohne Test. Für jede neue Szene:
 
-- **Fuzz:** Die Szene ist im Fuzz-Test enthalten. Keine Fehler, keine überlappenden Figuren, Tür immer erreichbar.
-- **Je Weg ein Test:** Ein festes Skript oder ein Bot geht den Kampfweg und kommt durch. Ein zweiter geht den Weg des Verstehens und kommt durch.
-- **Ankündigung:** Kein Schaden ohne rotes Feld im Zug davor. Von jedem markierten Feld gibt es einen sicheren Schritt.
-- **Bots:** Kämpfer, Ausweicher und Ausgewogener können die Szene bestehen.
+- **Regel als Szene:** In `tests/regeln.test.js` baut `szene({...})` einen leeren Wagen mit Figuren an festen Plätzen. Je Regel ein Test, je Weg ein Test (Kampfweg kommt durch, Weg des Verstehens kommt durch).
+- **Wagen:** `tests/wagen.test.js` prüft jede Auslosung von selbst: verbunden, Bauregel, höchstens sechs Gegner, Abstand zum Start.
+- **Fuzz:** `tests/fuzz.test.js` sieht den neuen Wagen von selbst. Für einen neuen Gegnertyp die Prüfungen in `pruefeZustand` ergänzen. Kein Schaden ohne Rot im Zug davor, vom Feld des Spielers führt aus jedem Muster ein Schritt hinaus.
+- **Bots:** In `tests/bots.js` lernen die drei Bots den Umgang mit dem Neuen. `tests/bots.test.js` muss grün bleiben, kein Bot darf hängen.
 - **Regie** (ab Etappe 3): Über viele Seeds kommt die Szene weder nie noch ständig.
 
 ## 7. Abschluss
 
 1. Skill `ton-check` über neue Texte und Symbole.
 2. Skill `balance-pruefen`.
-3. Im Browser bei 390×700 und 360×600 beide Wege selbst durchspielen.
+3. Im Browser bei 390×700 und 360×600 prüfen: `node werkzeug/bedienung.mjs` und `node werkzeug/schau.mjs`, Bilder ansehen. Eine überraschende Bot-Fahrt zeigt `node werkzeug/spur.mjs` Zug für Zug.
 4. Steckbrief-Entscheidungen in `docs/ENTSCHEIDUNGEN.md`, neue Dateien in `CLAUDE.md` unter Architektur.

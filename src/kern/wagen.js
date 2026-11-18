@@ -6,6 +6,11 @@
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
 // Alle Angaben gelten ungespiegelt, der Wagen wird zufällig gespiegelt.
+//
+// Bauregel, damit sich jede Ankündigung mit einem Schritt verlassen lässt:
+// Jedes freie Feld hat mindestens einen freien Nachbarn links oder rechts
+// und mindestens einen freien Nachbarn oben oder unten. Es gibt also keine
+// Sackgassen und keine einspurigen Gänge. tests/wagen.test.js prüft das.
 
 import { BREITE } from './feld.js';
 import { wuerfle } from './zufall.js';
@@ -15,11 +20,11 @@ export const WAGENPLAENE = [
     art: 'sitzwagen',
     plan: [
       '.....',
-      'S...S',
-      '.....',
       '.....',
       'S...S',
       '.....',
+      '.....',
+      'S...S',
       '.....',
       '.....',
     ],
@@ -31,12 +36,12 @@ export const WAGENPLAENE = [
     art: 'fahrradabteil',
     plan: [
       '.....',
-      'FF...',
+      '.....',
       'F....',
-      '....K',
+      'F...K',
+      'F....',
       'FF...',
       '.....',
-      '...K.',
       '.....',
     ],
     gegner: [
@@ -49,16 +54,16 @@ export const WAGENPLAENE = [
     art: 'grossraumwagen',
     plan: [
       '.....',
-      'S...S',
-      'S...S',
       '.....',
       'SS..S',
       '.....',
-      'S...S',
+      '.....',
+      'S..SS',
+      '.....',
       '.....',
     ],
     gegner: [
-      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0], [0, 0]], [[2, 1], [2, 0], [3, 0], [4, 0]]] },
+      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0]], [[2, 1], [2, 0], [3, 0]]] },
       { typ: 'pendler', orte: [[0, 3], [1, 3]] },
       { typ: 'pendler', orte: [[4, 3], [3, 3]] },
     ],
@@ -67,9 +72,9 @@ export const WAGENPLAENE = [
     art: 'liegewagen',
     plan: [
       '.....',
-      '..WWW',
       '.....',
       '..WWW',
+      '.....',
       '.....',
       '..WWW',
       '.....',
@@ -77,26 +82,26 @@ export const WAGENPLAENE = [
     ],
     gegner: [
       { typ: 'draengler', orte: [[0, 0], [1, 0], [0, 1]] },
-      { typ: 'pendler', orte: [[4, 2], [3, 2]] },
-      { typ: 'pendler', orte: [[4, 4], [3, 4]] },
       { typ: 'pendler', orte: [[4, 0], [3, 0]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 3]] },
+      { typ: 'pendler', orte: [[4, 4], [3, 4]] },
     ],
   },
   {
     art: 'gepaeckwagen',
     plan: [
+      'K...K',
       '.....',
-      '.K...',
-      '...K.',
-      'K....',
       '..K..',
+      'K....',
       '....K',
-      '.K...',
+      '..K..',
       '.....',
+      'K...K',
     ],
     gegner: [
-      { typ: 'draengler', orte: [[4, 0], [4, 1]] },
-      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0]], [[0, 1], [0, 0], [1, 0]]] },
+      { typ: 'draengler', orte: [[4, 1], [3, 0]] },
+      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0]], [[1, 1], [1, 0], [2, 0]]] },
       { typ: 'pendler', orte: [[1, 3], [1, 2]] },
       { typ: 'pendler', orte: [[3, 3], [4, 3]] },
     ],
