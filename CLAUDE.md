@@ -13,8 +13,8 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
-- Etappe 1, Der Kern muss allein Spaß machen: **gebaut, wartet auf die Rückmeldung des Auftraggebers.** Erst seine Antwort auf die vier Prüffragen im Fahrplan schließt die Etappe ab.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: als Nächstes, aber erst auf sein Wort.
+- Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **freigegeben, noch nicht begonnen.** Der Auftraggeber hat am 18.11. „Weitermachen" gesagt. Es gibt dafür noch keinen Code und keinen Entwurf.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 
 Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
@@ -25,6 +25,7 @@ Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot er
 - Nach jeder Etappe stoppen und kurz sagen: was neu ist, was er antippen muss, um es zu übernehmen und im Browser zu spielen, und worauf er beim Testen achten soll.
 - Detailfragen selbst entscheiden und in `docs/ENTSCHEIDUNGEN.md` notieren. Nur fragen, wenn eine Entscheidung den Charakter des Spiels ändert.
 - Alle Zahlen sind Startwerte. Texte im Spiel sind Deutsch.
+- Sparsam mit seinem Nutzungslimit umgehen: Am 18.11. hat eine Entwurfsrunde mit sechs Agenten das Limit aufgebraucht und nichts geliefert. In kleinen Schritten arbeiten, nach jedem Schritt mit grünen Tests committen und pushen. Große Läufe mit mehreren Agenten vorher ankündigen.
 
 ## Nicht tun
 - Keine Frameworks, Bibliotheken, Analyse-Skripte oder Netzwerkzugriffe.
