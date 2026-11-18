@@ -2,6 +2,87 @@
 
 Detailfragen, die Claude selbst entschieden hat. Neueste Etappe oben. Jede Zeile: was, und warum.
 
+## Offen
+
+Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/PROTOTYP-freier-platz.md`) und den vorhandenen Dokumenten. Sie sind **nicht entschieden**. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+
+### Betrifft den Prototyp unmittelbar
+
+- **Daumenzone unten oder Knöpfe oben.** Auftrag, Abschnitt 4: unten links die Fahrkarte, unten rechts der Knopf „Warten". Vorhanden (`CLAUDE.md`, „iPhone hat Vorrang"): „Nichts zum Antippen am unteren Rand", Uhr und Lautsprecher sitzen oben. Vorläufig gebaut: Die Daumenzone liegt unten, hält aber denselben Abstand zum Rand, den das Hauptspiel unter seinem untersten Feld freilässt (26 Pixel, dazu der Home-Balken). Der Lautsprecher sitzt wie im Hauptspiel oben rechts. Zu klären am Gerät: Kommt die Leiste von Safari dem Knopf in die Quere?
+- **Abspielen der Ereignisse.** Auftrag, Abschnitt 11: Ereignisse nacheinander, je 150 bis 350 ms, dabei höchstens eine Eingabe vormerken. Vorhanden (Fahrplan, Etappe 1): keine Bewegung über 150 ms, Eingaben schneiden Bewegungen ab, niemand wartet auf das Spiel. Vorläufig gebaut: Die Ereignisse laufen nacheinander mit den Zeiten des Auftrags, aber jede neue Eingabe springt sofort ans Ende, wie im Hauptspiel. Nur nach dem Anstoßen verfallen Eingaben für 0,3 Sekunden, damit ein doppelter Wisch nicht versehentlich drängt. Preis: Wer schnell tippt, sieht Übergänge nicht, nur ihr Ergebnis.
+- **Ton beim Start.** Auftrag: aus. Hauptspiel (eigene Entscheidung aus Etappe 1): an, aber leise. Vorläufig: Im Prototyp ist er aus, im Hauptspiel unverändert an. Offen ist, was später für das ganze Spiel gilt.
+- **Testprotokoll.** Auftrag, Abschnitt 12: Das Spiel schreibt mit, was in der letzten Fahrt geschah. Vorhanden (`CLAUDE.md`, „Nicht tun"): keine Analyse-Skripte, in Etappe 0 gedeutet als „Skripte, die im Spiel Nutzungsdaten sammeln". Vorläufig gebaut, weil der Spieltest es braucht: Das Protokoll liegt nur auf dem Gerät, wird nirgends hingeschickt und ist nur mit langem Druck auf die Zuganzeige zu sehen.
+- **Neustart.** Auftrag: Knopf „Neue Fahrt". Fahrplan, Etappe 1: Endkarte nach oben wegwischen. Etappe 2: Knöpfe „Aussteigen" und „Noch eine Fahrt". Vorläufig: nur der Knopf.
+- **Zuganzeige.** Auftrag: „Wagen 7". Hauptspiel: Wagennummer und Wagenname („1 | Sitzwagen"). Vorläufig: wie im Auftrag.
+- **Kein Hinweis, kein Pfeil, keine leuchtende Markierung.** Auftrag, Abschnitt 2 (verbindlich). Vorhanden im Hauptspiel: drei Hinweiswörter, pulsierende rote Felder, Ausrufezeichen, Winkel an der offenen Tür, grünes Licht neben der Tür. Fahrplan Etappe 2 und 3: leuchtende Symbole auf Feldern, Option „deutliche Hinweise". Der Prototyp hat nichts davon. Offen ist, was das für das Hauptspiel heißt.
+- **Nichts vor den Fenstern.** Auftrag, Abschnitt 2 (verbindlich): keine Landschaft vor den Fenstern. Vorhanden: vorbeiziehende Lichter im Hauptspiel, Bahnsteigbild auf der Endkarte, in der Vision „Regen an der Scheibe" und im Speisewagen „Blick nach draußen". Im Prototyp sind die Fenster dunkel.
+- **Schatten.** Auftrag: Schatten gibt es nur als flache, geworfene Schatten im Lampenlicht. Vorhanden: Jede Figur des Hauptspiels hat einen runden Bodenschatten, und der Fahrplan nennt „Stärken aus Schatten". Im Prototyp haben Figuren keinen Bodenschatten.
+
+### Betrifft das Konzept
+
+- **Rätsel oder Taktik.** Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
+- **Prototyp und Fahrplan.** `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
+- **Fahrkarte.** Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
+- **Mitgezählter Spielstil.** Auftrag: kein Punktestand, kein Moralwert, kein Persönlichkeitstest. Fahrplan Etappe 3: Spielstil mitzählen, Wärme und Kälte, Haltung der Figur nach Spielstil. Etappe 5: Bestwerte gegen sich selbst. Nicht umgesetzt, nur vermerkt.
+- **Kein Lob.** Auftrag: kein Lob, kein „Geschafft". Fahrplan Etappe 2: Der Begleiter „nennt zuerst, was neu gelungen ist".
+- **Gesichter.** Auftrag: Figuren haben keine Gesichter. Fahrplan Etappe 2: Verstandene Gegner sitzen im Speisewagen „und haben ein Gesicht". Vision: Am Ende sieht man „zum ersten Mal das eigene Gesicht".
+- **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
+- **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
+
+## Prototyp „Der freie Platz"
+
+Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
+
+### Aufbau
+
+- **Eigener Ordner `prototyp/freier-platz/` mit eigener Seite.** Warum: Der Prototyp soll das Hauptspiel nicht berühren und eine eigene Adresse haben. Er folgt dem Muster des Projekts: Quelltext in Modulen, Regeln ohne Browser in `src/kern/`, alle Texte in einer Datei, eine gebaute `index.html`, eingecheckt und getestet.
+- **Aus dem Hauptspiel geliehen, nicht kopiert:** Punktmatrix-Schrift, Farben und Zeichenhilfen, die Eingabe (Wischen, Tippen, Tasten) und der Seitenrahmen mit allen iPhone-Vorgaben. Das Build-Skript des Hauptspiels baut auch den Prototyp. `npm run build` baut beide Seiten, `npm test` prüft beide.
+- **Am Hauptspiel geändert ist nur eine Zeile in `package.json`,** damit ein Befehl beide Seiten baut. `index.html`, `src/` und `tests/` des Hauptspiels sind unverändert.
+- **Beide Schritte sind gebaut:** die Szene am eigenen Platz und der Schlafende. Die Regeln des Schlafenden waren im Kern so klein, dass ein getrennter erster Stand nichts gespart hätte. Die Tests sind getrennt (`regeln.test.js`, `schlaefer.test.js`).
+
+### Regeln, wo der Auftrag Spielraum lässt
+
+- **„Würde er ohnehin weitergehen" wird geprüft, als hätte der Spieler seinen Platz schon verlassen.** Wer neben dem wartenden Schaffner aufsteht und dessen Platz damit frei macht (Tasche weg, Schatten weg), tritt einfach in den Gang, und der Schaffner geht weiter. Warum: So zeigt das Spiel ohne Worte, dass es um den Platz geht, nicht um den Spieler. Und der Schaffner ist danach vorn und bleibt beim Schlafenden stehen, wo man der Regel ein zweites Mal begegnet.
+- **Wer dem Schaffner im Gang entgegenkommt, stößt immer an.** Er will auf das Feld des Spielers und kann nicht durch ihn hindurch. Nachrücken gibt es nur von hinten oder von der Seite.
+- **Weggeschoben nickt er nicht.** Das Nicken gibt es nur, wenn der Platz in seiner Reihe wirklich frei wurde.
+- **Wird er von oben weggedrängt, landet er eine Reihe höher und geht von dort weiter.** Er geht nie zurück. Liegt die Tasche noch, bleibt sie liegen, und die Anzeige nennt sie nach der Tür.
+- **Lochen von links nach rechts.** Sitzen in seiner Reihe mehrere Wache ohne Lochung, ist der linke zuerst dran. In diesem Wagen heißt das: der Spieler vor dem Fahrgast.
+- **Gelocht wird auf jedem Platz.** Wer mit der Tasche in eine dunkle Reihe umzieht und den Schaffner kommen lässt, bekommt die Lochung auch. Die Regel des Auftrags nennt keine Reihe, also gilt sie überall.
+- **Gegen den Schlafenden wischen weckt ihn nicht,** nur Antippen. Warum: Der Auftrag nennt „dagegenwischen" nur für die Tasche, und ein verirrter Wisch soll niemanden wecken.
+- **Antippen ohne Wirkung kostet keine Runde:** der Schaffner, wenn er nicht wartet, der wache Fahrgast, der schon Geweckte, die eigene Figur. Die Figur lehnt sich kurz hin, mehr nicht.
+- **Die Zange tippt auf jeden Schatten einmal,** auch in Reihe 2, wenn sie sich dort zum ersten Mal hebt. Auf die Tasche zeigt sie nur.
+- **Betritt der Schaffner ein Gangfeld, auf dem schon ein Schatten liegt, macht er auch dabei den großen Schritt.**
+- **Reihe 2 gilt im Protokoll als frei,** sobald am Ende einer Runde auf dem Fensterplatz neben dem Schlafenden kein Schatten mehr liegt.
+
+### Anzeige und Bedienung
+
+- **Die Lampe sitzt auf der Lehne zwischen den beiden Sitzen, ihr Arm schwenkt oben herum zur anderen Seite.** Der Kopf sitzt auf der Seite, von der das Licht kommt. Antippen lässt sich der Lampenkopf, mit mindestens 48 Pixeln Trefferfläche. Wer mitten auf ein Feld tippt, trifft immer das Feld, nie die Lampe: Das prüft ein Test für jede Bildschirmgröße.
+- **Der Schatten ist der Umriss der sitzenden Figur, flach hingelegt,** der Kopf zeigt vom Licht weg. An der Wand ist er ein schmaler dunkler Streifen.
+- **Der Arm des Schaffners reicht bis zum störenden Ding,** auch über den Sitzenden hinweg. Warum: „zielt genau" und „tippt auf den Schatten" gehen nur, wenn die Zange wirklich ankommt. Der lange Arm ist die komischste Lösung, die ohne Pfeil auskommt.
+- **Nur die zwei brennenden Lampen sind gezeichnet.** Andere Sitzpaare haben keine, damit niemand versucht, sie einzuschalten.
+- **Zwei Zeilen je Tatsache.** Die Sätze des Auftrags sind für die Anzeige bei 360 Pixeln zu lang und werden umbrochen: „Der Schaffner / wartet in Reihe 5."
+- **Die Uhrzeit nach der Tür** erscheint nur, wenn es keine Tatsache gibt. Sie folgt dem Hauptspiel: Abfahrt 23:41, jede Runde eine Minute.
+- **Die Lochung ist eine schmale, schräg gesetzte Sichel.** Die erste Fassung war breiter und sah aus wie ein Mond.
+- **Tippen auf die Fahrkarte** drückt sie kurz ein, sonst nichts. Tippen auf die eigene Figur wartet nicht: Dafür gibt es hier den Knopf.
+- **Am Rechner** gehen Pfeiltasten oder WASD, die Leertaste wartet, nach der Tür beginnt die Eingabetaste eine neue Fahrt.
+- **Reduzierte Bewegung:** Das Bild ruckt beim Schienenstoß nicht, der Schlafende atmet nicht sichtbar. Lampen und Schatten bewegen sich weiter, weil sie die Auskunft tragen.
+- **Töne:** Schritt, Tasche, Klick der Lampe, Knips, Ta-tack. Kein Ton bei Eingaben, die nicht gehen.
+- **Der Satz bleibt stehen, wenn eine schnelle Eingabe sein Erscheinen abgekürzt hat,** und verschwindet erst mit der Eingabe danach. Sonst sähe ihn nie, wer schnell tippt.
+
+### Speicher und Protokoll
+
+- **Eigener Schlüssel `endstation.freier-platz.1`.** Der Stand des Hauptspiels wird weder gelesen noch geschrieben.
+- **Das Protokoll wird nach jeder Eingabe gesichert,** nicht erst an der Tür. Warum: Gibt eine Testperson auf, bleibt die abgebrochene Fahrt lesbar.
+- **Eingaben ohne Wirkung stehen als Punkt in der Folge.** Warum: Der Spieltest fragt, ob jemand „wahllos überall" tippt.
+- **Die aufgehobenen Karten sind nur im Protokoll zu sehen,** als Zeile aus `+` und `-`. Im Spiel gibt es keine Sammlung.
+- **`#probe` an der Adresse** macht den Zustand von außen lesbar. Das braucht das Prüfwerkzeug.
+
+### Nicht geprüft
+
+- Kein echtes iPhone und keine WebKit-Engine, nur Chromium mit iPhone-Profil.
+- Der Ton wurde nicht angehört.
+- Ob jemand die Regel errät und ob es komisch ist, zeigt nur der Spieltest.
+
 ## Etappe 1
 
 ### Regeln

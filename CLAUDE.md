@@ -16,6 +16,7 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **freigegeben, noch nicht begonnen.** Der Auftraggeber hat am 18.11. „Weitermachen" gesagt. Es gibt dafür noch keinen Code und keinen Entwurf.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
+- Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, wartet auf den Spieltest.** Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
 Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
 
@@ -112,6 +113,14 @@ tests/
   bots.js           die drei Bots und fahre()
   balance.js        Balance-Bericht
 werkzeug/           Selbstkontrolle im Browser, kein Teil des Spiels
+prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Hauptspiel
+  index.html        gebauter Prototyp, eingecheckt
+  build.js          baut ihn mit buendle() aus dem Build-Skript des Hauptspiels
+  src/kern/         Regeln ohne DOM: abteil.js, licht.js, schaffner.js, fahrt.js
+  src/anzeige/      masse.js (Aufteilung), gestalten.js, abteilbild.js, buehne.js (Ablauf)
+  src/              texte.js, speicher.js, protokoll.js, ton.js, main.js
+  tests/            Regeln, Abläufe, vollständige Suche, Aufteilung, Speicher, Texte, Build
+  werkzeug/         fotos.mjs, szene.mjs: Selbstkontrolle im Browser
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
 
@@ -137,13 +146,15 @@ Regeln des Build-Skripts (Verstöße brechen den Build ab):
 ## Befehle
 
 ```
-npm run build                          baut index.html aus src/
-npm test                               alle Tests (Node-eigener Testläufer, keine Pakete)
+npm run build                          baut index.html aus src/ und den Prototyp
+npm test                               alle Tests, auch die des Prototyps (Node-eigener Testläufer, keine Pakete)
 npm run balance                        Bericht: drei Bots, 500 Fahrten je Bot
 node werkzeug/spur.mjs <bot> <seed>    eine Bot-Fahrt Zug für Zug als Textbild
 node werkzeug/bedienung.mjs 390x844    Wischen, Tippen, Tasten, Endkarte, Speicher im Browser
 node werkzeug/bedienung.mjs 390x844 47,34    dasselbe mit Notch und Home-Balken
 node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
+node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
+node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
 ```
 
 `index.html` nie von Hand ändern. Nach jeder Änderung in `src/` bauen, sonst schlägt `npm test` fehl.
@@ -158,4 +169,4 @@ Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich.
 6. Dem Auftraggeber melden: was neu ist, was er antippen muss, worauf er achten soll.
 
 ## Veröffentlichung
-GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
+GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. Der Prototyp liegt dann unter derselben Adresse mit `prototyp/freier-platz/` dahinter. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
