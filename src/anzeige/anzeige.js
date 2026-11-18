@@ -10,7 +10,7 @@ import { HERZEN_VOLL, RUHE_VOLL } from '../kern/spiel.js';
 import { WAGENZAHL } from '../kern/wagen.js';
 import { TEXTE, fuelle } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, leicht, hinUndHer } from './formen.js';
-import { berechneLayout, feldBei } from './layout.js';
+import { berechneLayout, feldBei, KNOPF } from './layout.js';
 import { maleFigur, malePunkte, maleAchtung } from './figuren.js';
 import { maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
 import { maleKarte, kartenMasse } from './karte.js';
@@ -65,8 +65,9 @@ export function erzeugeAnzeige(leinwand) {
   // ---------------------------------------------------------------- Aufbau
 
   function passeAn() {
-    const breite = Math.max(200, window.innerWidth);
-    const hoehe = Math.max(300, window.innerHeight);
+    // Maß ist der Canvas selbst: Er folgt der dynamischen Höhe und lässt Notch und Home-Balken frei.
+    const breite = Math.max(200, leinwand.clientWidth || window.innerWidth);
+    const hoehe = Math.max(240, leinwand.clientHeight || window.innerHeight);
     dichte = Math.min(window.devicePixelRatio || 1, 2.5);
     leinwand.width = Math.round(breite * dichte);
     leinwand.height = Math.round(hoehe * dichte);
@@ -595,6 +596,8 @@ export function erzeugeAnzeige(leinwand) {
 
   function zeichne(jetzt) {
     if (!layout || !z) return;
+    // Safari ändert die Höhe, wenn seine Leisten kommen und gehen, oft ohne verlässliches Signal.
+    if (leinwand.clientWidth && (leinwand.clientWidth !== layout.breite || leinwand.clientHeight !== layout.hoehe)) passeAn();
     const dt = Math.min(0.05, Math.max(0, (jetzt - letzteZeit) / 1000));
     letzteZeit = jetzt;
     const t = jetzt / 1000;
@@ -673,8 +676,8 @@ export function erzeugeAnzeige(leinwand) {
       return { art: 'karte' };
     }
     const nah = (ort, r) => Math.hypot(px - ort.x, py - ort.y) <= r;
-    if (nah(layout.uhr, Math.max(30, layout.uhr.r + 4))) return { art: 'uhr' };
-    if (nah(layout.ton, 26)) return { art: 'ton' };
+    if (nah(layout.uhr, Math.max(KNOPF / 2 + 2, layout.uhr.r + 2))) return { art: 'uhr' };
+    if (nah(layout.ton, KNOPF / 2)) return { art: 'ton' };
     const feld = feldBei(layout, px, py);
     if (feld) return { art: 'feld', x: feld.x, y: feld.y };
     return null;

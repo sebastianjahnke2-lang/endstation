@@ -13,7 +13,7 @@ Gebaut wird immer nur die aktuelle Etappe. Alles danach ist Fahrplan, kein Auftr
 | 4 | Das Surreale | offen |
 | 5 | Veröffentlichen | offen |
 
-Die Abschnitte ab hier sind unverändert aus der Übergabe übernommen.
+Die Abschnitte ab hier sind unverändert aus der Übergabe übernommen. Der Abschnitt „iPhone" kam während Etappe 1 dazu und hat Vorrang vor allem anderen.
 
 ## Technik
 - Ergebnis ist eine einzige `index.html` mit CSS und JS inline, ohne externe Assets. Alles wird per Canvas gezeichnet. Entwickelt wird in mehreren Dateien mit kleinem Build-Skript.
@@ -25,6 +25,14 @@ Die Abschnitte ab hier sind unverändert aus der Übergabe übernommen.
 - Ton ist Zugabe: wenige erzeugte Klänge über Web Audio, keine Dateien. Das Spiel funktioniert vollständig stumm.
 - Tests in Node: Fuzz-Test mit Zufallsaktionen (keine Fehler, keine überlappenden Figuren, Tür immer erreichbar) und drei Bots mit Spielstil (Kämpfer, Ausweicher, Ausgewogener).
 - Selbstkontrolle: Nach jeder Etappe das Spiel im Browser bei 390×700 und 360×600 öffnen, Screenshots ansehen und Wischen, Tippen und Tastatur durchspielen.
+
+## iPhone (hat Vorrang)
+- Zielgerät ist das iPhone mit Safari. Alles muss dort ohne Zusatz laufen.
+- Notch und Home-Balken über Safe-Area-Abstände freihalten. Keine Bedienelemente am unteren Rand, und keine Geste muss am Bildschirmrand beginnen.
+- Dynamische Viewport-Höhe mit Fallback, damit die Safari-Leisten nichts abschneiden. Kein Zoom bei Doppeltipp, kein Gummiband-Scrollen, keine Textauswahl beim Wischen.
+- Ton startet erst nach der ersten Berührung. Nicht auf Vibration verlassen.
+- Speicherstand: Safari kann lokale Daten nach einigen Tagen ohne Besuch löschen. Das Spiel muss einen leeren Speicher jederzeit verkraften. In Etappe 5 kommen Icon und Vollbild-Angaben für den Home-Bildschirm dazu, und am Halt erscheint einmalig ein kurzer Hinweis, dass der Fortschritt als Home-Bildschirm-App sicher bleibt.
+- Selbstkontrolle zusätzlich mit der WebKit-Engine bei 390×844, falls verfügbar.
 
 ## Etappe 1: Der Kern muss allein Spaß machen
 **Regeln**
@@ -105,3 +113,4 @@ Die Abschnitte ab hier sind unverändert aus der Übergabe übernommen.
 ## Etappe 5: Veröffentlichen
 - PWA mit Manifest und Service Worker, damit das Spiel installierbar ist und ohne Netz startet.
 - Bestwerte nur gegen sich selbst, mit neutralem Vermerk, ob der Schutz aktiv war.
+- Aus dem Abschnitt „iPhone": Icon und Vollbild-Angaben für den Home-Bildschirm, und am Halt einmalig ein kurzer Hinweis, dass der Fortschritt als Home-Bildschirm-App sicher bleibt.

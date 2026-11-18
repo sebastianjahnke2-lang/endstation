@@ -30,6 +30,30 @@ test('alles Geschriebene läuft über die Punktmatrix-Schrift', () => {
   assert.equal(gebaut.match(/\b(?:fillText|strokeText)\s*\(/), null);
 });
 
+test('iPhone: Safe-Area, dynamische Höhe mit Fallback, kein Zoom, kein Scrollen, keine Textauswahl', () => {
+  assert.match(gebaut, /<meta name="viewport"[^>]*viewport-fit=cover/, 'viewport-fit=cover fehlt');
+  for (const seite of ['top', 'right', 'bottom', 'left']) {
+    assert.ok(gebaut.includes(`env(safe-area-inset-${seite}`), `Abstand für safe-area-inset-${seite} fehlt`);
+  }
+  // erst die Höhe, die jeder Browser kennt, danach die dynamische
+  const fest = gebaut.indexOf('height: 100%;');
+  const dynamisch = gebaut.indexOf('height: 100dvh');
+  assert.ok(fest >= 0 && dynamisch > fest, 'dynamische Höhe braucht einen Fallback davor');
+  assert.ok(gebaut.includes('@supports (height: 100dvh)'));
+  assert.ok(!/height:\s*100vh/.test(gebaut), '100vh schneidet in Safari unten ab');
+  for (const regel of ['touch-action: none', 'overscroll-behavior: none', '-webkit-user-select: none', '-webkit-touch-callout: none']) {
+    assert.ok(gebaut.includes(regel), `${regel} fehlt`);
+  }
+  for (const sperre of ["'touchmove'", "'gesturestart'", "'dblclick'"]) assert.ok(gebaut.includes(sperre), `Sperre für ${sperre} fehlt`);
+});
+
+test('iPhone: keine Vibration, Ton erst nach einer Berührung', () => {
+  assert.equal(gebaut.match(/\bvibrate\b/), null, 'auf Vibration darf sich nichts verlassen');
+  // Der Tonkontext entsteht nur in wecke(), und wecke() hängt nur an Eingaben.
+  assert.equal(gebaut.match(/new Klasse\(\)/g).length, 1);
+  assert.equal(gebaut.match(/\bautoplay\b/), null);
+});
+
 // Der Build hängt Module ohne echten Bündler aneinander. Was er nicht kann,
 // muss er laut ablehnen, statt still etwas Falsches zu bauen.
 

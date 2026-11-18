@@ -41,9 +41,21 @@ Detailfragen, die Claude selbst entschieden hat. Neueste Etappe oben. Jede Zeile
 - **`#seed=Zahl` an der Adresse** stellt eine Fahrt nach. Nur dann lässt sich der Zustand von außen ablesen. Das brauchen die Prüfwerkzeuge.
 - **`werkzeug/` im Repo.** Drei kleine Skripte für die Selbstkontrolle im Browser. Sie brauchen Playwright aus der Cloud-Umgebung und sind kein Teil des Spiels.
 
+### iPhone
+
+- **Uhr und Lautsprecher sitzen oben.** Die Uhr steht zwischen Herzen und Ruhe, der Lautsprecher rechts neben der Zuganzeige. Unten liegt nichts mehr. Warum: Am unteren Rand sitzen die Leiste von Safari und der Home-Balken. Preis: Die Uhr ist für den Daumen weit weg. Der kurze Weg zum Warten ist das Tippen auf die eigene Figur.
+- **Unter dem Wagen bleiben 22 Pixel frei,** dazu kommt der Abstand für den Home-Balken. Das unterste Feld endet also mindestens 26 Pixel über dem Rand des sicheren Bereichs.
+- **Der Canvas füllt nur den sicheren Bereich.** Die Abstände für Notch und Home-Balken setzt das Stylesheet am Seitenrahmen. Warum: Das Spiel muss dann nirgends selbst mit Rändern rechnen, und Tippen wird relativ zum Canvas ausgewertet.
+- **Höhe:** `100%` für jeden Browser, `100dvh` dort, wo es das gibt. `100vh` kommt nicht vor, weil Safari damit unten abschneidet. Zusätzlich misst das Spiel den Canvas in jedem Bild nach, weil Safari Größenänderungen nicht verlässlich meldet.
+- **Kein Zoom, kein Scrollen:** `touch-action: none`, dazu werden `touchmove`, `gesturestart` und `dblclick` unterbunden. Im Viewport steht zusätzlich `user-scalable=no` für ältere Geräte.
+- **Ton:** Der Klang wird erst erzeugt, wenn ein Finger den Bildschirm verlässt oder eine Taste gedrückt wird. Nach einem Anruf oder App-Wechsel setzt die nächste Berührung ihn fort. Vibration nutzt das Spiel nicht.
+- **Speicher:** `ladeStand()` liefert immer einen vollständigen Stand, aus leerem, gesperrtem oder kaputtem Speicher. Geprüft ist auch, dass das Spiel weiterläuft, wenn der Speicher mitten in der Fahrt gelöscht wird. Verloren gehen dann nur die gelernten Hinweise und die Ton-Wahl.
+- **Wischen vom linken Bildschirmrand** blättert in Safari eine Seite zurück. Das lässt sich nicht abschalten. Das Spiel braucht keine Geste am Rand, Wischen wirkt überall.
+- **WebKit war nicht verfügbar.** In der Cloud-Umgebung ist nur Chromium installiert. Geprüft wurde deshalb in Chromium mit iPhone-Profil bei 390×844, auch mit nachgestellter Notch (47) und Home-Balken (34). Die Werkzeuge nehmen WebKit von selbst, sobald es da ist.
+
 ### Nicht geprüft
 
-- Kein echtes Handy. Geprüft wurde in Chromium mit nachgestellter Berührung bei 390×700 und 360×600. Safari auf dem iPhone ist ungetestet.
+- Kein echtes iPhone und keine WebKit-Engine. Was Safari anders macht als Chromium, zeigt erst das Gerät: das Verhalten der Leisten, die Ton-Freigabe, das Wischen vom Rand.
 - Der Ton wurde nicht angehört. Geprüft ist nur, dass er ohne Fehler läuft.
 - Ob es Spaß macht, kann kein Test sagen.
 

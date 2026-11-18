@@ -78,5 +78,5 @@ Keine Mechanik ohne Test. Für jede neue Szene:
 
 1. Skill `ton-check` über neue Texte und Symbole.
 2. Skill `balance-pruefen`.
-3. Im Browser bei 390×700 und 360×600 prüfen: `node werkzeug/bedienung.mjs` und `node werkzeug/schau.mjs`, Bilder ansehen. Eine überraschende Bot-Fahrt zeigt `node werkzeug/spur.mjs` Zug für Zug.
+3. Im Browser prüfen, zuerst in iPhone-Größe: `node werkzeug/bedienung.mjs 390x844` und `node werkzeug/schau.mjs`, Bilder ansehen. Dazu die Größen aus `CLAUDE.md`. Eine überraschende Bot-Fahrt zeigt `node werkzeug/spur.mjs` Zug für Zug.
 4. Steckbrief-Entscheidungen in `docs/ENTSCHEIDUNGEN.md`, neue Dateien in `CLAUDE.md` unter Architektur.

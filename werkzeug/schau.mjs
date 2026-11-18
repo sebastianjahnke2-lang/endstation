@@ -1,32 +1,22 @@
 // Selbstkontrolle im Browser: lässt einen Bot eine Fahrt im echten Spiel spielen und macht Bilder
 // an den sehenswerten Stellen (neuer Wagen, Linie, Gruppe, Treffer, volle Ruhe, offene Tür, Endkarte).
 //
-//   node werkzeug/schau.mjs [bot] [seed] [breite] [hoehe]
+//   node werkzeug/schau.mjs [bot] [seed] [breite] [hoehe]      Standard: ausgewogener 3 390 844
 //
-// Braucht Playwright. In der Cloud-Umgebung ist es vorinstalliert, ins Repo gehört es nicht.
+// Nimmt WebKit, wenn es installiert ist, sonst Chromium mit iPhone-Profil (siehe browser.mjs).
 // Die Bilder landen in $BILDER oder im Ordner "endstation-bilder" im Temp-Verzeichnis.
 
-import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { BOTS } from '../tests/bots.js';
 import { erzeugeSpiel } from '../src/kern/spiel.js';
+import { oeffne, bilderOrdner, SPIELDATEI } from './browser.mjs';
 
-const { chromium } = createRequire(import.meta.url)('playwright');
-const [bot = 'ausgewogener', seed = '3', breite = '390', hoehe = '700'] = process.argv.slice(2);
-const ordner = process.env.BILDER || join(tmpdir(), 'endstation-bilder');
-mkdirSync(ordner, { recursive: true });
-const seiteDatei = join(dirname(fileURLToPath(import.meta.url)), '..', 'index.html');
+const [bot = 'ausgewogener', seed = '3', breite = '390', hoehe = '844'] = process.argv.slice(2);
+const ordner = bilderOrdner();
 const TASTE = { hoch: 'ArrowUp', rechts: 'ArrowRight', runter: 'ArrowDown', links: 'ArrowLeft', warten: 'Space' };
 
-const browser = await chromium.launch();
-const seite = await browser.newPage({ viewport: { width: Number(breite), height: Number(hoehe) }, deviceScaleFactor: 2, hasTouch: true });
-const meldungen = [];
-seite.on('console', (m) => meldungen.push(`${m.type()}: ${m.text()}`));
-seite.on('pageerror', (e) => meldungen.push(`FEHLER: ${e.message}`));
-await seite.goto(`file://${seiteDatei}#seed=${seed}`);
+const { browser, seite, motor, meldungen } = await oeffne(Number(breite), Number(hoehe));
+await seite.goto(`file://${SPIELDATEI}#seed=${seed}`);
 await seite.waitForTimeout(300);
 
 const soll = erzeugeSpiel(Number(seed));
@@ -62,7 +52,7 @@ while (z.status === 'faehrt' && z.zug < 600) {
 await bild('ende', 900);
 const browserStand = JSON.parse(await seite.evaluate(() => window.endstationZustand()));
 const gleich = JSON.stringify(browserStand) === JSON.stringify(z);
-console.log(`${bot}, Seed ${seed}, ${breite}x${hoehe}: ${z.status} in Wagen ${z.wagenNr + 1} nach ${z.zug} Zügen`);
+console.log(`${bot}, Seed ${seed}, ${breite}x${hoehe}, ${motor}: ${z.status} in Wagen ${z.wagenNr + 1} nach ${z.zug} Zügen`);
 console.log(`Browser und Kern stimmen überein: ${gleich ? 'ja' : 'NEIN'} | Meldungen: ${JSON.stringify(meldungen)}`);
 console.log(`${nr} Bilder in ${ordner}`);
 await browser.close();

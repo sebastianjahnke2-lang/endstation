@@ -32,6 +32,15 @@ Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot er
 - Keine Erklärtexte und keine Tutorial-Bildschirme.
 - Nichts, was gegen die harten Regeln der Vision verstößt.
 
+## iPhone hat Vorrang
+Zielgerät ist das iPhone mit Safari. Der volle Wortlaut steht im Fahrplan. Für jede Änderung gilt:
+- Notch und Home-Balken bleiben frei. Das erledigt `src/style.css` mit Safe-Area-Abständen, der Canvas füllt nur den sicheren Bereich.
+- Nichts zum Antippen am unteren Rand, keine Geste beginnt am Bildschirmrand. Uhr und Lautsprecher sitzen oben. `tests/layout.test.js` prüft das.
+- Höhe mit `100dvh` und `100%` als Fallback, nie `100vh`. Kein Zoom, kein Scrollen, keine Textauswahl.
+- Ton erst nach der ersten Berührung, keine Vibration.
+- Der Speicher kann jederzeit leer sein. `ladeStand()` liefert immer einen vollständigen Stand. Neues im Speicher braucht einen Anfangswert in `src/speicher.js` und einen Test.
+- Nur Sprachmittel, die Safari seit iOS 13 kennt. Keine Schrift außer der eigenen Punktmatrix.
+
 ## Kernsatz
 Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht, und ihre Stärke dalassen.
 
@@ -73,7 +82,7 @@ src/
   texte.js          alle sichtbaren Texte, einzige Quelle
   main.js           Einstieg: verbindet Kern, Anzeige, Eingabe, Ton, Speicher
   eingabe.js        Wischen, Tippen, Tastatur
-  speicher.js       localStorage, immer in try/catch
+  speicher.js       localStorage, immer in try/catch, immer ein vollständiger Stand
   ton.js            erzeugte Klänge über Web Audio
   kern/             reine Logik ohne DOM
     feld.js         Raster 5x8, Richtungen, Breitensuche
@@ -84,7 +93,7 @@ src/
     spiel.js        erzeugeSpiel(seed) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
     anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
-    layout.js       Bildschirmaufteilung ab 360 x 600
+    layout.js       Bildschirmaufteilung ab 360 x 600, nichts am unteren Rand
     kulisse.js      Wagen, Tür, Lichter, Herzen, Ruhe, Uhr
     figuren.js      Figuren und Hindernisse
     karte.js        Endkarte mit Bahnsteig
@@ -96,7 +105,9 @@ tests/
   wagen.test.js     jede Auslosung jedes Wagens
   bots.test.js      Abnahme der Schwierigkeit
   ton.test.js       verbotene Wörter, Schrift, Textlängen
-  build.test.js     index.html aktuell, eine Datei, kein Netz, Build-Regeln
+  layout.test.js    passt auf jedes Handy, nichts zum Antippen am unteren Rand
+  speicher.test.js  leerer, gesperrter und kaputter Speicher
+  build.test.js     index.html aktuell, eine Datei, kein Netz, iPhone-Vorgaben, Build-Regeln
   bots.js           die drei Bots und fahre()
   balance.js        Balance-Bericht
 werkzeug/           Selbstkontrolle im Browser, kein Teil des Spiels
@@ -129,7 +140,8 @@ npm run build                          baut index.html aus src/
 npm test                               alle Tests (Node-eigener Testläufer, keine Pakete)
 npm run balance                        Bericht: drei Bots, 500 Fahrten je Bot
 node werkzeug/spur.mjs <bot> <seed>    eine Bot-Fahrt Zug für Zug als Textbild
-node werkzeug/bedienung.mjs 390x700    Wischen, Tippen, Tasten, Endkarte im echten Browser
+node werkzeug/bedienung.mjs 390x844    Wischen, Tippen, Tasten, Endkarte, Speicher im Browser
+node werkzeug/bedienung.mjs 390x844 47,34    dasselbe mit Notch und Home-Balken
 node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
 ```
 
@@ -138,7 +150,7 @@ Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich.
 
 ## Abschluss einer Etappe
 1. `npm run build` und `npm test`, alles grün.
-2. Selbstkontrolle im Browser bei 390×700 und 360×600: `node werkzeug/bedienung.mjs` in beiden Größen und `node werkzeug/schau.mjs`, dann die Bilder ansehen. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
+2. Selbstkontrolle im Browser: `node werkzeug/bedienung.mjs` bei 390x844 (auch mit `47,34`), 390x664, 375x548, 360x600 und 390x700, dazu `node werkzeug/schau.mjs`, dann die Bilder ansehen. Die Werkzeuge nehmen WebKit, wenn es installiert ist, sonst Chromium mit iPhone-Profil. Welche Engine lief, steht in der Ausgabe und gehört in den Bericht. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
 3. Skill `ton-check` über alle neuen Texte und Symbole, Skill `balance-pruefen` nach jeder Änderung an Zahlen.
 4. Etappenstand hier und in `docs/FAHRPLAN.md` aktualisieren, Entscheidungen notieren.
 5. Committen und pushen. Pull Request nur, wenn der Auftraggeber es sagt.

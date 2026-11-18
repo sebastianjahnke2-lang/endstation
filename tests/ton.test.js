@@ -68,6 +68,8 @@ test('die Wortliste greift wirklich', () => {
 
 // Die Zuganzeige kann nur schreiben, wofür sie ein Punktmuster hat.
 import { hatZeichen, textBreite } from '../src/anzeige/matrix.js';
+import { berechneLayout } from '../src/anzeige/layout.js';
+import { kartenMasse } from '../src/anzeige/karte.js';
 
 test('jedes Zeichen in den Texten gibt es in der Punktmatrix-Schrift', () => {
   for (const [pfad, text] of alleTexte) {
@@ -79,13 +81,16 @@ test('jedes Zeichen in den Texten gibt es in der Punktmatrix-Schrift', () => {
 });
 
 test('die Texte passen bei 360 Pixel Breite auf die Anzeige', () => {
-  // 360 breit: Kopfzeile 131 Punkte (Nummer und Strich brauchen 16), Endkarte 118, Hinweis 172
-  for (const name of Object.values(TEXTE.wagen)) assert.ok(textBreite(name) <= 131 - 16 - 2, `Wagenname zu lang: ${name}`);
-  for (const text of Object.values(TEXTE.hinweis)) assert.ok(textBreite(text) <= 172, `Hinweis zu lang: ${text}`);
+  const layout = berechneLayout(360, 600);
+  const kopf = layout.tafel.spalten - 16 - 2; // Nummer und Strich brauchen 16 Punkte
+  const karte = kartenMasse(layout, 'tod').tafel.spalten;
+  const schild = Math.floor((360 - 12 - 14) / 2); // Hinweisschild: Punktabstand 2, Rand und Polster
+  for (const name of Object.values(TEXTE.wagen)) assert.ok(textBreite(name) <= kopf, `Wagenname zu lang: ${name}`);
+  for (const text of Object.values(TEXTE.hinweis)) assert.ok(textBreite(text) <= schild, `Hinweis zu lang: ${text}`);
   for (const text of Object.values(TEXTE.ende)) {
     for (const zahl of TEXTE.zahlwort) {
       for (const zeile of text.replace('{n}', zahl).replace('{zeit}', '00:00').split(' / ')) {
-        assert.ok(textBreite(zeile) <= 118, `Zeile zu lang: ${zeile}`);
+        assert.ok(textBreite(zeile) <= karte, `Zeile zu lang: ${zeile}`);
       }
     }
   }

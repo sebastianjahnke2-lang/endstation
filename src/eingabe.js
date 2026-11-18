@@ -55,12 +55,26 @@ export function verbindeEingabe(flaeche, melde) {
     finger = null;
     if (e.type === 'pointerup') melde.losgelassen();
     if (fertig || e.type !== 'pointerup') return;
-    if (Math.hypot(dx, dy) < TIPPWEG) melde.tipp(e.clientX, e.clientY);
+    if (Math.hypot(dx, dy) < TIPPWEG) {
+      // Der Canvas beginnt nicht immer in der Ecke: Neben Notch und Home-Balken bleibt ein Rand frei.
+      const kasten = flaeche.getBoundingClientRect();
+      melde.tipp(e.clientX - kasten.left, e.clientY - kasten.top);
+    }
     else melde.aktion(wischrichtung(dx, dy), 'wisch'); // ein kurzer Wisch zählt auch
   };
   flaeche.addEventListener('pointerup', loslassen);
   flaeche.addEventListener('pointercancel', loslassen);
   flaeche.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Safari auf dem iPhone: kein Gummiband beim Ziehen, kein Zoom mit zwei Fingern oder Doppeltipp.
+  const halt = (e) => e.preventDefault();
+  document.addEventListener('touchmove', halt, { passive: false });
+  document.addEventListener('gesturestart', halt);
+  document.addEventListener('gesturechange', halt);
+  document.addEventListener('dblclick', halt);
+  // Den Ton gibt Safari erst frei, wenn ein Finger den Bildschirm wieder verlässt.
+  document.addEventListener('touchend', () => melde.losgelassen(), { passive: true });
+  document.addEventListener('click', () => melde.losgelassen());
 
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;

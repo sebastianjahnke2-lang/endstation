@@ -12,9 +12,7 @@ const leinwand = document.getElementById('bild');
 const anzeige = erzeugeAnzeige(leinwand);
 const ton = erzeugeTon();
 
-const stand = ladeStand();
-if (!stand.gelernt || typeof stand.gelernt !== 'object') stand.gelernt = {};
-if (typeof stand.ton !== 'boolean') stand.ton = true;
+const stand = ladeStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
 
 const grobesZeigen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 let mitTasten = !grobesZeigen;
@@ -115,5 +113,6 @@ anzeige.passeAn();
 starteFahrt(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
 verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
-window.addEventListener('resize', () => anzeige.passeAn());
+for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => anzeige.passeAn());
 window.requestAnimationFrame(schleife);

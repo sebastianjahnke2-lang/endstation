@@ -1,4 +1,5 @@
 // Ton ist Zugabe: wenige erzeugte Klänge, keine Dateien. Fehlt Web Audio, bleibt es still.
+// Er beginnt erst nach der ersten Berührung. Vibration nutzt das Spiel nicht, das iPhone kennt sie im Browser nicht.
 
 export function erzeugeTon() {
   let ac = null;
@@ -25,7 +26,11 @@ export function erzeugeTon() {
           daten[i] = wert / 2147483648 - 1;
         }
       }
-      if (ac.state === 'suspended') ac.resume();
+      // "suspended" vor der ersten Berührung, "interrupted" nach einem Anruf oder App-Wechsel am iPhone
+      if (ac.state !== 'running') {
+        const versuch = ac.resume();
+        if (versuch && versuch.catch) versuch.catch(() => {});
+      }
     } catch (fehler) {
       ac = null;
     }
