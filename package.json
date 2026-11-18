@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.js",
-    "test": "node --test"
+    "test": "node --test",
+    "balance": "node tests/balance.js"
   }
 }
