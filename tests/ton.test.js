@@ -65,3 +65,34 @@ test('die Wortliste greift wirklich', () => {
   for (const text of muss) assert.ok(trifft(text), `"${text}" müsste auffallen`);
   for (const text of darfNicht) assert.ok(!trifft(text), `"${text}" dürfte nicht auffallen`);
 });
+
+// Die Zuganzeige kann nur schreiben, wofür sie ein Punktmuster hat.
+import { hatZeichen, textBreite } from '../src/anzeige/matrix.js';
+
+test('jedes Zeichen in den Texten gibt es in der Punktmatrix-Schrift', () => {
+  for (const [pfad, text] of alleTexte) {
+    for (const zeichen of text.replace(/\{\w+\}/g, '')) {
+      assert.ok(hatZeichen(zeichen), `${pfad}: Zeichen "${zeichen}" fehlt in der Schrift`);
+    }
+  }
+  for (const zeichen of '0123456789:') assert.ok(hatZeichen(zeichen));
+});
+
+test('die Texte passen bei 360 Pixel Breite auf die Anzeige', () => {
+  // 360 breit: Kopfzeile 131 Punkte (Nummer und Strich brauchen 16), Endkarte 118, Hinweis 172
+  for (const name of Object.values(TEXTE.wagen)) assert.ok(textBreite(name) <= 131 - 16 - 2, `Wagenname zu lang: ${name}`);
+  for (const text of Object.values(TEXTE.hinweis)) assert.ok(textBreite(text) <= 172, `Hinweis zu lang: ${text}`);
+  for (const text of Object.values(TEXTE.ende)) {
+    for (const zahl of TEXTE.zahlwort) {
+      for (const zeile of text.replace('{n}', zahl).replace('{zeit}', '00:00').split(' / ')) {
+        assert.ok(textBreite(zeile) <= 118, `Zeile zu lang: ${zeile}`);
+      }
+    }
+  }
+});
+
+test('Hinweise haben wenige Worte, und es sind höchstens drei Lagen', () => {
+  for (const text of Object.values(TEXTE.hinweis)) assert.ok(text.split(' ').length <= 3, text);
+  // wischen und tasten sind derselbe Hinweis für zwei Geräte
+  assert.ok(Object.keys(TEXTE.hinweis).filter((k) => k !== 'tasten').length <= 3);
+});
