@@ -18,9 +18,10 @@ Vom Auftraggeber, im Wortlaut:
 - Vorurteile kosten Züge oder Wege, nie unvermeidbaren Schaden. Im Rückblick stehen sie als Tatsache.
 - Gegenstück: Auch der Spieler liest andere falsch (Stimmung lesen). Beides zusammen ist das Thema „erster Eindruck".
 
+- Nachtrag zum Kontrolleur: Andere Fahrgäste gehen sichtbar ungeprüft an ihm vorbei. Ab und zu soll aber doch mal einer kontrolliert werden, damit es nicht billig wirkt und der Spieler merkt, dass er anders behandelt wird.
+
 Baut auf Etappe 3 auf: Gegenstand und Haltung der Figur, Stimmung lesen, Rückblick.
 
 Offen, vor dem Bauen zu klären:
 
 - Der Gegenstand hat laut Fahrplan keine Werte. Hängt ein Vorurteil an ihm, kostet die Wahl doch Züge oder Wege. Entweder trifft das Vorurteil jeden Gegenstand gleich oft, oder der Satz im Fahrplan ändert sich.
-- „Der Kontrolleur prüft nur den Spieler" sieht man nur, wenn andere Fahrgäste sichtbar ungeprüft an ihm vorbeigehen.
