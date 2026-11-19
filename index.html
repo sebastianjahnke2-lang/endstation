@@ -1,0 +1,2984 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#080a10">
+<title>Endstation</title>
+<link rel="icon" href="data:,">
+<style>
+/* Die Seite ist nur der Rahmen. Alles Sichtbare zeichnet der Canvas.
+   Zielgerät ist das iPhone mit Safari: nichts scrollt, nichts zoomt, nichts lässt sich markieren. */
+
+html {
+  height: 100%;
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  /* Höhe: erst der Wert, den jeder Browser kennt. Wo es die dynamische Höhe gibt, gilt sie:
+     Sie folgt den Leisten von Safari, damit unten nichts abgeschnitten wird. */
+  height: 100%;
+  box-sizing: border-box;
+  /* Notch und Home-Balken bleiben frei, der Canvas füllt nur den sicheren Bereich. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (height: 100dvh) {
+  body {
+    height: 100dvh;
+  }
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+</style>
+</head>
+<body>
+<canvas id="bild"></canvas>
+<script>
+(function () {
+'use strict';
+
+// --- kern/feld.js
+// Das Raster eines Wagens und alles, was nur mit Geometrie zu tun hat.
+
+const BREITE = 5;
+const HOEHE = 8;
+const STARTFELD = { x: 2, y: 7 };
+const TUERFELD = { x: 2, y: 0 }; // das Feld vor der Tür, die Tür liegt darüber
+
+const RICHTUNG = {
+  hoch: { x: 0, y: -1 },
+  rechts: { x: 1, y: 0 },
+  runter: { x: 0, y: 1 },
+  links: { x: -1, y: 0 },
+};
+const RICHTUNGSNAMEN = ['hoch', 'rechts', 'runter', 'links'];
+
+function imFeld(x, y) {
+  return x >= 0 && x < BREITE && y >= 0 && y < HOEHE;
+}
+
+function feldNr(x, y) {
+  return y * BREITE + x;
+}
+
+function abstand(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+// Breitensuche: Entfernung jedes Feldes zum Ziel in Schritten.
+// begehbar(x, y) entscheidet, wo man gehen darf. Das Zielfeld zählt immer.
+// Unerreichbare Felder behalten -1.
+function entfernungen(ziel, begehbar) {
+  const weit = new Array(BREITE * HOEHE).fill(-1);
+  const schlange = [{ x: ziel.x, y: ziel.y }];
+  weit[feldNr(ziel.x, ziel.y)] = 0;
+  for (let i = 0; i < schlange.length; i++) {
+    const f = schlange[i];
+    const d = weit[feldNr(f.x, f.y)];
+    for (const name of RICHTUNGSNAMEN) {
+      const x = f.x + RICHTUNG[name].x;
+      const y = f.y + RICHTUNG[name].y;
+      if (!imFeld(x, y) || weit[feldNr(x, y)] !== -1 || !begehbar(x, y)) continue;
+      weit[feldNr(x, y)] = d + 1;
+      schlange.push({ x, y });
+    }
+  }
+  return weit;
+}
+
+// Der nächste Schritt von "von" in Richtung Ziel, anhand einer Entfernungskarte.
+// Bei Gleichstand wird zuerst die größere Lücke geschlossen, danach gilt die
+// feste Reihenfolge der Richtungen. So bewegt sich jede Figur immer gleich.
+function naechsterSchritt(von, weit, ziel) {
+  const hier = weit[feldNr(von.x, von.y)];
+  if (hier <= 0) return null;
+  let bester = null;
+  let besteLuecke = -1;
+  for (const name of RICHTUNGSNAMEN) {
+    const x = von.x + RICHTUNG[name].x;
+    const y = von.y + RICHTUNG[name].y;
+    if (!imFeld(x, y) || weit[feldNr(x, y)] !== hier - 1) continue;
+    const luecke = RICHTUNG[name].x !== 0 ? Math.abs(ziel.x - von.x) : Math.abs(ziel.y - von.y);
+    if (luecke > besteLuecke) {
+      bester = { x, y, richtung: name };
+      besteLuecke = luecke;
+    }
+  }
+  return bester;
+}
+
+// --- kern/lage.js
+// Fragen an den Spielzustand: Was steht wo, was ist markiert.
+
+
+
+function istHindernis(z, x, y) {
+  return z.wagen.plan[y][x] !== '.';
+}
+
+function gegnerAuf(z, x, y) {
+  for (const g of z.gegner) if (g.x === x && g.y === y) return g;
+  return null;
+}
+
+function spielerAuf(z, x, y) {
+  return z.spieler.x === x && z.spieler.y === y;
+}
+
+// frei heißt: im Wagen, kein Hindernis, keine Figur
+function istFrei(z, x, y) {
+  return imFeld(x, y) && !istHindernis(z, x, y) && !gegnerAuf(z, x, y) && !spielerAuf(z, x, y);
+}
+
+function istMarkiert(z, x, y) {
+  for (const g of z.gegner) {
+    if (g.ansage && g.ansage.some((f) => f.x === x && f.y === y)) return true;
+  }
+  return false;
+}
+
+// Der Vorderste einer Reisegruppe ist das lebende Mitglied mit dem kleinsten Rang.
+function istVorderster(z, g) {
+  if (g.typ !== 'gruppe') return false;
+  for (const anderer of z.gegner) {
+    if (anderer.typ === 'gruppe' && anderer.gruppe === g.gruppe && anderer.rang < g.rang) return false;
+  }
+  return true;
+}
+
+// --- kern/zufall.js
+// Zufall mit Seed. Der Stand liegt im Spielzustand, damit jede Fahrt
+// mit demselben Seed und denselben Eingaben gleich verläuft.
+
+function naechsteZufallszahl(z) {
+  z.zufall = (z.zufall + 0x6d2b79f5) >>> 0;
+  let t = z.zufall;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// ganze Zahl von 0 bis n - 1
+function wuerfle(z, n) {
+  return Math.floor(naechsteZufallszahl(z) * n);
+}
+
+// --- kern/wagen.js
+// Die Wagen einer Fahrt. Zahlen sind Startwerte.
+// "art" ist die Kennung des Wagens, sein Name für die Anzeige steht in texte.js.
+//
+// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand. Alles außer "." ist ein Hindernis.
+// Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
+// Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
+// Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
+// Alle Angaben gelten ungespiegelt, der Wagen wird zufällig gespiegelt.
+//
+// Bauregel, damit sich jede Ankündigung mit einem Schritt verlassen lässt:
+// Jedes freie Feld hat mindestens einen freien Nachbarn links oder rechts
+// und mindestens einen freien Nachbarn oben oder unten. Es gibt also keine
+// Sackgassen und keine einspurigen Gänge. tests/wagen.test.js prüft das.
+
+
+
+
+const WAGENPLAENE = [
+  {
+    art: 'sitzwagen',
+    plan: [
+      '.....',
+      '.....',
+      'S...S',
+      '.....',
+      '.....',
+      'S...S',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'pendler', langsam: true, orte: [[2, 2], [1, 2], [3, 2]] },
+    ],
+  },
+  {
+    art: 'fahrradabteil',
+    plan: [
+      '.....',
+      '.....',
+      'F....',
+      'F...K',
+      'F....',
+      'FF...',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'pendler', orte: [[3, 1], [4, 1], [3, 0]] },
+      { typ: 'pendler', orte: [[1, 3], [2, 3], [1, 2]] },
+      { typ: 'pendler', orte: [[4, 2], [3, 3], [4, 4]] },
+    ],
+  },
+  {
+    art: 'grossraumwagen',
+    plan: [
+      '.....',
+      '.....',
+      'SS..S',
+      '.....',
+      '.....',
+      'S..SS',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0]], [[2, 1], [2, 0], [3, 0]]] },
+      { typ: 'pendler', orte: [[0, 3], [1, 3]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 3]] },
+    ],
+  },
+  {
+    art: 'liegewagen',
+    plan: [
+      '.....',
+      '.....',
+      '..WWW',
+      '.....',
+      '.....',
+      '..WWW',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'draengler', orte: [[0, 0], [1, 0], [0, 1]] },
+      { typ: 'pendler', orte: [[4, 0], [3, 0]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 3]] },
+      { typ: 'pendler', orte: [[4, 4], [3, 4]] },
+    ],
+  },
+  {
+    art: 'gepaeckwagen',
+    plan: [
+      'K...K',
+      '.....',
+      '..K..',
+      'K....',
+      '....K',
+      '..K..',
+      '.....',
+      'K...K',
+    ],
+    gegner: [
+      { typ: 'draengler', orte: [[4, 1], [3, 0]] },
+      { typ: 'gruppe', ketten: [[[2, 1], [2, 0], [1, 0]], [[1, 1], [1, 0], [2, 0]]] },
+      { typ: 'pendler', orte: [[1, 3], [1, 2]] },
+      { typ: 'pendler', orte: [[3, 3], [4, 3]] },
+    ],
+  },
+];
+
+const WAGENZAHL = WAGENPLAENE.length;
+
+// Baut den Wagen mit der Nummer nr (ab 0). Gibt Plan und Gegnervorgaben zurück.
+function baueWagen(nr, z) {
+  const vorlage = WAGENPLAENE[nr];
+  const gespiegelt = wuerfle(z, 2) === 1;
+  const sx = (x) => (gespiegelt ? BREITE - 1 - x : x);
+  const plan = vorlage.plan.map((zeile) => (gespiegelt ? [...zeile].reverse().join('') : zeile));
+  const gegner = [];
+  let gruppe = 0;
+  for (const vorgabe of vorlage.gegner) {
+    if (vorgabe.typ === 'gruppe') {
+      const kette = vorgabe.ketten[wuerfle(z, vorgabe.ketten.length)];
+      gruppe += 1;
+      kette.forEach(([x, y], rang) => gegner.push({ typ: 'gruppe', x: sx(x), y, gruppe, rang }));
+    } else {
+      const [x, y] = vorgabe.orte[wuerfle(z, vorgabe.orte.length)];
+      gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
+    }
+  }
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner };
+}
+
+// --- kern/gegner.js
+// Verhalten der Fahrgäste. Jede Figur folgt festen Regeln ohne Zufall,
+// damit man sie durchschauen kann.
+//
+// Ablauf eines Gegnerzugs:
+//   1. Alle angekündigten Angriffe treffen ein (loeseAnsagenEin).
+//   2. Wer nicht angegriffen hat, bewegt sich oder kündigt an (planeGegner).
+// Ein Angriff trifft also immer genau einen Zug nach seiner Ankündigung.
+
+
+
+
+const GEGNERWERTE = {
+  pendler: { hp: 2 },
+  gruppe: { hp: 1, schritte: 2 },
+  draengler: { hp: 3, erschoepfung: 1 },
+};
+
+function neuerGegner(id, vorgabe) {
+  const g = { id, typ: vorgabe.typ, x: vorgabe.x, y: vorgabe.y, hp: GEGNERWERTE[vorgabe.typ].hp, ansage: null };
+  if (g.typ === 'pendler') {
+    g.langsam = vorgabe.langsam === true;
+    g.pause = 0;
+  } else if (g.typ === 'gruppe') {
+    g.gruppe = vorgabe.gruppe;
+    g.rang = vorgabe.rang;
+  } else if (g.typ === 'draengler') {
+    g.erschoepft = 0;
+  }
+  return g;
+}
+
+function kopie(f) {
+  return { x: f.x, y: f.y };
+}
+
+// Felder, die für eine Figur begehbar sind: kein Hindernis, keine andere Figur.
+function begehbarFuer(z, g) {
+  return (x, y) => !istHindernis(z, x, y) && !spielerAuf(z, x, y) && (gegnerAuf(z, x, y) || g) === g;
+}
+
+// Die Figur läuft die angekündigten Felder ab, bis jemand im Weg steht.
+// Steht der Spieler im Weg, wird er getroffen, und die Figur bleibt davor stehen.
+function stosseVor(z, g, ereignisse) {
+  const von = kopie(g);
+  const weg = [];
+  let trifft = false;
+  for (const f of g.ansage) {
+    if (spielerAuf(z, f.x, f.y)) {
+      trifft = true;
+      break;
+    }
+    if (!istFrei(z, f.x, f.y)) break;
+    g.x = f.x;
+    g.y = f.y;
+    weg.push(kopie(f));
+  }
+  ereignisse.push({ typ: 'vorstoss', phase: 1, id: g.id, gegner: g.typ, von, weg, felder: g.ansage.map(kopie), trifft });
+  return trifft;
+}
+
+// Mitglieder einer Reisegruppe rücken zu ihrem Vordermann auf, bis zu zwei Schritte.
+function rueckeAuf(z, ereignisse) {
+  const mitglieder = z.gegner.filter((g) => g.typ === 'gruppe').sort((a, b) => a.gruppe - b.gruppe || a.rang - b.rang);
+  let vordermann = null;
+  for (const g of mitglieder) {
+    if (!vordermann || vordermann.gruppe !== g.gruppe) {
+      vordermann = g; // der Vorderste läuft nur über seine Ansage
+      continue;
+    }
+    const von = kopie(g);
+    const weg = [];
+    for (let i = 0; i < GEGNERWERTE.gruppe.schritte && abstand(g, vordermann) > 1; i++) {
+      const weit = entfernungen(vordermann, begehbarFuer(z, g));
+      const schritt = naechsterSchritt(g, weit, vordermann);
+      if (!schritt || !istFrei(z, schritt.x, schritt.y)) break;
+      g.x = schritt.x;
+      g.y = schritt.y;
+      weg.push(kopie(schritt));
+    }
+    if (weg.length) ereignisse.push({ typ: 'folgen', phase: 1, id: g.id, von, weg });
+    vordermann = g;
+  }
+}
+
+// Schritt 1: Angekündigte Angriffe treffen ein. Gibt zurück, wer den Spieler getroffen hat.
+function loeseAnsagenEin(z, ereignisse) {
+  let treffer = null;
+  const dran = new Set();
+  for (const g of [...z.gegner]) {
+    if (!g.ansage) continue;
+    dran.add(g.id);
+    let trifft = false;
+    if (g.typ === 'pendler') {
+      trifft = g.ansage.some((f) => spielerAuf(z, f.x, f.y));
+      ereignisse.push({ typ: 'hieb', phase: 1, id: g.id, felder: g.ansage.map(kopie), trifft });
+      if (g.langsam) g.pause = 1;
+    } else {
+      trifft = stosseVor(z, g, ereignisse);
+      if (g.typ === 'draengler') g.erschoepft = GEGNERWERTE.draengler.erschoepfung;
+    }
+    g.ansage = null;
+    if (trifft && !treffer) treffer = g;
+  }
+  rueckeAuf(z, ereignisse);
+  return { treffer, dran };
+}
+
+function sagAn(g, felder, ereignisse) {
+  if (!felder.length) return;
+  g.ansage = felder.map(kopie);
+  ereignisse.push({ typ: 'ansage', phase: 2, id: g.id, gegner: g.typ, felder: felder.map(kopie) });
+}
+
+function geheEinenSchritt(z, g, schritt, ereignisse) {
+  if (!schritt || !istFrei(z, schritt.x, schritt.y)) return false;
+  const von = kopie(g);
+  g.x = schritt.x;
+  g.y = schritt.y;
+  ereignisse.push({ typ: 'gegnerSchritt', phase: 2, id: g.id, von, nach: kopie(g) });
+  return true;
+}
+
+// Schritt Richtung Spieler. Erst um andere Figuren herum, sonst hinter ihnen her.
+function schrittZumSpieler(z, g) {
+  const s = z.spieler;
+  let weit = entfernungen(s, begehbarFuer(z, g));
+  if (weit[feldNr(g.x, g.y)] < 0) weit = entfernungen(s, (x, y) => !istHindernis(z, x, y));
+  return naechsterSchritt(g, weit, s);
+}
+
+function planePendler(z, g, ereignisse) {
+  if (g.pause > 0) {
+    g.pause -= 1;
+    return;
+  }
+  if (abstand(g, z.spieler) === 1) {
+    sagAn(g, [z.spieler], ereignisse);
+    return;
+  }
+  if (geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse) && g.langsam) g.pause = 1;
+}
+
+// Der Vorderste kündigt die nächsten zwei Felder seines Wegs zum Spieler an.
+function planeVordersten(z, g, ereignisse) {
+  const s = z.spieler;
+  const weit = entfernungen(s, begehbarFuer(z, g));
+  const felder = [];
+  let hier = kopie(g);
+  for (let i = 0; i < GEGNERWERTE.gruppe.schritte; i++) {
+    const schritt = naechsterSchritt(hier, weit, s);
+    if (!schritt) break;
+    felder.push(kopie(schritt));
+    hier = schritt;
+  }
+  sagAn(g, felder, ereignisse);
+}
+
+// Freie Sicht in gerader Linie vom Drängler zum Spieler? Gibt die Richtung zurück.
+function sichtlinie(z, von, nach) {
+  if (von.x !== nach.x && von.y !== nach.y) return null;
+  if (von.x === nach.x && von.y === nach.y) return null;
+  const name = von.x === nach.x ? (nach.y < von.y ? 'hoch' : 'runter') : (nach.x < von.x ? 'links' : 'rechts');
+  const r = RICHTUNG[name];
+  for (let x = von.x + r.x, y = von.y + r.y; x !== nach.x || y !== nach.y; x += r.x, y += r.y) {
+    if (istHindernis(z, x, y) || gegnerAuf(z, x, y)) return null;
+  }
+  return name;
+}
+
+function planeDraengler(z, g, ereignisse) {
+  if (g.erschoepft > 0) {
+    g.erschoepft -= 1;
+    return;
+  }
+  const s = z.spieler;
+  const richtung = sichtlinie(z, g, s);
+  if (richtung) {
+    // die ganze Linie bis zur Wand oder zum nächsten Hindernis
+    const r = RICHTUNG[richtung];
+    const felder = [];
+    for (let x = g.x + r.x, y = g.y + r.y; imFeld(x, y) && !istHindernis(z, x, y); x += r.x, y += r.y) {
+      felder.push({ x, y });
+    }
+    sagAn(g, felder, ereignisse);
+    return;
+  }
+  // Sonst zum nächsten Feld gehen, von dem aus die Linie frei ist.
+  const vonHier = entfernungen(g, begehbarFuer(z, g));
+  let ziel = null;
+  let bestes = Infinity;
+  for (let y = 0; y < HOEHE; y++) {
+    for (let x = 0; x < BREITE; x++) {
+      const d = vonHier[feldNr(x, y)];
+      if (d <= 0 || !istFrei(z, x, y) || !sichtlinie(z, { x, y }, s)) continue;
+      const wertung = d * 100 - abstand({ x, y }, s); // nah zuerst, bei Gleichstand der längere Anlauf
+      if (wertung < bestes) {
+        bestes = wertung;
+        ziel = { x, y };
+      }
+    }
+  }
+  if (ziel) {
+    geheEinenSchritt(z, g, naechsterSchritt(g, entfernungen(ziel, begehbarFuer(z, g)), ziel), ereignisse);
+  } else {
+    geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse);
+  }
+}
+
+// Schritt 2: Bewegen oder ankündigen. Wer in diesem Zug angegriffen hat, setzt aus.
+// Ausnahme ist der Vorderste der Reisegruppe: Er läuft und kündigt in jedem Zug an.
+function planeGegner(z, dran, ereignisse) {
+  for (const g of z.gegner) {
+    if (g.typ === 'gruppe') {
+      if (istVorderster(z, g)) planeVordersten(z, g, ereignisse);
+    } else if (dran.has(g.id)) {
+      continue;
+    } else if (g.typ === 'pendler') {
+      planePendler(z, g, ereignisse);
+    } else if (g.typ === 'draengler') {
+      planeDraengler(z, g, ereignisse);
+    }
+  }
+}
+
+// Liste aller Richtungen als Hilfe für Tests und Bots
+function richtungVon(a, b) {
+  for (const name of RICHTUNGSNAMEN) {
+    if (a.x + RICHTUNG[name].x === b.x && a.y + RICHTUNG[name].y === b.y) return name;
+  }
+  return null;
+}
+
+// --- kern/spiel.js
+// Der Spielkern. Kennt weder Bildschirm noch Browser.
+//
+//   const spiel = erzeugeSpiel(seed);
+//   const ereignisse = spiel.act('hoch');   // 'hoch' | 'rechts' | 'runter' | 'links' | 'warten'
+//
+// act() ändert spiel.zustand und gibt zurück, was dabei passiert ist.
+// Jedes Ereignis trägt eine Phase: 0 Spieler, 1 Angriffe treffen ein, 2 Gegner bewegen sich.
+// Eine ungültige Eingabe ändert nichts und kostet keinen Zug.
+
+
+
+
+
+
+const HERZEN_VOLL = 5;
+const RUHE_VOLL = 3;
+const SCHADEN_SPIELER = 1;
+
+function richteWagenEin(z) {
+  const wagen = baueWagen(z.wagenNr, z);
+  z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
+  z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
+  z.spieler.x = STARTFELD.x;
+  z.spieler.y = STARTFELD.y;
+  z.tuerOffen = z.gegner.length === 0;
+  z.zuegeImWagen = 0;
+}
+
+function oeffneTuer(z, ereignisse) {
+  if (z.tuerOffen || z.gegner.length > 0) return;
+  z.tuerOffen = true;
+  ereignisse.push({ typ: 'tuerAuf', phase: 0 });
+}
+
+function wechsleWagen(z) {
+  z.zug += 1;
+  z.zaehler.schritte += 1;
+  z.zaehler.wagen += 1;
+  if (z.wagenNr + 1 >= WAGENZAHL) {
+    z.status = 'halt';
+    return [{ typ: 'halt', phase: 0 }];
+  }
+  z.wagenNr += 1;
+  richteWagenEin(z);
+  return [{ typ: 'wagenwechsel', phase: 0, nr: z.wagenNr }];
+}
+
+function fuehreAus(z, aktion) {
+  if (z.status !== 'faehrt') return [];
+  const s = z.spieler;
+  const ereignisse = [];
+  const startRot = istMarkiert(z, s.x, s.y);
+  let zielRot = false;
+  let bewegt = false;
+
+  // Phase 0: der Spieler
+  if (aktion === 'warten') {
+    ereignisse.push({ typ: 'warten', phase: 0 });
+    z.zaehler.gewartet += 1;
+  } else {
+    const r = RICHTUNG[aktion];
+    if (!r) return [];
+    const x = s.x + r.x;
+    const y = s.y + r.y;
+    if (aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y) {
+      if (!z.tuerOffen) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: true }];
+      return wechsleWagen(z);
+    }
+    if (!imFeld(x, y) || istHindernis(z, x, y)) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+    const g = gegnerAuf(z, x, y);
+    if (g) {
+      g.hp -= SCHADEN_SPIELER;
+      const besiegt = g.hp <= 0;
+      ereignisse.push({ typ: 'schlag', phase: 0, id: g.id, gegner: g.typ, richtung: aktion, x, y, hp: Math.max(0, g.hp), besiegt });
+      z.zaehler.schlaege += 1;
+      if (besiegt) {
+        z.gegner.splice(z.gegner.indexOf(g), 1); // seine Ansage verfällt mit ihm
+        z.zaehler.besiegt += 1;
+        oeffneTuer(z, ereignisse);
+      }
+    } else {
+      zielRot = istMarkiert(z, x, y);
+      ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y } });
+      s.x = x;
+      s.y = y;
+      bewegt = true;
+      z.zaehler.schritte += 1;
+    }
+  }
+  z.zug += 1;
+  z.zuegeImWagen += 1;
+
+  // Phase 1: angekündigte Angriffe treffen ein
+  const { treffer, dran } = loeseAnsagenEin(z, ereignisse);
+  if (treffer) {
+    s.herzen -= 1; // höchstens ein Herz je Zug, egal wie viele treffen
+    s.ruhe = 0;
+    z.zaehler.treffer += 1;
+    ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ });
+    if (s.herzen <= 0) {
+      z.status = 'tot';
+      ereignisse.push({ typ: 'tod', phase: 1, wagenNr: z.wagenNr, durch: treffer.typ, uebrig: z.gegner.length });
+      return ereignisse;
+    }
+  } else if (startRot && bewegt && !zielRot) {
+    z.zaehler.ausgewichen += 1;
+    if (s.ruhe < RUHE_VOLL) s.ruhe += 1;
+    ereignisse.push({ typ: 'ausgewichen', phase: 1, ruhe: s.ruhe });
+  }
+
+  // Phase 2: Gegner bewegen sich oder kündigen an
+  planeGegner(z, dran, ereignisse);
+  return ereignisse;
+}
+
+function erzeugeSpiel(seed, optionen = {}) {
+  const z = {
+    seed: seed >>> 0,
+    zufall: seed >>> 0,
+    status: 'faehrt', // 'faehrt' | 'tot' | 'halt'
+    wagenNr: optionen.startWagen || 0,
+    wagen: null,
+    spieler: { x: STARTFELD.x, y: STARTFELD.y, herzen: HERZEN_VOLL, ruhe: 0 },
+    gegner: [],
+    tuerOffen: false,
+    zug: 0,
+    zuegeImWagen: 0,
+    naechsteId: 1,
+    zaehler: { schritte: 0, schlaege: 0, gewartet: 0, ausgewichen: 0, treffer: 0, besiegt: 0, wagen: 0 },
+  };
+  richteWagenEin(z);
+  return { zustand: z, act: (aktion) => fuehreAus(z, aktion) };
+}
+
+// --- texte.js
+// Alle Texte, die im Spiel zu lesen sind. Einzige Quelle, damit der Ton-Test
+// (tests/ton.test.js) nichts übersieht. Nur Zeichenketten, keine Funktionen.
+// Veränderliche Stellen stehen als Platzhalter in geschweiften Klammern, etwa {n}.
+// Ein Schrägstrich mit Leerzeichen davor und danach trennt zwei Zeilen der Anzeige.
+
+const TEXTE = {
+  // Namen der Wagen auf der Zuganzeige, Schlüssel wie in kern/wagen.js
+  wagen: {
+    sitzwagen: 'Sitzwagen',
+    fahrradabteil: 'Fahrradabteil',
+    grossraumwagen: 'Großraumwagen',
+    liegewagen: 'Liegewagen',
+    gepaeckwagen: 'Gepäckwagen',
+  },
+
+  // Höchstens drei Hinweise, jeder erst, wenn die Lage eintritt
+  hinweis: {
+    wischen: 'Wischen',
+    tasten: 'Pfeiltasten',
+    ausweichen: 'Ausweichen',
+    anrempeln: 'Anrempeln',
+  },
+
+  // Endkarte: eine wahre Zeile, was gefehlt hat
+  ende: {
+    einWagen: 'Noch ein Wagen / bis zum Halt',
+    mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
+    halt: 'Halt / Ankunft {zeit} Uhr',
+  },
+
+  zahlwort: ['null', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs'],
+};
+
+// Setzt Werte in die Platzhalter eines Texts ein.
+function fuelle(text, werte) {
+  return text.replace(/\{(\w+)\}/g, (ganz, name) => (werte[name] !== undefined ? String(werte[name]) : ganz));
+}
+
+// --- anzeige/formen.js
+// Farben und kleine Zeichenhilfen für die ganze Anzeige.
+
+const FARBE = {
+  nacht: '#080a10',
+  wand: '#2b3550',
+  wandKante: '#3a4666',
+  wandDunkel: '#171d2c',
+  boden: '#151c2b',
+  feld: '#212c44',
+  feldKante: '#2a3858',
+  glas: '#0c1626',
+  glasGlanz: '#1c2d48',
+  tafel: '#120e08',
+  tafelRand: '#2c2416',
+  bernstein: '#ffb347',
+  bernsteinAus: '#33260f',
+  rot: '#e8402f',
+  rotHell: '#ff7a63',
+  herz: '#f08a7a',
+  ruhe: '#bfe3ff',
+  leer: '#39435c',
+  gruen: '#6fdc8f',
+  warm: '#ffd9a0',
+  spieler: { mantel: '#eadfc6', kopf: '#f7eedb', schuh: '#8d7b5e', schal: '#ffb347' },
+  pendler: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658', tasche: '#4a392b', arm: '#56667d' },
+  gruppe: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', rucksack: '#2f6155', wimpel: '#f2d264' },
+  draengler: { mantel: '#9a5a74', kopf: '#dbb9c6', schuh: '#4f2c3c', arm: '#7c455c' },
+};
+
+function rundesRechteck(stift, x, y, b, h, r) {
+  const k = Math.min(r, b / 2, h / 2);
+  stift.beginPath();
+  stift.moveTo(x + k, y);
+  stift.lineTo(x + b - k, y);
+  stift.quadraticCurveTo(x + b, y, x + b, y + k);
+  stift.lineTo(x + b, y + h - k);
+  stift.quadraticCurveTo(x + b, y + h, x + b - k, y + h);
+  stift.lineTo(x + k, y + h);
+  stift.quadraticCurveTo(x, y + h, x, y + h - k);
+  stift.lineTo(x, y + k);
+  stift.quadraticCurveTo(x, y, x + k, y);
+  stift.closePath();
+}
+
+function kreis(stift, x, y, r) {
+  stift.beginPath();
+  stift.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
+}
+
+function begrenze(wert, von, bis) {
+  return wert < von ? von : wert > bis ? bis : wert;
+}
+
+// weiches Auslaufen
+function sanft(p) {
+  return 1 - (1 - p) * (1 - p) * (1 - p);
+}
+
+// Auslaufen mit kleinem Überschwingen, für den Flusszustand
+function leicht(p) {
+  const c = 1.9;
+  return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2);
+}
+
+// hin und zurück: 0 -> 1 -> 0
+function hinUndHer(p) {
+  return Math.sin(p * Math.PI);
+}
+
+// --- anzeige/matrix.js
+// Punktmatrix-Schrift der Zuganzeige. Jedes Zeichen ist 5 Punkte breit und 7 hoch,
+// Unterlängen brauchen zwei Zeilen mehr. Alles Geschriebene im Spiel nutzt diese Schrift,
+// damit es auf jedem Gerät gleich aussieht.
+
+const ZEICHEN = {
+  ' ': '..... ..... ..... ..... ..... ..... .....',
+  A: '.###. #...# #...# ##### #...# #...# #...#',
+  B: '####. #...# #...# ####. #...# #...# ####.',
+  C: '.###. #...# #.... #.... #.... #...# .###.',
+  D: '####. #...# #...# #...# #...# #...# ####.',
+  E: '##### #.... #.... ####. #.... #.... #####',
+  F: '##### #.... #.... ####. #.... #.... #....',
+  G: '.###. #...# #.... #.### #...# #...# .###.',
+  H: '#...# #...# #...# ##### #...# #...# #...#',
+  I: '.###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  J: '..### ...#. ...#. ...#. ...#. #..#. .##..',
+  K: '#...# #..#. #.#.. ##... #.#.. #..#. #...#',
+  L: '#.... #.... #.... #.... #.... #.... #####',
+  M: '#...# ##.## #.#.# #.#.# #...# #...# #...#',
+  N: '#...# ##..# #.#.# #..## #...# #...# #...#',
+  O: '.###. #...# #...# #...# #...# #...# .###.',
+  P: '####. #...# #...# ####. #.... #.... #....',
+  Q: '.###. #...# #...# #...# #.#.# #..#. .##.#',
+  R: '####. #...# #...# ####. #.#.. #..#. #...#',
+  S: '.#### #.... #.... .###. ....# ....# ####.',
+  T: '##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..',
+  U: '#...# #...# #...# #...# #...# #...# .###.',
+  V: '#...# #...# #...# #...# #...# .#.#. ..#..',
+  W: '#...# #...# #...# #.#.# #.#.# ##.## #...#',
+  X: '#...# #...# .#.#. ..#.. .#.#. #...# #...#',
+  Y: '#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..',
+  Z: '##### ....# ...#. ..#.. .#... #.... #####',
+  Ä: '#...# .###. #...# #...# ##### #...# #...#',
+  Ö: '#...# .###. #...# #...# #...# #...# .###.',
+  Ü: '#...# ..... #...# #...# #...# #...# .###.',
+  a: '..... ..... .###. ....# .#### #...# .####',
+  b: '#.... #.... #.##. ##..# #...# #...# ####.',
+  c: '..... ..... .###. #.... #.... #...# .###.',
+  d: '....# ....# .##.# #..## #...# #...# .####',
+  e: '..... ..... .###. #...# ##### #.... .###.',
+  f: '..##. .#..# .#... ###.. .#... .#... .#...',
+  g: '..... ..... .#### #...# #...# #...# .#### ....# .###.',
+  h: '#.... #.... #.##. ##..# #...# #...# #...#',
+  i: '..#.. ..... .##.. ..#.. ..#.. ..#.. .###.',
+  j: '...#. ..... ..##. ...#. ...#. ...#. ...#. #..#. .##..',
+  k: '#.... #.... #..#. #.#.. ##... #.#.. #..#.',
+  l: '.##.. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  m: '..... ..... ##.#. #.#.# #.#.# #.#.# #.#.#',
+  n: '..... ..... #.##. ##..# #...# #...# #...#',
+  o: '..... ..... .###. #...# #...# #...# .###.',
+  p: '..... ..... ####. #...# #...# #...# ####. #.... #....',
+  q: '..... ..... .#### #...# #...# #...# .#### ....# ....#',
+  r: '..... ..... #.##. ##..# #.... #.... #....',
+  s: '..... ..... .#### #.... .###. ....# ####.',
+  t: '.#... .#... ###.. .#... .#... .#..# ..##.',
+  u: '..... ..... #...# #...# #...# #..## .##.#',
+  v: '..... ..... #...# #...# #...# .#.#. ..#..',
+  w: '..... ..... #...# #...# #.#.# #.#.# .#.#.',
+  x: '..... ..... #...# .#.#. ..#.. .#.#. #...#',
+  y: '..... ..... #...# #...# #...# #...# .#### ....# .###.',
+  z: '..... ..... ##### ...#. ..#.. .#... #####',
+  ä: '.#.#. ..... .###. ....# .#### #...# .####',
+  ö: '.#.#. ..... .###. #...# #...# #...# .###.',
+  ü: '.#.#. ..... #...# #...# #...# #..## .##.#',
+  ß: '.##.. #..#. #..#. #.##. #...# #...# #.##.',
+  0: '.###. #...# #..## #.#.# ##..# #...# .###.',
+  1: '..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.',
+  2: '.###. #...# ....# ...#. ..#.. .#... #####',
+  3: '##### ...#. ..#.. ...#. ....# #...# .###.',
+  4: '...#. ..##. .#.#. #..#. ##### ...#. ...#.',
+  5: '##### #.... ####. ....# ....# #...# .###.',
+  6: '..##. .#... #.... ####. #...# #...# .###.',
+  7: '##### ....# ...#. ..#.. .#... .#... .#...',
+  8: '.###. #...# #...# .###. #...# #...# .###.',
+  9: '.###. #...# #...# .#### ....# ...#. .##..',
+  '.': '..... ..... ..... ..... ..... .##.. .##..',
+  ',': '..... ..... ..... ..... .##.. ..#.. .#...',
+  ':': '..... .##.. .##.. ..... .##.. .##.. .....',
+  '!': '..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..',
+  '?': '.###. #...# ....# ...#. ..#.. ..... ..#..',
+  '-': '..... ..... ..... ##### ..... ..... .....',
+  '+': '..... ..#.. ..#.. ##### ..#.. ..#.. .....',
+  '/': '....# ....# ...#. ..#.. .#... #.... #....',
+};
+
+const ZEICHENBREITE = 6; // fünf Punkte und eine Lücke
+const ZEILENHOEHE = 9; // sieben Punkte und zwei für Unterlängen
+
+const MUSTER = {};
+for (const [zeichen, bild] of Object.entries(ZEICHEN)) MUSTER[zeichen] = bild.split(' ');
+
+function hatZeichen(zeichen) {
+  return MUSTER[zeichen] !== undefined;
+}
+
+// Breite eines Texts in Punkten, ohne die Lücke nach dem letzten Zeichen
+function textBreite(text) {
+  return Math.max(0, [...text].length * ZEICHENBREITE - 1);
+}
+
+// Ein Punktfeld: spalten mal zeilen, jeder Punkt an oder aus.
+function neuesPunktfeld(spalten, zeilen) {
+  return { spalten, zeilen, an: new Uint8Array(spalten * zeilen) };
+}
+
+function schreibe(feld, text, spalte, zeile) {
+  let x = spalte;
+  for (const zeichen of text) {
+    const muster = MUSTER[zeichen] || MUSTER['?'];
+    for (let r = 0; r < muster.length; r++) {
+      for (let c = 0; c < 5; c++) {
+        const px = x + c;
+        const py = zeile + r;
+        if (muster[r][c] === '#' && px >= 0 && px < feld.spalten && py >= 0 && py < feld.zeilen) {
+          feld.an[py * feld.spalten + px] = 1;
+        }
+      }
+    }
+    x += ZEICHENBREITE;
+  }
+}
+
+function schreibeMittig(feld, text, zeile) {
+  schreibe(feld, text, Math.round((feld.spalten - textBreite(text)) / 2), zeile);
+}
+
+// Zeichnet das Punktfeld. raster ist der Abstand der Punkte in Pixeln.
+// dunkel ist die Farbe der unbeleuchteten Punkte, null lässt sie weg.
+function zeichnePunktfeld(stift, feld, x, y, raster, hell, dunkel) {
+  const r = raster * 0.38;
+  for (const durchgang of dunkel ? [0, 1] : [1]) {
+    stift.fillStyle = durchgang ? hell : dunkel;
+    stift.beginPath();
+    for (let py = 0; py < feld.zeilen; py++) {
+      for (let px = 0; px < feld.spalten; px++) {
+        if (feld.an[py * feld.spalten + px] !== durchgang) continue;
+        const cx = x + (px + 0.5) * raster;
+        const cy = y + (py + 0.5) * raster;
+        stift.moveTo(cx + r, cy);
+        stift.arc(cx, cy, r, 0, Math.PI * 2);
+      }
+    }
+    stift.fill();
+  }
+}
+
+// --- anzeige/layout.js
+// Wo auf dem Bildschirm was liegt. Alles in CSS-Pixeln, passt ab 360 x 600.
+
+
+
+
+// Von oben nach unten: Zuganzeige mit Lautsprecher, darunter Herzen, Uhr und Ruhe, darunter der Wagen.
+// Am unteren Rand liegt nichts zum Antippen: Dort sitzen beim iPhone die Leiste von Safari
+// und der Home-Balken. Breite und Höhe sind die des Canvas, also schon ohne Notch und Balken.
+const RAND_UNTEN = 22; // so viel bleibt unter dem Wagen frei
+const KNOPF = 48; // kleinste Tippfläche
+
+function berechneLayout(breite, hoehe) {
+  const rand = 10;
+  const nutzbar = Math.min(breite, 520);
+  const links = Math.round((breite - nutzbar) / 2);
+  const raster = nutzbar >= 380 ? 3 : 2.5;
+  const polster = 6;
+  const tonBreite = 44; // Platz für den Lautsprecher rechts neben der Anzeige
+  const spalten = Math.floor((nutzbar - 2 * rand - tonBreite - 2 * polster) / raster);
+  const zeilen = ZEILENHOEHE + 2;
+  const tafel = {
+    x: links + rand,
+    y: rand,
+    b: spalten * raster + 2 * polster,
+    h: Math.ceil(zeilen * raster + 2 * polster),
+    raster,
+    spalten,
+    zeilen,
+    polster,
+  };
+  const ton = { x: Math.round(links + nutzbar - rand - tonBreite / 2 + 4), y: Math.round(tafel.y + tafel.h / 2), r: KNOPF / 2 };
+  const status = { x: links + rand + 4, y: tafel.y + tafel.h + 6, b: nutzbar - 2 * rand - 8, h: 54 };
+  const uhr = { x: Math.round(breite / 2), y: Math.round(status.y + status.h / 2), r: 24 };
+  const oben = status.y + status.h + 6;
+
+  const s = Math.max(12, Math.floor(Math.min((nutzbar - 44) / BREITE, (hoehe - oben - RAND_UNTEN) / (HOEHE + 0.64))));
+  const wandOben = Math.round(s * 0.42);
+  const wandUnten = Math.round(s * 0.22);
+  const wandSeite = Math.max(7, Math.round(s * 0.14));
+  const bodenB = s * BREITE;
+  const bodenH = s * HOEHE;
+  const luft = hoehe - oben - RAND_UNTEN - (wandOben + bodenH + wandUnten);
+  const bodenX = Math.round((breite - bodenB) / 2);
+  const bodenY = Math.round(oben + wandOben + Math.max(0, luft) / 2);
+
+  return {
+    breite,
+    hoehe,
+    s,
+    tafel,
+    status,
+    boden: { x: bodenX, y: bodenY, b: bodenB, h: bodenH },
+    rumpf: { x: bodenX - wandSeite, y: bodenY - wandOben, b: bodenB + 2 * wandSeite, h: wandOben + bodenH + wandUnten },
+    wandOben,
+    wandUnten,
+    wandSeite,
+    wagenlaenge: wandOben + bodenH + wandUnten + Math.round(s * 0.16), // Abstand von Wagen zu Wagen
+    uhr,
+    ton,
+  };
+}
+
+// Bildschirmpunkt -> Feld im Wagen, oder null
+function feldBei(layout, px, py) {
+  const x = Math.floor((px - layout.boden.x) / layout.s);
+  const y = Math.floor((py - layout.boden.y) / layout.s);
+  if (x < 0 || x >= BREITE || y < -1 || y >= HOEHE) return null;
+  return { x, y }; // y = -1 ist der Streifen der Tür
+}
+
+// --- anzeige/figuren.js
+// Figuren und Hindernisse. Niemand hat ein Gesicht. Jede Figur ist am Umriss erkennbar:
+// der Spieler am Schal, der Pendler an der Aktentasche, die Reisegruppe am Rucksack
+// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern.
+
+
+
+// Rumpf und Kopf. (cx, fy) ist der Punkt zwischen den Füßen.
+function maleKoerper(stift, cx, fy, masse, farben, neigung) {
+  const { hoch, schulter, saum, kopf } = masse;
+  const schulterY = fy - hoch + kopf * 1.75;
+  const schub = neigung * hoch * 0.16;
+  const r = Math.min(schulter * 0.3, hoch * 0.16);
+
+  stift.fillStyle = farben.schuh;
+  rundesRechteck(stift, cx - saum * 0.42, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+  stift.fill();
+  rundesRechteck(stift, cx + saum * 0.06, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+  stift.fill();
+
+  stift.fillStyle = farben.mantel;
+  stift.beginPath();
+  stift.moveTo(cx - saum / 2, fy - hoch * 0.05);
+  stift.lineTo(cx - schulter / 2 + schub, schulterY + r);
+  stift.quadraticCurveTo(cx - schulter / 2 + schub, schulterY, cx - schulter / 2 + schub + r, schulterY);
+  stift.lineTo(cx + schulter / 2 + schub - r, schulterY);
+  stift.quadraticCurveTo(cx + schulter / 2 + schub, schulterY, cx + schulter / 2 + schub, schulterY + r);
+  stift.lineTo(cx + saum / 2, fy - hoch * 0.05);
+  stift.closePath();
+  stift.fill();
+
+  const kopfX = cx + schub * 1.35;
+  const kopfY = schulterY - kopf * 0.72 + (masse.kopfTief || 0);
+  stift.fillStyle = farben.kopf;
+  kreis(stift, kopfX, kopfY, kopf);
+  stift.fill();
+  return { schulterY, kopfX, kopfY, schub };
+}
+
+function maleSchatten(stift, cx, fy, breite) {
+  stift.fillStyle = 'rgba(0, 0, 0, 0.34)';
+  stift.beginPath();
+  stift.ellipse(cx, fy, breite, breite * 0.3, 0, 0, Math.PI * 2);
+  stift.fill();
+}
+
+function linie(stift, punkte, farbe, dicke) {
+  stift.strokeStyle = farbe;
+  stift.lineWidth = dicke;
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  stift.beginPath();
+  stift.moveTo(punkte[0][0], punkte[0][1]);
+  for (let i = 1; i < punkte.length; i++) stift.lineTo(punkte[i][0], punkte[i][1]);
+  stift.stroke();
+}
+
+function maleSpieler(stift, cx, fy, s, o) {
+  const atem = o.ruhig ? 0 : Math.sin(o.t * 1.7) * 0.012;
+  const masse = { hoch: s * 0.72 * (1 + atem), schulter: s * 0.34, saum: s * 0.42, kopf: s * 0.125 };
+  const f = FARBE.spieler;
+  const k = maleKoerper(stift, cx, fy, masse, f, o.neigung || 0);
+  // Schal: ein Band um den Hals und ein Ende, das herabhängt
+  const flattern = o.ruhig ? 0 : Math.sin(o.t * (o.fluss ? 3.1 : 1.3)) * s * (o.fluss ? 0.03 : 0.012);
+  stift.fillStyle = f.schal;
+  rundesRechteck(stift, cx - masse.schulter * 0.42 + k.schub, k.schulterY - s * 0.025, masse.schulter * 0.84, s * 0.085, s * 0.04);
+  stift.fill();
+  stift.beginPath();
+  stift.moveTo(cx + masse.schulter * 0.1 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + masse.schulter * 0.34 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + masse.schulter * 0.36 + k.schub + flattern, k.schulterY + s * 0.26);
+  stift.lineTo(cx + masse.schulter * 0.12 + k.schub + flattern, k.schulterY + s * 0.24);
+  stift.closePath();
+  stift.fill();
+  return k;
+}
+
+function malePendler(stift, cx, fy, s, o) {
+  const atem = o.ruhig ? 0 : Math.sin(o.t * 1.3 + o.takt) * 0.01;
+  const masse = { hoch: s * 0.72 * (1 + atem), schulter: s * 0.36, saum: s * 0.38, kopf: s * 0.12 };
+  const f = FARBE.pendler;
+  // kleine Geste: ab und zu hebt er den Arm und sieht auf die Uhr; wer pausiert, tut es durchgehend
+  const kreisen = (o.t * 0.16 + o.takt * 0.37) % 1;
+  const blick = o.pausiert ? 1 : o.ruhig ? 0 : kreisen > 0.78 ? Math.sin(((kreisen - 0.78) / 0.22) * Math.PI) : 0;
+  masse.kopfTief = blick * s * 0.02;
+  // Aktentasche in der rechten Hand
+  const tx = cx + masse.saum * 0.5;
+  const ty = fy - s * 0.3;
+  stift.fillStyle = f.tasche;
+  rundesRechteck(stift, tx - s * 0.02, ty, s * 0.2, s * 0.15, s * 0.025);
+  stift.fill();
+  linie(stift, [[tx + s * 0.04, ty], [tx + s * 0.04, ty - s * 0.035], [tx + s * 0.12, ty - s * 0.035], [tx + s * 0.12, ty]], f.tasche, s * 0.022);
+  const k = maleKoerper(stift, cx, fy, masse, f, o.neigung || 0);
+  // Krawatte
+  stift.fillStyle = f.schuh;
+  stift.beginPath();
+  stift.moveTo(cx - s * 0.022, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.022, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.03, k.schulterY + s * 0.19);
+  stift.lineTo(cx, k.schulterY + s * 0.23);
+  stift.lineTo(cx - s * 0.03, k.schulterY + s * 0.19);
+  stift.closePath();
+  stift.fill();
+  if (blick > 0.02) {
+    const sx = cx - masse.schulter * 0.44;
+    const sy = k.schulterY + s * 0.07;
+    linie(stift, [[sx, sy], [sx - s * 0.05, sy + s * 0.14 - blick * s * 0.03], [sx + s * 0.08 * blick, sy + s * 0.14 - blick * s * 0.13]], f.arm, s * 0.07);
+    stift.fillStyle = f.kopf;
+    kreis(stift, sx + s * 0.08 * blick, sy + s * 0.14 - blick * s * 0.13, s * 0.035);
+    stift.fill();
+  }
+  return k;
+}
+
+function maleGruppe(stift, cx, fy, s, o) {
+  const wippen = o.ruhig ? 0 : Math.sin(o.t * 2.1 + o.takt * 1.9) * s * 0.012;
+  const masse = { hoch: s * 0.6, schulter: s * 0.3, saum: s * 0.34, kopf: s * 0.105 };
+  const f = FARBE.gruppe;
+  const y = fy + wippen;
+  // Rucksack schaut links hinter dem Rücken hervor
+  stift.fillStyle = f.rucksack;
+  rundesRechteck(stift, cx - masse.schulter * 0.78, y - masse.hoch * 0.66, masse.schulter * 0.6, masse.hoch * 0.42, s * 0.05);
+  stift.fill();
+  const k = maleKoerper(stift, cx, y, masse, f, o.neigung || 0);
+  // Schirmmütze
+  stift.fillStyle = f.rucksack;
+  stift.beginPath();
+  stift.arc(k.kopfX, k.kopfY - masse.kopf * 0.15, masse.kopf * 1.02, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  rundesRechteck(stift, k.kopfX - masse.kopf * 0.2, k.kopfY - masse.kopf * 0.3, masse.kopf * 1.5, masse.kopf * 0.24, masse.kopf * 0.1);
+  stift.fill();
+  if (o.vorderster) {
+    // der Wimpel, dem alle folgen
+    const wx = cx + masse.schulter * 0.62;
+    const oben = y - masse.hoch - s * 0.2;
+    linie(stift, [[wx, y - masse.hoch * 0.42], [wx, oben]], '#d9d2bf', s * 0.028);
+    const wehen = o.ruhig ? 0 : Math.sin(o.t * 4 + o.takt) * s * 0.02;
+    stift.fillStyle = f.wimpel;
+    stift.beginPath();
+    stift.moveTo(wx, oben);
+    stift.lineTo(wx + s * 0.2, oben + s * 0.06 + wehen);
+    stift.lineTo(wx, oben + s * 0.13);
+    stift.closePath();
+    stift.fill();
+  }
+  return k;
+}
+
+function maleDraengler(stift, cx, fy, s, o) {
+  const f = FARBE.draengler;
+  const schnaufen = o.erschoepft && !o.ruhig ? Math.sin(o.t * 6) * 0.03 : 0;
+  const wippen = !o.erschoepft && !o.ansagend && !o.ruhig ? Math.sin(o.t * 5 + o.takt) * 0.07 : 0;
+  const gebeugt = o.erschoepft ? 0.74 + schnaufen : o.ansagend ? 0.9 : 1;
+  const masse = { hoch: s * 0.8 * gebeugt, schulter: s * 0.52, saum: s * 0.36, kopf: s * 0.125 };
+  if (o.erschoepft) masse.kopfTief = s * 0.1;
+  const neigung = (o.neigung || 0) + wippen;
+  const k = maleKoerper(stift, cx, fy, masse, f, neigung);
+  // Ellbogen stehen ab, im Erschöpften hängen die Arme auf die Knie
+  const ay = k.schulterY + s * 0.1;
+  for (const seite of [-1, 1]) {
+    const sx = cx + seite * masse.schulter * 0.47 + k.schub;
+    if (o.erschoepft) {
+      linie(stift, [[sx, ay], [sx + seite * s * 0.02, ay + s * 0.2], [cx + seite * s * 0.1, fy - s * 0.2]], f.arm, s * 0.085);
+    } else {
+      linie(stift, [[sx, ay], [sx + seite * s * 0.11, ay + s * 0.1], [sx + seite * s * 0.03, ay + s * 0.21]], f.arm, s * 0.085);
+    }
+  }
+  return k;
+}
+
+const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler };
+
+// Zeichnet eine Figur. (cx, fy) ist der Punkt zwischen den Füßen, s die Feldgröße.
+// o: t (Sekunden), takt (eigener Versatz), neigung, alpha, blitz, ruhig und was die Figur gerade tut.
+function maleFigur(stift, art, cx, fy, s, o) {
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0.01) return null;
+  stift.save();
+  stift.globalAlpha *= alpha;
+  maleSchatten(stift, cx, fy, s * (art === 'draengler' ? 0.27 : art === 'gruppe' ? 0.19 : 0.22));
+  const k = MALER[art](stift, cx, fy, s, o);
+  if (o.blitz > 0.01) {
+    // kurzes Aufleuchten bei einem Treffer
+    stift.globalCompositeOperation = 'lighter';
+    const schein = stift.createRadialGradient(cx, fy - s * 0.38, 0, cx, fy - s * 0.38, s * 0.46);
+    schein.addColorStop(0, `rgba(255, 244, 224, ${0.85 * Math.min(1, o.blitz)})`);
+    schein.addColorStop(0.5, `rgba(255, 244, 224, ${0.3 * Math.min(1, o.blitz)})`);
+    schein.addColorStop(1, 'rgba(255, 244, 224, 0)');
+    stift.fillStyle = schein;
+    kreis(stift, cx, fy - s * 0.38, s * 0.46);
+    stift.fill();
+  }
+  stift.restore();
+  return k;
+}
+
+// HP als Punkte über dem Kopf
+function malePunkte(stift, cx, y, s, hp, voll) {
+  const r = s * 0.042;
+  const schritt = s * 0.13;
+  const start = cx - ((voll - 1) * schritt) / 2;
+  for (let i = 0; i < voll; i++) {
+    kreis(stift, start + i * schritt, y, r);
+    if (i < hp) {
+      stift.fillStyle = '#ffe9c4';
+      stift.fill();
+    } else {
+      stift.strokeStyle = 'rgba(255, 233, 196, 0.3)';
+      stift.lineWidth = 1;
+      stift.stroke();
+    }
+  }
+}
+
+// Das Ausrufezeichen über der eigenen Figur
+function maleAchtung(stift, cx, y, s) {
+  const b = s * 0.085;
+  stift.fillStyle = FARBE.nacht;
+  rundesRechteck(stift, cx - b * 1.1, y - s * 0.3, b * 2.2, s * 0.36, b);
+  stift.fill();
+  stift.fillStyle = FARBE.rotHell;
+  rundesRechteck(stift, cx - b / 2, y - s * 0.26, b, s * 0.17, b / 2);
+  stift.fill();
+  kreis(stift, cx, y - s * 0.015, b * 0.6);
+  stift.fill();
+}
+
+// ---------------------------------------------------------------- Hindernisse
+
+function maleSitz(stift, x, y, s) {
+  const p = s * 0.09;
+  stift.fillStyle = '#22304c';
+  rundesRechteck(stift, x + p, y + p, s - 2 * p, s - 2 * p, s * 0.14);
+  stift.fill();
+  stift.fillStyle = '#2c3d61';
+  rundesRechteck(stift, x + p * 1.9, y + s * 0.34, s - p * 3.8, s * 0.5, s * 0.1);
+  stift.fill();
+  stift.fillStyle = '#3a4f7b';
+  rundesRechteck(stift, x + p * 1.5, y + p * 1.3, s - p * 3, s * 0.24, s * 0.09);
+  stift.fill();
+  stift.fillStyle = '#4a6193';
+  rundesRechteck(stift, x + s * 0.36, y + p * 1.3, s * 0.28, s * 0.09, s * 0.04);
+  stift.fill();
+}
+
+function maleFahrrad(stift, x, y, s) {
+  const hinten = [x + s * 0.27, y + s * 0.64];
+  const vorn = [x + s * 0.74, y + s * 0.64];
+  const r = s * 0.19;
+  stift.lineCap = 'round';
+  stift.strokeStyle = '#8796ae';
+  stift.lineWidth = s * 0.035;
+  for (const rad of [hinten, vorn]) {
+    kreis(stift, rad[0], rad[1], r);
+    stift.stroke();
+  }
+  const sattel = [x + s * 0.4, y + s * 0.35];
+  const lenker = [x + s * 0.66, y + s * 0.33];
+  const tretlager = [x + s * 0.47, y + s * 0.64];
+  linie(stift, [hinten, sattel, lenker, tretlager, hinten], '#5fa79b', s * 0.04);
+  linie(stift, [tretlager, sattel], '#5fa79b', s * 0.04);
+  linie(stift, [lenker, vorn], '#5fa79b', s * 0.04);
+  linie(stift, [[sattel[0] - s * 0.07, sattel[1] - s * 0.03], [sattel[0] + s * 0.06, sattel[1] - s * 0.03]], '#c9d2de', s * 0.045);
+  linie(stift, [[lenker[0] - s * 0.02, lenker[1] - s * 0.08], [lenker[0] + s * 0.09, lenker[1] - s * 0.08]], '#c9d2de', s * 0.04);
+  linie(stift, [lenker, [lenker[0] + s * 0.01, lenker[1] - s * 0.08]], '#5fa79b', s * 0.035);
+}
+
+function maleKoffer(stift, x, y, s, gross) {
+  if (gross) {
+    // eine Reisetasche liegt dahinter
+    stift.fillStyle = '#3d4d63';
+    rundesRechteck(stift, x + s * 0.12, y + s * 0.5, s * 0.5, s * 0.32, s * 0.12);
+    stift.fill();
+  }
+  const kx = x + (gross ? s * 0.34 : s * 0.22);
+  const ky = y + s * 0.3;
+  const b = s * 0.48;
+  const h = s * 0.55;
+  linie(stift, [[kx + b * 0.3, ky], [kx + b * 0.3, ky - s * 0.09], [kx + b * 0.7, ky - s * 0.09], [kx + b * 0.7, ky]], '#3a2b20', s * 0.035);
+  stift.fillStyle = '#7a5b43';
+  rundesRechteck(stift, kx, ky, b, h, s * 0.06);
+  stift.fill();
+  stift.fillStyle = '#5c4331';
+  stift.fillRect(kx + b * 0.2, ky, b * 0.1, h);
+  stift.fillRect(kx + b * 0.7, ky, b * 0.1, h);
+  stift.fillStyle = '#e9dcc0';
+  stift.fillRect(kx + b * 0.42, ky + h * 0.42, b * 0.2, h * 0.14);
+}
+
+function maleWand(stift, x, y, s) {
+  stift.fillStyle = FARBE.wand;
+  stift.fillRect(x, y, s, s);
+  stift.fillStyle = FARBE.wandKante;
+  stift.fillRect(x, y, s, s * 0.08);
+  stift.fillStyle = FARBE.wandDunkel;
+  stift.fillRect(x, y + s * 0.86, s, s * 0.14);
+  stift.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  rundesRechteck(stift, x + s * 0.14, y + s * 0.24, s * 0.72, s * 0.46, s * 0.05);
+  stift.fill();
+}
+
+// art: Zeichen aus dem Wagenplan
+function maleHindernis(stift, art, x, y, s, feldX, feldY) {
+  if (art === 'S') maleSitz(stift, x, y, s);
+  else if (art === 'F') maleFahrrad(stift, x, y, s);
+  else if (art === 'K') maleKoffer(stift, x, y, s, (feldX + feldY) % 2 === 0);
+  else maleWand(stift, x, y, s);
+}
+
+// --- anzeige/kulisse.js
+// Der Wagen von oben, die Tür, die Lichter draußen und die Anzeigen am Rand.
+
+
+
+
+
+
+function neueLeinwand(breite, hoehe, dichte) {
+  const leinwand = document.createElement('canvas');
+  leinwand.width = Math.max(1, Math.round(breite * dichte));
+  leinwand.height = Math.max(1, Math.round(hoehe * dichte));
+  const stift = leinwand.getContext('2d');
+  stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+  return { leinwand, stift };
+}
+
+// Rumpf, Boden, Fenster und Hindernisse eines Wagens als fertiges Bild.
+// Der Ursprung des Bilds ist die linke obere Ecke des Rumpfs.
+function maleWagenbild(layout, plan, dichte) {
+  const { rumpf, boden, s, wandSeite } = layout;
+  const { leinwand, stift } = neueLeinwand(rumpf.b, rumpf.h, dichte);
+  const bx = boden.x - rumpf.x;
+  const by = boden.y - rumpf.y;
+
+  stift.fillStyle = FARBE.wand;
+  rundesRechteck(stift, 0, 0, rumpf.b, rumpf.h, s * 0.2);
+  stift.fill();
+  stift.fillStyle = FARBE.wandKante;
+  rundesRechteck(stift, 0, 0, rumpf.b, s * 0.1, s * 0.2);
+  stift.fill();
+
+  // Fenster: je Seite vier, jedes über fast zwei Felder
+  for (let k = 0; k < HOEHE / 2; k++) {
+    const fy = by + (k * 2 + 0.16) * s;
+    const fh = s * 1.68;
+    for (const fx of [2, rumpf.b - wandSeite + 2]) {
+      stift.fillStyle = FARBE.glas;
+      rundesRechteck(stift, fx, fy, wandSeite - 4, fh, 3);
+      stift.fill();
+      stift.fillStyle = FARBE.glasGlanz;
+      stift.fillRect(fx + 1, fy + fh * 0.12, 1.5, fh * 0.3);
+    }
+  }
+
+  stift.fillStyle = FARBE.boden;
+  stift.fillRect(bx, by, boden.b, boden.h);
+  for (let y = 0; y < HOEHE; y++) {
+    for (let x = 0; x < BREITE; x++) {
+      const px = bx + x * s;
+      const py = by + y * s;
+      stift.fillStyle = FARBE.feld;
+      rundesRechteck(stift, px + 1.5, py + 1.5, s - 3, s - 3, s * 0.1);
+      stift.fill();
+      stift.fillStyle = FARBE.feldKante;
+      rundesRechteck(stift, px + 1.5, py + 1.5, s - 3, 2, 1);
+      stift.fill();
+    }
+  }
+  for (let y = 0; y < HOEHE; y++) {
+    for (let x = 0; x < BREITE; x++) {
+      if (plan[y][x] !== '.') maleHindernis(stift, plan[y][x], bx + x * s, by + y * s, s, x, y);
+    }
+  }
+
+  // die Tür, durch die man gekommen ist: unten, geschlossen
+  const tx = bx + TUERFELD.x * s;
+  stift.fillStyle = FARBE.wandDunkel;
+  stift.fillRect(tx + s * 0.08, by + boden.h, s * 0.84, layout.wandUnten);
+  stift.fillStyle = '#232c42';
+  stift.fillRect(tx + s * 0.12, by + boden.h + 2, s * 0.37, layout.wandUnten - 4);
+  stift.fillRect(tx + s * 0.51, by + boden.h + 2, s * 0.37, layout.wandUnten - 4);
+  return leinwand;
+}
+
+// Die Tür oben. offen läuft von 0 (zu) bis 1 (auf). (ox, oy) verschiebt den ganzen Wagen.
+function maleTuer(stift, layout, offen, t, ox, oy) {
+  const { boden, rumpf, s, wandOben } = layout;
+  const x = boden.x + TUERFELD.x * s + ox;
+  const y = rumpf.y + oy;
+  stift.fillStyle = FARBE.wandDunkel;
+  stift.fillRect(x + s * 0.06, y + 2, s * 0.88, wandOben - 2);
+  if (offen > 0.01) {
+    const licht = stift.createLinearGradient(0, y, 0, y + wandOben);
+    licht.addColorStop(0, '#fff1d6');
+    licht.addColorStop(1, FARBE.warm);
+    stift.fillStyle = licht;
+    stift.globalAlpha = offen;
+    stift.fillRect(x + s * 0.1, y + 3, s * 0.8, wandOben - 3);
+    stift.globalAlpha = 1;
+  }
+  const fluegel = s * 0.4;
+  const auf = offen * (fluegel - s * 0.07);
+  stift.fillStyle = '#35415f';
+  stift.fillRect(x + s * 0.1 - auf, y + 3, fluegel, wandOben - 3);
+  stift.fillRect(x + s * 0.5 + auf, y + 3, fluegel, wandOben - 3);
+  stift.fillStyle = FARBE.glas;
+  stift.fillRect(x + s * 0.18 - auf, y + 6, fluegel * 0.6, wandOben * 0.42);
+  stift.fillRect(x + s * 0.58 + auf, y + 6, fluegel * 0.6, wandOben * 0.42);
+  // die Wand deckt die aufgeschobenen Flügel wieder zu
+  stift.fillStyle = FARBE.wand;
+  stift.fillRect(x - s * 0.34, y + 2, s * 0.4, wandOben - 2);
+  stift.fillRect(x + s * 0.94, y + 2, s * 0.4, wandOben - 2);
+  // Lampe neben der Tür: aus, solange zu, grün, wenn frei
+  const lx = x + s * 1.14;
+  const ly = y + wandOben * 0.55;
+  if (offen > 0.5) {
+    const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 0.3);
+    schein.addColorStop(0, 'rgba(111, 220, 143, 0.55)');
+    schein.addColorStop(1, 'rgba(111, 220, 143, 0)');
+    stift.fillStyle = schein;
+    kreis(stift, lx, ly, s * 0.3);
+    stift.fill();
+  }
+  stift.fillStyle = offen > 0.5 ? FARBE.gruen : '#4b5672';
+  kreis(stift, lx, ly, s * 0.065);
+  stift.fill();
+}
+
+// Warmes Licht fällt durch die offene Tür auf den Boden, zwei Winkel zeigen nach oben.
+function maleTuerlicht(stift, layout, offen, t, ruhig) {
+  if (offen < 0.01) return;
+  const { boden, s } = layout;
+  const cx = boden.x + (TUERFELD.x + 0.5) * s;
+  const schein = stift.createRadialGradient(cx, boden.y, 0, cx, boden.y, s * 1.7);
+  schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * offen})`);
+  schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+  stift.fillStyle = schein;
+  stift.fillRect(boden.x, boden.y, boden.b, s * 1.8);
+  const wandern = ruhig ? 0 : ((t * 0.9) % 1) * s * 0.12;
+  stift.strokeStyle = FARBE.bernstein;
+  stift.lineWidth = Math.max(2, s * 0.05);
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  for (let i = 0; i < 2; i++) {
+    const y = boden.y + s * (0.34 + i * 0.2) - wandern;
+    stift.globalAlpha = offen * (i === 0 ? 0.9 : 0.5);
+    stift.beginPath();
+    stift.moveTo(cx - s * 0.14, y + s * 0.09);
+    stift.lineTo(cx, y);
+    stift.lineTo(cx + s * 0.14, y + s * 0.09);
+    stift.stroke();
+  }
+  stift.globalAlpha = 1;
+}
+
+// Lichter, die draußen vorbeiziehen: Laternen, ein beleuchtetes Fenster, ein Bahnübergang.
+function maleLichter(stift, layout, lichter, klar) {
+  const { rumpf, breite } = layout;
+  stift.save();
+  stift.globalCompositeOperation = 'lighter';
+  for (const l of lichter) {
+    const frei = l.seite < 0 ? rumpf.x : breite - (rumpf.x + rumpf.b);
+    const x = l.seite < 0 ? rumpf.x - frei * l.ort : rumpf.x + rumpf.b + frei * l.ort;
+    const r = l.groesse * (1 + klar * 0.25);
+    const schein = stift.createRadialGradient(x, l.y, 0, x, l.y, r);
+    schein.addColorStop(0, `rgba(${l.farbe}, ${0.5 * l.hell})`);
+    schein.addColorStop(0.35, `rgba(${l.farbe}, ${0.16 * l.hell})`);
+    schein.addColorStop(1, `rgba(${l.farbe}, 0)`);
+    stift.fillStyle = schein;
+    stift.beginPath();
+    stift.ellipse(x, l.y, r * 0.8, r * (1 + l.zug), 0, 0, Math.PI * 2);
+    stift.fill();
+  }
+  stift.restore();
+}
+
+// Der Schein der Lichter wandert durch den Wagen über den Boden.
+function maleLichtschein(stift, layout, lichter, klar) {
+  const { boden, s } = layout;
+  stift.save();
+  stift.beginPath();
+  stift.rect(boden.x, boden.y, boden.b, boden.h);
+  stift.clip();
+  stift.globalCompositeOperation = 'lighter';
+  for (const l of lichter) {
+    if (l.fern) continue;
+    const x = l.seite < 0 ? boden.x - s * 0.3 : boden.x + boden.b + s * 0.3;
+    const r = s * (2.4 + klar * 0.8);
+    const staerke = (0.09 + klar * 0.07) * l.hell;
+    const schein = stift.createRadialGradient(x, l.y, 0, x, l.y, r);
+    schein.addColorStop(0, `rgba(${l.farbe}, ${staerke})`);
+    schein.addColorStop(1, `rgba(${l.farbe}, 0)`);
+    stift.fillStyle = schein;
+    stift.fillRect(boden.x, l.y - r, boden.b, r * 2);
+  }
+  stift.restore();
+}
+
+// Die Zuganzeige als fertiges Bild: Wagennummer links, Wagenname daneben.
+function maleTafelbild(layout, nummer, name, dichte) {
+  const { tafel } = layout;
+  const { leinwand, stift } = neueLeinwand(tafel.b, tafel.h, dichte);
+  stift.fillStyle = FARBE.tafel;
+  rundesRechteck(stift, 0, 0, tafel.b, tafel.h, 5);
+  stift.fill();
+  stift.strokeStyle = FARBE.tafelRand;
+  stift.lineWidth = 1;
+  rundesRechteck(stift, 0.5, 0.5, tafel.b - 1, tafel.h - 1, 5);
+  stift.stroke();
+  const feld = neuesPunktfeld(tafel.spalten, tafel.zeilen);
+  schreibe(feld, nummer, 2, 1);
+  schreibe(feld, name, 2 + ([...nummer].length + 1) * ZEICHENBREITE + 2, 1);
+  // ein senkrechter Strich trennt Nummer und Name
+  const strich = 2 + [...nummer].length * ZEICHENBREITE + 2;
+  for (let y = 1; y < 8; y++) feld.an[y * feld.spalten + strich] = 1;
+  zeichnePunktfeld(stift, feld, tafel.polster, tafel.polster, tafel.raster, FARBE.bernstein, FARBE.bernsteinAus);
+  return leinwand;
+}
+
+function herzPfad(stift, cx, cy, g) {
+  stift.beginPath();
+  stift.moveTo(cx, cy + g * 0.46);
+  stift.bezierCurveTo(cx - g * 0.72, cy + g * 0.02, cx - g * 0.52, cy - g * 0.56, cx, cy - g * 0.18);
+  stift.bezierCurveTo(cx + g * 0.52, cy - g * 0.56, cx + g * 0.72, cy + g * 0.02, cx, cy + g * 0.46);
+  stift.closePath();
+}
+
+// Herzen links. verlust: 0..1, lässt das zuletzt verlorene Herz aufblitzen und verschwinden.
+function maleHerzen(stift, x, y, herzen, voll, verlust, groesse) {
+  const g = groesse || 17;
+  for (let i = 0; i < voll; i++) {
+    const cx = x + g * 0.6 + i * (g + 6);
+    herzPfad(stift, cx, y, g);
+    if (i < herzen) {
+      stift.fillStyle = FARBE.herz;
+      stift.fill();
+    } else {
+      stift.strokeStyle = FARBE.leer;
+      stift.lineWidth = 1.5;
+      stift.stroke();
+      if (i === herzen && verlust > 0.01) {
+        herzPfad(stift, cx, y, g * (1 + verlust * 0.5));
+        stift.fillStyle = `rgba(255, 255, 255, ${verlust})`;
+        stift.fill();
+      }
+    }
+  }
+}
+
+// Ruhe rechts: drei Lichter. Bei voller Ruhe leuchten sie mit Hof.
+function maleRuhe(stift, xRechts, y, ruhe, voll, zuwachs) {
+  for (let i = 0; i < voll; i++) {
+    const cx = xRechts - 8 - (voll - 1 - i) * 21;
+    const an = i < ruhe;
+    if (an && ruhe >= voll) {
+      const hof = stift.createRadialGradient(cx, y, 0, cx, y, 15);
+      hof.addColorStop(0, 'rgba(191, 227, 255, 0.5)');
+      hof.addColorStop(1, 'rgba(191, 227, 255, 0)');
+      stift.fillStyle = hof;
+      kreis(stift, cx, y, 15);
+      stift.fill();
+    }
+    kreis(stift, cx, y, 6.5);
+    if (an) {
+      stift.fillStyle = FARBE.ruhe;
+      stift.fill();
+    } else {
+      stift.strokeStyle = FARBE.leer;
+      stift.lineWidth = 1.5;
+      stift.stroke();
+    }
+    if (i === ruhe - 1 && zuwachs > 0.01) {
+      stift.strokeStyle = `rgba(191, 227, 255, ${zuwachs})`;
+      stift.lineWidth = 2;
+      kreis(stift, cx, y, 6.5 + (1 - zuwachs) * 12);
+      stift.stroke();
+    }
+  }
+}
+
+// Die Bahnhofsuhr ist der Knopf zum Warten. Jeder Zug rückt den Minutenzeiger weiter.
+function maleUhr(stift, uhr, minuten, druck) {
+  const r = uhr.r * (1 - druck * 0.07);
+  stift.fillStyle = '#0d1119';
+  kreis(stift, uhr.x, uhr.y, r + 3);
+  stift.fill();
+  stift.fillStyle = druck > 0.01 ? '#f6f0e0' : '#d9d3c2';
+  kreis(stift, uhr.x, uhr.y, r);
+  stift.fill();
+  stift.strokeStyle = '#1b1f2a';
+  stift.lineCap = 'butt';
+  for (let i = 0; i < 12; i++) {
+    const w = (i / 12) * Math.PI * 2;
+    const lang = i % 3 === 0 ? 0.24 : 0.14;
+    stift.lineWidth = i % 3 === 0 ? 2.6 : 1.6;
+    stift.beginPath();
+    stift.moveTo(uhr.x + Math.sin(w) * r * (0.9 - lang), uhr.y - Math.cos(w) * r * (0.9 - lang));
+    stift.lineTo(uhr.x + Math.sin(w) * r * 0.9, uhr.y - Math.cos(w) * r * 0.9);
+    stift.stroke();
+  }
+  const stunde = (((minuten / 60) % 12) / 12) * Math.PI * 2;
+  const minute = ((minuten % 60) / 60) * Math.PI * 2;
+  stift.lineCap = 'round';
+  stift.lineWidth = 3.4;
+  stift.beginPath();
+  stift.moveTo(uhr.x - Math.sin(stunde) * r * 0.12, uhr.y + Math.cos(stunde) * r * 0.12);
+  stift.lineTo(uhr.x + Math.sin(stunde) * r * 0.5, uhr.y - Math.cos(stunde) * r * 0.5);
+  stift.stroke();
+  stift.lineWidth = 2.4;
+  stift.beginPath();
+  stift.moveTo(uhr.x - Math.sin(minute) * r * 0.14, uhr.y + Math.cos(minute) * r * 0.14);
+  stift.lineTo(uhr.x + Math.sin(minute) * r * 0.74, uhr.y - Math.cos(minute) * r * 0.74);
+  stift.stroke();
+}
+
+// Lautsprecher: an oder durchgestrichen
+function maleTonknopf(stift, ton, an) {
+  const { x, y } = ton;
+  stift.fillStyle = '#5b6680';
+  stift.strokeStyle = '#5b6680';
+  stift.lineWidth = 2;
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(x - 9, y - 3.5);
+  stift.lineTo(x - 4, y - 3.5);
+  stift.lineTo(x + 1, y - 8);
+  stift.lineTo(x + 1, y + 8);
+  stift.lineTo(x - 4, y + 3.5);
+  stift.lineTo(x - 9, y + 3.5);
+  stift.closePath();
+  stift.fill();
+  if (an) {
+    stift.beginPath();
+    stift.arc(x + 2, y, 5, -0.9, 0.9);
+    stift.stroke();
+    stift.beginPath();
+    stift.arc(x + 2, y, 9, -0.9, 0.9);
+    stift.stroke();
+  } else {
+    stift.beginPath();
+    stift.moveTo(x + 5, y - 4);
+    stift.lineTo(x + 12, y + 4);
+    stift.moveTo(x + 12, y - 4);
+    stift.lineTo(x + 5, y + 4);
+    stift.stroke();
+  }
+}
+
+// --- anzeige/karte.js
+// Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
+// Nach oben wegwischen beginnt die nächste Fahrt.
+
+
+
+
+
+
+// Maße der Karte. Sie ist nur so hoch wie ihr Inhalt.
+function kartenMasse(layout, art) {
+  const b = Math.min(layout.breite - 32, 420);
+  const x = Math.round((layout.breite - b) / 2);
+  const polster = 6;
+  const raster = b >= 380 ? 3 : 2.5;
+  const spalten = Math.floor((b - 20 - 2 * polster) / raster);
+  const zeilen = 2 * ZEILENHOEHE + 4;
+  const bildH = Math.max(150, Math.min(250, Math.round(layout.hoehe * 0.34)));
+  const tafelH = Math.ceil(zeilen * raster + 2 * polster);
+  const herzenH = art === 'halt' ? 40 : 0;
+  const h = 10 + bildH + 10 + tafelH + herzenH + 66;
+  const y = Math.round((layout.hoehe - h) / 2) - 4;
+  return {
+    x,
+    y,
+    b,
+    h,
+    bild: { x: x + 10, y: y + 10, b: b - 20, h: bildH },
+    tafel: { x: x + 10, y: y + 20 + bildH, b: b - 20, h: tafelH, raster, spalten, zeilen, polster },
+    herzenY: y + 20 + bildH + tafelH + 22,
+    weiter: { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
+  };
+}
+
+function maleBahnsteig(stift, r, karte, t) {
+  const halt = karte.art === 'halt';
+  stift.save();
+  rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
+  stift.clip();
+
+  const himmel = stift.createLinearGradient(0, r.y, 0, r.y + r.h);
+  himmel.addColorStop(0, '#0a101c');
+  himmel.addColorStop(0.7, halt ? '#33293a' : '#18223a');
+  himmel.addColorStop(1, halt ? '#5a4038' : '#1f2a44');
+  stift.fillStyle = himmel;
+  stift.fillRect(r.x, r.y, r.b, r.h);
+
+  const boden = r.y + r.h * 0.76;
+  // ferne Lichter am Horizont
+  for (let i = 0; i < 9; i++) {
+    const fx = r.x + ((i * 97 + 31) % 100) / 100 * r.b;
+    const fy = boden - r.h * (0.05 + ((i * 37) % 10) / 100);
+    stift.fillStyle = i % 3 === 0 ? 'rgba(255, 217, 160, 0.55)' : 'rgba(190, 210, 255, 0.35)';
+    kreis(stift, fx, fy, 1.2);
+    stift.fill();
+  }
+
+  if (halt) {
+    // der Zug steht am Bahnsteig, die Fenster sind hell, die Tür ist offen
+    const zx = r.x + r.b * 0.5;
+    const zy = boden - r.h * 0.46;
+    const zh = r.h * 0.43;
+    stift.fillStyle = '#26314b';
+    rundesRechteck(stift, zx, zy, r.b, zh, 10);
+    stift.fill();
+    stift.fillStyle = '#1a2236';
+    stift.fillRect(zx, zy + zh - 8, r.b, 8);
+    stift.fillStyle = FARBE.warm;
+    for (let i = 0; i < 3; i++) {
+      rundesRechteck(stift, zx + r.b * (0.2 + i * 0.13), zy + zh * 0.2, r.b * 0.09, zh * 0.3, 3);
+      stift.fill();
+    }
+    const tuer = stift.createLinearGradient(0, zy, 0, zy + zh);
+    tuer.addColorStop(0, '#fff1d6');
+    tuer.addColorStop(1, FARBE.warm);
+    stift.fillStyle = tuer;
+    stift.fillRect(zx + r.b * 0.05, zy + zh * 0.16, r.b * 0.1, zh * 0.78);
+    const schein = stift.createRadialGradient(zx + r.b * 0.1, boden, 0, zx + r.b * 0.1, boden, r.b * 0.3);
+    schein.addColorStop(0, 'rgba(255, 217, 160, 0.4)');
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(r.x, boden - r.h * 0.3, r.b, r.h * 0.5);
+  } else {
+    // der Zug ist weitergefahren: zwei Schlusslichter in der Ferne
+    stift.fillStyle = 'rgba(255, 122, 99, 0.8)';
+    kreis(stift, r.x + r.b * 0.86, boden - 5, 1.5);
+    stift.fill();
+    kreis(stift, r.x + r.b * 0.88, boden - 5, 1.5);
+    stift.fill();
+  }
+
+  // Bahnsteig mit weißer Linie
+  stift.fillStyle = '#242b3b';
+  stift.fillRect(r.x, boden, r.b, r.h);
+  stift.fillStyle = '#343d52';
+  stift.fillRect(r.x, boden, r.b, 3);
+  stift.fillStyle = 'rgba(240, 236, 224, 0.75)';
+  stift.fillRect(r.x, boden + r.h * 0.12, r.b, 2.5);
+
+  // Laterne mit warmem Kegel
+  const lx = r.x + r.b * 0.27;
+  const kopf = r.y + r.h * 0.2;
+  const flackern = karte.ruhig ? 1 : 0.96 + Math.sin(t * 0.7) * 0.04;
+  stift.globalCompositeOperation = 'lighter';
+  const kegel = stift.createLinearGradient(0, kopf, 0, boden);
+  kegel.addColorStop(0, `rgba(255, 217, 160, ${0.42 * flackern})`);
+  kegel.addColorStop(1, `rgba(255, 217, 160, ${0.06 * flackern})`);
+  stift.fillStyle = kegel;
+  stift.beginPath();
+  stift.moveTo(lx + 6, kopf + 3);
+  stift.lineTo(lx + 22, kopf + 3);
+  stift.lineTo(lx + r.b * 0.36, boden + 4);
+  stift.lineTo(lx - r.b * 0.16, boden + 4);
+  stift.closePath();
+  stift.fill();
+  const fleck = stift.createRadialGradient(lx + r.b * 0.1, boden + 6, 0, lx + r.b * 0.1, boden + 6, r.b * 0.3);
+  fleck.addColorStop(0, `rgba(255, 217, 160, ${0.3 * flackern})`);
+  fleck.addColorStop(1, 'rgba(255, 217, 160, 0)');
+  stift.fillStyle = fleck;
+  stift.fillRect(r.x, boden, r.b, r.h * 0.24);
+  stift.globalCompositeOperation = 'source-over';
+  stift.strokeStyle = '#0d1119';
+  stift.lineWidth = 3;
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(lx, boden);
+  stift.lineTo(lx, kopf);
+  stift.lineTo(lx + 22, kopf);
+  stift.stroke();
+  stift.fillStyle = '#fff1d6';
+  rundesRechteck(stift, lx + 6, kopf + 1, 16, 4, 2);
+  stift.fill();
+
+  // Bank, darauf ein Becher
+  const bx = lx + r.b * 0.07;
+  const bb = r.b * 0.2;
+  stift.strokeStyle = '#0d1119';
+  stift.lineWidth = 3;
+  stift.beginPath();
+  stift.moveTo(bx, boden - 13);
+  stift.lineTo(bx + bb, boden - 13);
+  stift.moveTo(bx + 4, boden - 13);
+  stift.lineTo(bx + 4, boden);
+  stift.moveTo(bx + bb - 4, boden - 13);
+  stift.lineTo(bx + bb - 4, boden);
+  stift.moveTo(bx, boden - 26);
+  stift.lineTo(bx + bb, boden - 26);
+  stift.stroke();
+  stift.fillStyle = '#e9dcc0';
+  stift.fillRect(bx + bb * 0.2, boden - 21, 5, 7);
+
+  maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
+
+  if (halt) {
+    // die Uhr am Bahnsteig zeigt die Ankunft
+    stift.strokeStyle = '#0d1119';
+    stift.lineWidth = 3;
+    stift.beginPath();
+    stift.moveTo(r.x + r.b * 0.12, boden);
+    stift.lineTo(r.x + r.b * 0.12, r.y + r.h * 0.34);
+    stift.stroke();
+    maleUhr(stift, { x: r.x + r.b * 0.12, y: r.y + r.h * 0.26, r: 15 }, karte.minuten, 0);
+  }
+  stift.restore();
+}
+
+// karte: { art, zeilen, herzen, herzenVoll, minuten, einblenden 0..1, weg 0..1, ruhig }
+function maleKarte(stift, layout, karte, t) {
+  const m = kartenMasse(layout, karte.art);
+  const ein = sanft(karte.einblenden);
+  const weg = karte.weg * karte.weg;
+  stift.save();
+  stift.fillStyle = `rgba(5, 7, 12, ${0.74 * ein * (1 - weg)})`;
+  stift.fillRect(0, 0, layout.breite, layout.hoehe);
+  stift.globalAlpha = ein;
+  stift.translate(0, (1 - ein) * 28 - weg * (m.y + m.h + 20));
+
+  stift.fillStyle = '#10141d';
+  rundesRechteck(stift, m.x, m.y, m.b, m.h, 16);
+  stift.fill();
+  stift.strokeStyle = '#2a3346';
+  stift.lineWidth = 1;
+  rundesRechteck(stift, m.x + 0.5, m.y + 0.5, m.b - 1, m.h - 1, 16);
+  stift.stroke();
+
+  maleBahnsteig(stift, m.bild, karte, t);
+
+  // Anzeige mit zwei Zeilen
+  const tf = m.tafel;
+  stift.fillStyle = FARBE.tafel;
+  rundesRechteck(stift, tf.x, tf.y, tf.b, tf.h, 5);
+  stift.fill();
+  const feld = neuesPunktfeld(tf.spalten, tf.zeilen);
+  schreibeMittig(feld, karte.zeilen[0] || '', 1);
+  schreibeMittig(feld, karte.zeilen[1] || '', ZEILENHOEHE + 3);
+  zeichnePunktfeld(stift, feld, tf.x + tf.polster, tf.y + tf.polster, tf.raster, FARBE.bernstein, FARBE.bernsteinAus);
+
+  if (karte.art === 'halt') {
+    const g = 17;
+    const breite = karte.herzenVoll * (g + 6) - 6;
+    maleHerzen(stift, layout.breite / 2 - breite / 2 - g * 0.1, m.herzenY, karte.herzen, karte.herzenVoll, 0, g);
+  }
+
+  // zwei Winkel nach oben: wegwischen
+  const cx = layout.breite / 2;
+  const wandern = karte.ruhig ? 0 : Math.sin(t * 2.2) * 3;
+  stift.strokeStyle = FARBE.bernstein;
+  stift.lineWidth = 3;
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  for (let i = 0; i < 2; i++) {
+    const y = m.y + m.h - 40 + i * 11 - wandern;
+    stift.globalAlpha = ein * (i === 0 ? 0.95 : 0.45);
+    stift.beginPath();
+    stift.moveTo(cx - 13, y + 8);
+    stift.lineTo(cx, y);
+    stift.lineTo(cx + 13, y + 8);
+    stift.stroke();
+  }
+  stift.restore();
+}
+
+// --- anzeige/anzeige.js
+// Die Anzeige spielt ab, was der Kern meldet. Sie entscheidet nie über Spielregeln.
+//
+// "bild" ist der Stand, der gerade zu sehen ist. Er läuft dem echten Zustand ein paar
+// Zehntelsekunden hinterher, während die Ereignisse eines Zugs nacheinander ablaufen.
+// Kommt eine neue Eingabe, bevor alles gezeigt ist, springt das Bild sofort ans Ende.
+
+
+
+
+
+
+
+
+
+
+
+
+
+const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
+const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
+
+function uhrzeit(zug) {
+  const minuten = (ABFAHRT + zug) % (24 * 60);
+  return `${String(Math.floor(minuten / 60)).padStart(2, '0')}:${String(minuten % 60).padStart(2, '0')}`;
+}
+
+function erzeugeAnzeige(leinwand) {
+  const stift = leinwand.getContext('2d');
+  const ruhig = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let layout = null;
+  let dichte = 1;
+  let z = null; // der echte Zustand, nur zum Lesen
+  let wagenbild = null;
+  let altesWagenbild = null;
+  let tafelbild = null;
+  let schleier = null;
+
+  const bild = {
+    wagenNr: -1,
+    spieler: { x: 0, y: 0, px: 0, py: 0, sx: 0, sy: 0, hupf: 0, blitz: 0 },
+    gegner: [],
+    herzen: HERZEN_VOLL,
+    ruhe: 0,
+    zug: 0,
+    tuer: 0,
+    schwenk: 0,
+  };
+  let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
+  let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
+  let geister = []; // Besiegte, die verblassen
+  let blitze = []; // Felder, auf denen gerade ein Angriff eintrifft
+  let lichter = [];
+  let klar = 0;
+  let letzteZeit = 0;
+  let lichtIn = 0.4;
+  let fernIn = 0.2;
+  let taktUhr = 0;
+  let karte = null;
+  let hinweis = null;
+  let tonAn = true;
+  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9 };
+  const melder = { takt: null };
+
+  // ---------------------------------------------------------------- Aufbau
+
+  function passeAn() {
+    // Maß ist der Canvas selbst: Er folgt der dynamischen Höhe und lässt Notch und Home-Balken frei.
+    const breite = Math.max(200, leinwand.clientWidth || window.innerWidth);
+    const hoehe = Math.max(240, leinwand.clientHeight || window.innerHeight);
+    dichte = Math.min(window.devicePixelRatio || 1, 2.5);
+    leinwand.width = Math.round(breite * dichte);
+    leinwand.height = Math.round(hoehe * dichte);
+    layout = berechneLayout(breite, hoehe);
+    baueSchleier();
+    bild.wagenNr = -1;
+    if (z) gleicheAb();
+  }
+
+  // Dunkle Ränder, die sich im Flusszustand lichten. Einmal gemalt, dann nur noch aufgelegt.
+  function baueSchleier() {
+    schleier = document.createElement('canvas');
+    const b = Math.round(layout.breite / 2);
+    const h = Math.round(layout.hoehe / 2);
+    schleier.width = b;
+    schleier.height = h;
+    const s2 = schleier.getContext('2d');
+    const rand = s2.createRadialGradient(b / 2, h * 0.52, h * 0.28, b / 2, h * 0.52, h * 0.82);
+    rand.addColorStop(0, 'rgba(4, 6, 12, 0)');
+    rand.addColorStop(1, 'rgba(4, 6, 12, 1)');
+    s2.fillStyle = rand;
+    s2.fillRect(0, 0, b, h);
+  }
+
+  function baueBilder() {
+    wagenbild = maleWagenbild(layout, z.wagen.plan, dichte);
+    tafelbild = maleTafelbild(layout, String(z.wagenNr + 1), TEXTE.wagen[z.wagen.art] || '', dichte);
+    bild.wagenNr = z.wagenNr;
+  }
+
+  // Bild und Zustand in Deckung bringen
+  function gleicheAb() {
+    if (bild.wagenNr !== z.wagenNr) baueBilder();
+    const s = bild.spieler;
+    s.x = s.px = z.spieler.x;
+    s.y = s.py = z.spieler.y;
+    s.sx = s.sy = s.hupf = 0;
+    bild.herzen = z.spieler.herzen;
+    bild.ruhe = z.spieler.ruhe;
+    bild.zug = z.zug;
+    bild.tuer = z.tuerOffen ? 1 : 0;
+    bild.schwenk = 0;
+    const alt = new Map(bild.gegner.map((g) => [g.id, g]));
+    bild.gegner = z.gegner.map((g) => {
+      const b = alt.get(g.id) || { id: g.id, typ: g.typ, sx: 0, sy: 0, blitz: 0 };
+      b.x = b.px = g.x;
+      b.y = b.py = g.y;
+      b.hp = g.hp;
+      b.ansage = g.ansage ? g.ansage.map((f) => ({ x: f.x, y: f.y })) : null;
+      b.zeigen = 1;
+      b.erschoepft = g.erschoepft > 0;
+      b.pausiert = g.pause > 0;
+      b.gruppe = g.gruppe;
+      b.rang = g.rang;
+      return b;
+    });
+  }
+
+  function bewege(start, dauer, schritt, bleibt) {
+    const l = { start, dauer, schritt, bleibt: bleibt === true };
+    laeufer.push(l);
+    schritt(0);
+    return l;
+  }
+
+  function findeGegner(id) {
+    for (const g of bild.gegner) if (g.id === id) return g;
+    return null;
+  }
+
+  function laufeWeg(g, von, weg, jetzt, dauer) {
+    const punkte = [von, ...weg];
+    if (punkte.length < 2) return;
+    const ziel = punkte[punkte.length - 1];
+    g.x = ziel.x;
+    g.y = ziel.y;
+    bewege(jetzt, dauer, (p) => {
+      const q = sanft(p) * (punkte.length - 1);
+      const i = Math.min(punkte.length - 2, Math.floor(q));
+      const rest = q - i;
+      g.px = punkte[i].x + (punkte[i + 1].x - punkte[i].x) * rest;
+      g.py = punkte[i].y + (punkte[i + 1].y - punkte[i].y) * rest;
+    });
+  }
+
+  function lasseAufblitzen(felder, jetzt) {
+    const b = { felder, staerke: 1 };
+    blitze.push(b);
+    bewege(jetzt, 150, (p) => {
+      b.staerke = 1 - p;
+      if (p >= 1) blitze = blitze.filter((x) => x !== b);
+    }, true);
+  }
+
+  // ---------------------------------------------------------------- Ereignisse
+
+  function zeigeKarte(art, zeilen, jetzt, pause) {
+    karte = {
+      art,
+      zeilen,
+      herzen: z.spieler.herzen,
+      herzenVoll: HERZEN_VOLL,
+      minuten: ABFAHRT + z.zug,
+      start: jetzt + pause,
+      einblenden: 0,
+      weg: 0,
+      geht: 0,
+      ruhig,
+    };
+  }
+
+  function wendeAn(e, jetzt) {
+    const s = bild.spieler;
+    if (e.typ === 'schritt') {
+      const fluss = bild.ruhe >= RUHE_VOLL;
+      s.x = e.nach.x;
+      s.y = e.nach.y;
+      bild.zug += 1;
+      bewege(jetzt, fluss ? 100 : 125, (p) => {
+        const q = fluss ? leicht(p) : sanft(p);
+        s.px = e.von.x + (e.nach.x - e.von.x) * q;
+        s.py = e.von.y + (e.nach.y - e.von.y) * q;
+        s.hupf = fluss ? hinUndHer(p) * 0.07 : 0;
+      });
+    } else if (e.typ === 'warten') {
+      bild.zug += 1;
+      wirkung.uhr = jetzt;
+    } else if (e.typ === 'ungueltig') {
+      const r = RICHTUNG[e.richtung];
+      if (e.tuer) wirkung.tuerZu = jetzt;
+      bewege(jetzt, 100, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.13;
+        s.sy = r.y * hinUndHer(p) * 0.13;
+      });
+    } else if (e.typ === 'schlag') {
+      const r = RICHTUNG[e.richtung];
+      bild.zug += 1;
+      bewege(jetzt, 115, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.34;
+        s.sy = r.y * hinUndHer(p) * 0.34;
+      });
+      const g = findeGegner(e.id);
+      if (g) {
+        g.hp = e.hp;
+        if (e.besiegt) {
+          bild.gegner = bild.gegner.filter((x) => x !== g);
+          const geist = { g, alpha: 1 };
+          geister.push(geist);
+          bewege(jetzt, 140, (p) => {
+            geist.alpha = 1 - p;
+            g.sx = r.x * p * 0.3;
+            g.sy = r.y * p * 0.3;
+            g.blitz = 1 - p;
+            if (p >= 1) geister = geister.filter((x) => x !== geist);
+          }, true);
+        } else {
+          bewege(jetzt, 140, (p) => {
+            g.blitz = 1 - p;
+            g.sx = r.x * hinUndHer(p) * 0.14;
+            g.sy = r.y * hinUndHer(p) * 0.14;
+          }, true);
+        }
+      }
+    } else if (e.typ === 'tuerAuf') {
+      const l = bewege(jetzt, 150, (p) => {
+        bild.tuer = Math.max(0.001, sanft(p));
+      });
+      l.tuer = true;
+    } else if (e.typ === 'wagenwechsel') {
+      altesWagenbild = wagenbild;
+      baueBilder();
+      gleicheAb();
+      geister = [];
+      blitze = [];
+      if (!ruhig) {
+        bewege(jetzt, 150, (p) => {
+          const q = sanft(p);
+          bild.schwenk = 1 - q;
+          s.py = STARTFELD.y * q;
+          if (p >= 1) altesWagenbild = null;
+        });
+      } else {
+        altesWagenbild = null;
+      }
+    } else if (e.typ === 'halt') {
+      bild.zug += 1;
+      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+    } else if (e.typ === 'hieb') {
+      const g = findeGegner(e.id);
+      if (g) {
+        const f = e.felder[0];
+        const dx = Math.sign(f.x - g.x);
+        const dy = Math.sign(f.y - g.y);
+        g.ansage = null;
+        bewege(jetzt, 120, (p) => {
+          g.sx = dx * hinUndHer(p) * 0.3;
+          g.sy = dy * hinUndHer(p) * 0.3;
+        });
+      }
+      lasseAufblitzen(e.felder, jetzt);
+    } else if (e.typ === 'vorstoss') {
+      const g = findeGegner(e.id);
+      if (g) {
+        g.ansage = null;
+        if (g.typ === 'draengler') g.erschoepft = true;
+        laufeWeg(g, e.von, e.weg, jetzt, 135);
+      }
+      lasseAufblitzen(e.felder, jetzt);
+    } else if (e.typ === 'folgen') {
+      const g = findeGegner(e.id);
+      if (g) laufeWeg(g, e.von, e.weg, jetzt, 135);
+    } else if (e.typ === 'gegnerSchritt') {
+      const g = findeGegner(e.id);
+      if (g) laufeWeg(g, e.von, [e.nach], jetzt, 120);
+    } else if (e.typ === 'ansage') {
+      const g = findeGegner(e.id);
+      if (g) {
+        g.ansage = e.felder;
+        g.erschoepft = false;
+        bewege(jetzt, 110, (p) => {
+          g.zeigen = p;
+        });
+      }
+    } else if (e.typ === 'treffer') {
+      bild.herzen = e.herzen;
+      bild.ruhe = 0;
+      wirkung.treffer = jetzt;
+      if (!ruhig) wirkung.wackeln = jetzt;
+      bewege(jetzt, 150, (p) => {
+        s.blitz = 1 - p;
+      }, true);
+    } else if (e.typ === 'ausgewichen') {
+      bild.ruhe = e.ruhe;
+      wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'tod') {
+      const uebrig = WAGENZAHL - e.wagenNr;
+      const text = uebrig === 1 ? TEXTE.ende.einWagen : fuelle(TEXTE.ende.mehrereWagen, { n: TEXTE.zahlwort[uebrig] });
+      zeigeKarte('tod', text.split(' / '), jetzt, 280);
+    }
+  }
+
+  // Nimmt die Ereignisse eines Zugs entgegen und verteilt sie auf die nächsten Augenblicke.
+  function spiele(ereignisse, jetzt) {
+    const phasen = [[], [], []];
+    for (const e of ereignisse) phasen[e.phase].push(e);
+    let zeit = jetzt;
+    for (let p = 0; p < 3; p++) {
+      if (!phasen[p].length) continue;
+      wartend.push({ zeit, liste: phasen[p] });
+      const nurWarten = p === 0 && phasen[p].every((e) => e.typ === 'warten' || e.typ === 'ungueltig');
+      zeit += nurWarten ? 30 : p === 0 ? 100 : p === 1 ? 125 : 115;
+    }
+    wartend.push({ zeit, liste: null });
+    arbeiteAb(jetzt);
+  }
+
+  function arbeiteAb(jetzt) {
+    while (wartend.length && wartend[0].zeit <= jetzt) {
+      const dran = wartend[0];
+      if (dran.liste) {
+        wartend.shift();
+        for (const e of dran.liste) wendeAn(e, jetzt);
+        continue;
+      }
+      // der Abgleich am Ende wartet, bis keine Bewegung mehr läuft
+      if (laeufer.some((l) => !l.bleibt)) break;
+      wartend.shift();
+      gleicheAb();
+    }
+  }
+
+  // Alles, was noch läuft, sofort zu Ende bringen. Treffer und Aufblitzen laufen weiter.
+  function beschleunige(jetzt) {
+    for (const dran of wartend) if (dran.liste) for (const e of dran.liste) wendeAn(e, jetzt);
+    wartend = [];
+    for (const l of laeufer) if (!l.bleibt) l.schritt(1);
+    laeufer = laeufer.filter((l) => l.bleibt);
+    if (z) gleicheAb();
+  }
+
+  function neueFahrt(zustand, jetzt) {
+    z = zustand;
+    wartend = [];
+    laeufer = laeufer.filter((l) => l.bleibt);
+    geister = [];
+    blitze = [];
+    bild.gegner = [];
+    bild.tuer = 0;
+    altesWagenbild = null;
+    bild.wagenNr = -1;
+    gleicheAb();
+    if (karte) karte.geht = jetzt;
+  }
+
+  // ---------------------------------------------------------------- Lichter draußen
+
+  function neuesLicht(seite, fern, fest) {
+    const warm = fest || Math.random() < 0.78;
+    lichter.push({
+      seite,
+      fern,
+      ort: fern ? 0.55 + Math.random() * 0.45 : 0.3 + Math.random() * 0.5,
+      y: -60,
+      tempo: fern ? 34 + Math.random() * 30 : fest ? 340 : 250 + Math.random() * 130,
+      groesse: fern ? 3 + Math.random() * 3 : fest ? 30 : 16 + Math.random() * 20,
+      hell: fern ? 0.5 + Math.random() * 0.4 : fest ? 1 : 0.55 + Math.random() * 0.45,
+      farbe: warm ? '255, 205, 140' : '175, 205, 255',
+      zug: fern ? 0 : 0.7,
+    });
+  }
+
+  function bewegeLichter(dt) {
+    const fluss = bild.ruhe >= RUHE_VOLL && !karte;
+    const bremse = ruhig ? 0.2 : 1;
+    for (const l of lichter) l.y += l.tempo * dt * bremse;
+    lichter = lichter.filter((l) => l.y < layout.hoehe + 80);
+    fernIn -= dt * bremse;
+    if (fernIn <= 0) {
+      neuesLicht(Math.random() < 0.5 ? -1 : 1, true, false);
+      fernIn = 0.7 + Math.random() * 1.4;
+    }
+    if (fluss && !ruhig) {
+      // im Takt der Schienen: links, kurz darauf rechts, dann Pause
+      const vorher = taktUhr;
+      taktUhr = (taktUhr + dt) % TAKT;
+      if (taktUhr < vorher) {
+        neuesLicht(-1, false, true);
+        if (melder.takt) melder.takt(0);
+      }
+      if (vorher < 0.2 && taktUhr >= 0.2) {
+        neuesLicht(1, false, true);
+        if (melder.takt) melder.takt(1);
+      }
+    } else {
+      taktUhr = TAKT - 0.05;
+      lichtIn -= dt * bremse;
+      if (lichtIn <= 0) {
+        neuesLicht(Math.random() < 0.5 ? -1 : 1, false, false);
+        lichtIn = 0.5 + Math.random() * 1.7;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- Zeichnen
+
+  function maleRot(t) {
+    const { boden, s } = layout;
+    const puls = ruhig ? 0.5 : (Math.sin((t * Math.PI * 2) / 1.15) + 1) / 2;
+    const gemalt = new Map();
+    for (const g of bild.gegner) {
+      if (!g.ansage) continue;
+      g.ansage.forEach((f, i) => {
+        const nr = feldNr(f.x, f.y);
+        const vor = i === 0 ? g : g.ansage[i - 1];
+        const eintrag = { f, zeigen: g.zeigen, dx: Math.sign(f.x - vor.x), dy: Math.sign(f.y - vor.y), pfeil: g.typ !== 'pendler' };
+        if (!gemalt.has(nr) || gemalt.get(nr).zeigen < eintrag.zeigen) gemalt.set(nr, eintrag);
+      });
+    }
+    for (const { f, zeigen, dx, dy, pfeil } of gemalt.values()) {
+      const x = boden.x + f.x * s;
+      const y = boden.y + f.y * s;
+      stift.fillStyle = `rgba(232, 64, 47, ${(0.24 + 0.2 * puls) * zeigen})`;
+      rundesRechteck(stift, x + 2, y + 2, s - 4, s - 4, s * 0.1);
+      stift.fill();
+      stift.strokeStyle = `rgba(255, 122, 99, ${(0.6 + 0.35 * puls) * zeigen})`;
+      stift.lineWidth = 2;
+      rundesRechteck(stift, x + 3, y + 3, s - 6, s - 6, s * 0.09);
+      stift.stroke();
+      if (pfeil && (dx || dy)) {
+        // kleiner Winkel: aus dieser Richtung kommt er
+        const cx = x + s / 2;
+        const cy = y + s / 2;
+        const a = s * 0.1;
+        stift.strokeStyle = `rgba(255, 190, 170, ${0.55 * zeigen})`;
+        stift.lineWidth = Math.max(1.5, s * 0.035);
+        stift.lineCap = 'round';
+        stift.lineJoin = 'round';
+        stift.beginPath();
+        stift.moveTo(cx - dx * a - dy * a, cy - dy * a - dx * a);
+        stift.lineTo(cx + dx * a, cy + dy * a);
+        stift.lineTo(cx - dx * a + dy * a, cy - dy * a + dx * a);
+        stift.stroke();
+      }
+    }
+    for (const b of blitze) {
+      for (const f of b.felder) {
+        stift.fillStyle = `rgba(255, 214, 200, ${0.6 * b.staerke})`;
+        rundesRechteck(stift, boden.x + f.x * s + 2, boden.y + f.y * s + 2, s - 4, s - 4, s * 0.1);
+        stift.fill();
+      }
+    }
+  }
+
+  function istVorn(g) {
+    if (g.typ !== 'gruppe') return false;
+    return !bild.gegner.some((a) => a.typ === 'gruppe' && a.gruppe === g.gruppe && a.rang < g.rang);
+  }
+
+  function maleGegner(g, t, alpha, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (g.px + g.sx + 0.5) * s;
+    const fy = boden.y + (g.py + g.sy + 0.86) * s + oy;
+    let neigung = 0;
+    if (g.typ === 'draengler' && g.ansage && g.ansage.length) neigung = Math.sign(g.ansage[0].x - g.x) * 0.55;
+    maleFigur(stift, g.typ, cx, fy, s, {
+      t,
+      takt: g.id * 1.7,
+      alpha,
+      blitz: g.blitz,
+      ruhig,
+      neigung,
+      pausiert: g.pausiert && !g.ansage,
+      vorderster: istVorn(g),
+      erschoepft: g.erschoepft,
+      ansagend: !!g.ansage,
+    });
+    if (alpha > 0.5) {
+      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : 0.86;
+      malePunkte(stift, cx, fy - s * kopf, s, g.hp, GEGNERWERTE[g.typ].hp);
+    }
+  }
+
+  function maleSchild(text, cx, cy) {
+    const raster = 2;
+    const b = textBreite(text) * raster + 14;
+    const h = ZEILENHOEHE * raster + 10;
+    const x = begrenze(Math.round(cx - b / 2), 6, layout.breite - b - 6);
+    const y = Math.round(cy - h / 2);
+    stift.fillStyle = 'rgba(13, 17, 25, 0.94)';
+    rundesRechteck(stift, x, y, b, h, 6);
+    stift.fill();
+    stift.strokeStyle = FARBE.tafelRand;
+    stift.lineWidth = 1;
+    rundesRechteck(stift, x + 0.5, y + 0.5, b - 1, h - 1, 6);
+    stift.stroke();
+    const feld = neuesPunktfeld(textBreite(text), ZEILENHOEHE);
+    schreibe(feld, text, 0, 0);
+    zeichnePunktfeld(stift, feld, x + 7, y + 6, raster, FARBE.bernstein, null);
+  }
+
+  function figurAuf(x, y) {
+    const p = bild.spieler;
+    return (p.x === x && p.y === y) || bild.gegner.some((g) => g.x === x && g.y === y);
+  }
+
+  // Das Schild steht über dem Feld. Steht dort schon jemand, weicht es nach unten aus.
+  function schildAn(feld, hoch) {
+    const { boden, s } = layout;
+    const cx = boden.x + (feld.x + 0.5) * s;
+    const obenFrei = feld.y > 0 && !figurAuf(feld.x, feld.y - 1);
+    const untenFrei = feld.y < 7 && !figurAuf(feld.x, feld.y + 1);
+    if (obenFrei || !untenFrei) return { cx, cy: boden.y + feld.y * s - s * hoch };
+    return { cx, cy: boden.y + (feld.y + 1) * s + s * 0.32 };
+  }
+
+  // Höchstens ein Hinweis, und nur in dem Augenblick, in dem die Lage zu sehen ist.
+  function maleHinweis() {
+    if (!hinweis || karte || bild.schwenk > 0.01) return;
+    const p = bild.spieler;
+    const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
+    const nachbar = bild.gegner.find((a) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
+    if (hinweis.wischen && bild.zug === 0) {
+      const ort = schildAn(p, 0.42);
+      maleSchild(TEXTE.hinweis[hinweis.wischen], ort.cx, ort.cy);
+    } else if (hinweis.ausweichen && markiert) {
+      const ort = schildAn(p, 0.6);
+      maleSchild(TEXTE.hinweis.ausweichen, ort.cx, ort.cy);
+    } else if (hinweis.anrempeln && nachbar && !markiert) {
+      const ort = schildAn(nachbar, 0.4);
+      maleSchild(TEXTE.hinweis.anrempeln, ort.cx, ort.cy);
+    }
+  }
+
+  function maleWelt(t, jetzt) {
+    const { boden, rumpf, s, wagenlaenge } = layout;
+    const oy = -bild.schwenk * wagenlaenge;
+    if (altesWagenbild && bild.schwenk > 0) {
+      const alt = (1 - bild.schwenk) * wagenlaenge;
+      stift.drawImage(altesWagenbild, rumpf.x, rumpf.y + alt, rumpf.b, rumpf.h);
+      maleTuer(stift, layout, 1, t, 0, alt);
+    }
+    if (wagenbild) stift.drawImage(wagenbild, rumpf.x, rumpf.y + oy, rumpf.b, rumpf.h);
+    let zucken = 0;
+    const seit = jetzt - wirkung.tuerZu;
+    if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
+    maleTuer(stift, layout, bild.tuer, t, zucken, oy);
+
+    const imWechsel = bild.schwenk > 0.01;
+    if (!imWechsel) {
+      maleLichtschein(stift, layout, lichter, klar);
+      maleRot(t);
+      maleTuerlicht(stift, layout, bild.tuer, t, ruhig);
+    }
+
+    // Figuren von hinten nach vorn
+    const p = bild.spieler;
+    const reihe = [];
+    for (const g of bild.gegner) reihe.push({ y: g.py + g.sy, g, alpha: 1 });
+    for (const geist of geister) reihe.push({ y: geist.g.py + geist.g.sy, g: geist.g, alpha: geist.alpha });
+    reihe.push({ y: p.py + p.sy + 0.001, spieler: true });
+    reihe.sort((a, b) => a.y - b.y);
+    for (const eintrag of reihe) {
+      if (!eintrag.spieler) {
+        maleGegner(eintrag.g, t, eintrag.alpha, oy);
+        continue;
+      }
+      const cx = boden.x + (p.px + p.sx + 0.5) * s;
+      const fy = boden.y + (p.py + p.sy + 0.86 - p.hupf) * s;
+      if (klar > 0.02) {
+        const hof = stift.createRadialGradient(cx, fy, 0, cx, fy, s * 0.62);
+        hof.addColorStop(0, `rgba(255, 217, 160, ${0.26 * klar})`);
+        hof.addColorStop(1, 'rgba(255, 217, 160, 0)');
+        stift.fillStyle = hof;
+        stift.fillRect(cx - s * 0.7, fy - s * 0.4, s * 1.4, s * 0.8);
+      }
+      const tot = karte && karte.art === 'tod';
+      maleFigur(stift, 'spieler', cx, fy, s, { t, takt: 0, ruhig, blitz: p.blitz, fluss: klar > 0.5, alpha: tot ? 0.45 : 1 });
+      const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
+      if (markiert && !imWechsel && !karte) {
+        const wippen = ruhig ? 0 : Math.sin(t * 7) * s * 0.025;
+        maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
+      }
+    }
+    maleHinweis();
+  }
+
+  function zeichne(jetzt) {
+    if (!layout || !z) return;
+    // Safari ändert die Höhe, wenn seine Leisten kommen und gehen, oft ohne verlässliches Signal.
+    if (leinwand.clientWidth && (leinwand.clientWidth !== layout.breite || leinwand.clientHeight !== layout.hoehe)) passeAn();
+    const dt = Math.min(0.05, Math.max(0, (jetzt - letzteZeit) / 1000));
+    letzteZeit = jetzt;
+    const t = jetzt / 1000;
+
+    arbeiteAb(jetzt);
+    for (const l of [...laeufer]) {
+      const p = l.dauer <= 0 ? 1 : (jetzt - l.start) / l.dauer;
+      l.schritt(begrenze(p, 0, 1));
+      if (p >= 1) laeufer = laeufer.filter((x) => x !== l);
+    }
+    const zielKlar = bild.ruhe >= RUHE_VOLL ? 1 : 0;
+    klar += (zielKlar - klar) * Math.min(1, dt * 5);
+    bewegeLichter(dt);
+
+    stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+    stift.globalAlpha = 1;
+    stift.globalCompositeOperation = 'source-over';
+    stift.fillStyle = FARBE.nacht;
+    stift.fillRect(0, 0, layout.breite, layout.hoehe);
+
+    stift.save();
+    const seitWackeln = jetzt - wirkung.wackeln;
+    if (seitWackeln < 150) {
+      const rest = 1 - seitWackeln / 150;
+      stift.translate(Math.sin(seitWackeln / 9) * 5 * rest, Math.cos(seitWackeln / 7) * 3 * rest);
+    }
+    maleLichter(stift, layout, lichter, klar);
+    // der Wagen bleibt unter den Anzeigen, auch während er beim Wechsel durchs Bild schiebt
+    stift.beginPath();
+    stift.rect(-20, layout.status.y + layout.status.h + 3, layout.breite + 40, layout.hoehe);
+    stift.clip();
+    maleWelt(t, jetzt);
+    stift.restore();
+
+    // Dunst und dunkle Ränder; bei voller Ruhe wird das Bild klar
+    stift.fillStyle = `rgba(16, 22, 40, ${0.15 * (1 - klar)})`;
+    stift.fillRect(0, 0, layout.breite, layout.hoehe);
+    stift.globalAlpha = 0.62 - 0.4 * klar;
+    stift.drawImage(schleier, 0, 0, layout.breite, layout.hoehe);
+    stift.globalAlpha = 1;
+    const seitTreffer = jetzt - wirkung.treffer;
+    if (seitTreffer < 150 && !ruhig) {
+      stift.fillStyle = `rgba(232, 64, 47, ${0.2 * (1 - seitTreffer / 150)})`;
+      stift.fillRect(0, 0, layout.breite, layout.hoehe);
+    }
+
+    // Anzeigen am Rand
+    const { tafel, status } = layout;
+    if (tafelbild) stift.drawImage(tafelbild, tafel.x, tafel.y, tafel.b, tafel.h);
+    const verlust = begrenze(1 - seitTreffer / 320, 0, 1);
+    maleHerzen(stift, status.x, status.y + status.h / 2, bild.herzen, HERZEN_VOLL, verlust);
+    const zuwachs = begrenze(1 - (jetzt - wirkung.zuwachs) / 380, 0, 1);
+    maleRuhe(stift, status.x + status.b, status.y + status.h / 2, bild.ruhe, RUHE_VOLL, zuwachs);
+    const druck = begrenze(1 - (jetzt - wirkung.uhr) / 140, 0, 1);
+    maleUhr(stift, layout.uhr, ABFAHRT + bild.zug, druck);
+    maleTonknopf(stift, layout.ton, tonAn);
+
+    if (karte) {
+      karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      if (karte.geht) {
+        karte.weg = begrenze((jetzt - karte.geht) / 150, 0, 1);
+        if (ruhig) karte.weg = 1;
+      }
+      if (karte.weg >= 1) karte = null;
+      else if (jetzt >= karte.start) maleKarte(stift, layout, karte, t);
+    }
+  }
+
+  // ---------------------------------------------------------------- Auskunft
+
+  // Was liegt an diesem Bildschirmpunkt?
+  function wasLiegtBei(px, py) {
+    if (karte && !karte.geht) {
+      const w = kartenMasse(layout, karte.art).weiter;
+      if (px >= w.x && px <= w.x + w.b && py >= w.y && py <= w.y + w.h) return { art: 'weiter' };
+      return { art: 'karte' };
+    }
+    const nah = (ort, r) => Math.hypot(px - ort.x, py - ort.y) <= r;
+    if (nah(layout.uhr, Math.max(KNOPF / 2 + 2, layout.uhr.r + 2))) return { art: 'uhr' };
+    if (nah(layout.ton, KNOPF / 2)) return { art: 'ton' };
+    const feld = feldBei(layout, px, py);
+    if (feld) return { art: 'feld', x: feld.x, y: feld.y };
+    return null;
+  }
+
+  return {
+    passeAn,
+    neueFahrt,
+    spiele,
+    beschleunige,
+    zeichne,
+    wasLiegtBei,
+    melder,
+    setzeHinweis: (name) => {
+      hinweis = name;
+    },
+    setzeTon: (an) => {
+      tonAn = an;
+    },
+    zeigtKarte: () => karte !== null && !karte.geht,
+    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120,
+    tuerfeld: () => TUERFELD,
+  };
+}
+
+// --- eingabe.js
+// Eingabe: Wischen, Tippen, Tastatur. Meldet nur, was der Mensch getan hat.
+// Ein Wisch löst aus, sobald der Finger weit genug gewandert ist, nicht erst beim Loslassen.
+
+const WISCHWEG = 18; // Pixel bis zum Auslösen
+const TIPPWEG = 9; // weniger Bewegung gilt als Tippen
+
+const TASTEN = {
+  ArrowUp: 'hoch',
+  ArrowRight: 'rechts',
+  ArrowDown: 'runter',
+  ArrowLeft: 'links',
+  KeyW: 'hoch',
+  KeyD: 'rechts',
+  KeyS: 'runter',
+  KeyA: 'links',
+  Space: 'warten',
+};
+
+function wischrichtung(dx, dy) {
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'rechts' : 'links';
+  return dy > 0 ? 'runter' : 'hoch';
+}
+
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen() }
+function verbindeEingabe(flaeche, melde) {
+  let finger = null;
+
+  flaeche.addEventListener('pointerdown', (e) => {
+    if (finger) return;
+    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
+    if (flaeche.setPointerCapture) {
+      try {
+        flaeche.setPointerCapture(e.pointerId);
+      } catch (fehler) {
+        // ohne Fang geht es auch
+      }
+    }
+    e.preventDefault();
+  });
+
+  flaeche.addEventListener('pointermove', (e) => {
+    if (!finger || e.pointerId !== finger.id || finger.erledigt) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
+    finger.erledigt = true;
+    melde.aktion(wischrichtung(dx, dy), 'wisch');
+  });
+
+  const loslassen = (e) => {
+    if (!finger || e.pointerId !== finger.id) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    const fertig = finger.erledigt;
+    finger = null;
+    if (e.type === 'pointerup') melde.losgelassen();
+    if (fertig || e.type !== 'pointerup') return;
+    if (Math.hypot(dx, dy) < TIPPWEG) {
+      // Der Canvas beginnt nicht immer in der Ecke: Neben Notch und Home-Balken bleibt ein Rand frei.
+      const kasten = flaeche.getBoundingClientRect();
+      melde.tipp(e.clientX - kasten.left, e.clientY - kasten.top);
+    }
+    else melde.aktion(wischrichtung(dx, dy), 'wisch'); // ein kurzer Wisch zählt auch
+  };
+  flaeche.addEventListener('pointerup', loslassen);
+  flaeche.addEventListener('pointercancel', loslassen);
+  flaeche.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Safari auf dem iPhone: kein Gummiband beim Ziehen, kein Zoom mit zwei Fingern oder Doppeltipp.
+  const halt = (e) => e.preventDefault();
+  document.addEventListener('touchmove', halt, { passive: false });
+  document.addEventListener('gesturestart', halt);
+  document.addEventListener('gesturechange', halt);
+  document.addEventListener('dblclick', halt);
+  // Den Ton gibt Safari erst frei, wenn ein Finger den Bildschirm wieder verlässt.
+  document.addEventListener('touchend', () => melde.losgelassen(), { passive: true });
+  document.addEventListener('click', () => melde.losgelassen());
+
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
+    if (!name) return;
+    e.preventDefault();
+    if (e.code === 'Enter' && !melde.karteOffen()) return;
+    melde.aktion(name, 'taste');
+  });
+}
+
+// --- speicher.js
+// Was das Spiel sich merkt. Safari kann lokale Daten nach einigen Tagen ohne Besuch löschen,
+// im privaten Modus fehlt der Speicher ganz. Deshalb liefert ladeStand() immer einen
+// vollständigen Stand, auch aus dem Nichts oder aus Unsinn, und Schreiben darf scheitern.
+
+const SCHLUESSEL = 'endstation.1';
+
+function leererStand() {
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true };
+}
+
+// Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
+function bereinigeStand(roh) {
+  const stand = leererStand();
+  if (!roh || typeof roh !== 'object') return stand;
+  if (roh.gelernt && typeof roh.gelernt === 'object') {
+    for (const name of Object.keys(stand.gelernt)) stand.gelernt[name] = roh.gelernt[name] === true;
+  }
+  if (typeof roh.ton === 'boolean') stand.ton = roh.ton;
+  return stand;
+}
+
+function ladeStand() {
+  try {
+    return bereinigeStand(JSON.parse(window.localStorage.getItem(SCHLUESSEL)));
+  } catch (fehler) {
+    return leererStand();
+  }
+}
+
+function sichereStand(stand) {
+  try {
+    window.localStorage.setItem(SCHLUESSEL, JSON.stringify(stand));
+    return true;
+  } catch (fehler) {
+    return false; // kein Speicher, kein Problem
+  }
+}
+
+// --- ton.js
+// Ton ist Zugabe: wenige erzeugte Klänge, keine Dateien. Fehlt Web Audio, bleibt es still.
+// Er beginnt erst nach der ersten Berührung. Vibration nutzt das Spiel nicht, das iPhone kennt sie im Browser nicht.
+
+function erzeugeTon() {
+  let ac = null;
+  let haupt = null;
+  let rauschen = null;
+  let an = true;
+
+  // Darf erst nach einer Eingabe aufgerufen werden, sonst sperrt der Browser den Ton.
+  function wecke() {
+    if (!an) return;
+    try {
+      if (!ac) {
+        const Klasse = window.AudioContext || window.webkitAudioContext;
+        if (!Klasse) return;
+        ac = new Klasse();
+        haupt = ac.createGain();
+        haupt.gain.value = 0.2;
+        haupt.connect(ac.destination);
+        rauschen = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const daten = rauschen.getChannelData(0);
+        let wert = 12345;
+        for (let i = 0; i < daten.length; i++) {
+          wert = (Math.imul(wert, 1664525) + 1013904223) >>> 0;
+          daten[i] = wert / 2147483648 - 1;
+        }
+      }
+      // "suspended" vor der ersten Berührung, "interrupted" nach einem Anruf oder App-Wechsel am iPhone
+      if (ac.state !== 'running') {
+        const versuch = ac.resume();
+        if (versuch && versuch.catch) versuch.catch(() => {});
+      }
+    } catch (fehler) {
+      ac = null;
+    }
+  }
+
+  function klang(von, bis, dauer, laut, form, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = form || 'sine';
+      o.frequency.setValueAtTime(von, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, bis), t + dauer);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      o.connect(g);
+      g.connect(haupt);
+      o.start(t);
+      o.stop(t + dauer + 0.02);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  function hauch(hoehe, dauer, laut, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const q = ac.createBufferSource();
+      const f = ac.createBiquadFilter();
+      const g = ac.createGain();
+      q.buffer = rauschen;
+      f.type = 'bandpass';
+      f.frequency.value = hoehe;
+      f.Q.value = 0.9;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      q.connect(f);
+      f.connect(g);
+      g.connect(haupt);
+      q.start(t, (t * 7) % 0.5, dauer + 0.05);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  const KLAENGE = {
+    schritt: () => hauch(1100, 0.05, 0.22),
+    warten: () => klang(1400, 1300, 0.03, 0.08, 'square'),
+    ungueltig: () => klang(130, 110, 0.05, 0.2, 'triangle'),
+    schlag: () => {
+      klang(170, 70, 0.1, 0.8, 'triangle');
+      hauch(500, 0.06, 0.35);
+    },
+    besiegt: () => klang(392, 262, 0.2, 0.3, 'sine', 0.05),
+    treffer: () => {
+      klang(120, 45, 0.22, 0.9, 'sawtooth');
+      hauch(260, 0.14, 0.5);
+    },
+    ausgewichen: () => {
+      hauch(2200, 0.13, 0.22);
+      klang(784, 988, 0.14, 0.14, 'sine', 0.03);
+    },
+    tuerAuf: () => {
+      klang(880, 880, 0.1, 0.25, 'sine');
+      klang(1175, 1175, 0.16, 0.25, 'sine', 0.13);
+    },
+    wagenwechsel: () => hauch(320, 0.24, 0.5),
+    tod: () => klang(196, 98, 0.5, 0.4, 'sine', 0.1),
+    halt: () => {
+      klang(523, 523, 0.3, 0.3, 'sine', 0.1);
+      klang(659, 659, 0.3, 0.3, 'sine', 0.38);
+      klang(784, 784, 0.5, 0.3, 'sine', 0.66);
+    },
+  };
+
+  return {
+    wecke,
+    spiele(ereignisse) {
+      const schon = new Set();
+      for (const e of ereignisse) {
+        const name = e.typ === 'schlag' && e.besiegt ? 'besiegt' : e.typ;
+        if (e.typ === 'schlag') KLAENGE.schlag();
+        if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
+        schon.add(name);
+      }
+    },
+    // Schienenstoß im Flusszustand
+    takt() {
+      hauch(170, 0.07, 0.4);
+      klang(72, 50, 0.08, 0.4, 'sine');
+    },
+    setze(wert) {
+      an = wert;
+    },
+  };
+}
+
+// --- main.js
+// Einstieg: verbindet Kern, Anzeige, Eingabe, Ton und Speicher.
+// Beim Öffnen steht man sofort im ersten Wagen, die erste Eingabe ist schon ein Zug.
+
+
+
+
+
+
+
+
+const leinwand = document.getElementById('bild');
+const anzeige = erzeugeAnzeige(leinwand);
+const ton = erzeugeTon();
+
+const stand = ladeStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
+
+const grobesZeigen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+let mitTasten = !grobesZeigen;
+let spiel = null;
+let fahrten = 0;
+
+// Zum Nachstellen einer Fahrt: Adresse mit #seed=Zahl
+function festerSeed() {
+  const fund = /[#&]seed=(\d+)/.exec(window.location.hash);
+  return fund ? Number(fund[1]) : null;
+}
+
+function zeigeHinweise() {
+  const g = stand.gelernt;
+  anzeige.setzeHinweis({
+    wischen: g.wischen ? null : mitTasten ? 'tasten' : 'wischen',
+    ausweichen: !g.ausweichen,
+    anrempeln: !g.anrempeln,
+  });
+}
+
+function starteFahrt(jetzt) {
+  const fest = festerSeed();
+  const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
+  fahrten += 1;
+  spiel = erzeugeSpiel(seed);
+  anzeige.neueFahrt(spiel.zustand, jetzt);
+  zeigeHinweise();
+}
+
+function merke(ereignisse) {
+  const g = stand.gelernt;
+  const vorher = JSON.stringify(g);
+  for (const e of ereignisse) {
+    if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
+    if (e.typ === 'ausgewichen') g.ausweichen = true;
+    if (e.typ === 'schlag') g.anrempeln = true;
+  }
+  if (JSON.stringify(g) !== vorher) {
+    sichereStand(stand);
+    zeigeHinweise();
+  }
+}
+
+function gibEin(aktion, quelle) {
+  const jetzt = performance.now();
+  ton.wecke();
+  if (quelle === 'taste' && !mitTasten) {
+    mitTasten = true;
+    zeigeHinweise();
+  }
+  if (spiel.zustand.status !== 'faehrt') {
+    if (aktion === 'hoch' && anzeige.karteBereit(jetzt)) starteFahrt(jetzt);
+    return;
+  }
+  anzeige.beschleunige(jetzt);
+  const ereignisse = spiel.act(aktion);
+  if (!ereignisse.length) return;
+  anzeige.spiele(ereignisse, jetzt);
+  ton.spiele(ereignisse);
+  merke(ereignisse);
+}
+
+function tippe(x, y) {
+  const ziel = anzeige.wasLiegtBei(x, y);
+  if (!ziel) return;
+  if (ziel.art === 'weiter') {
+    gibEin('hoch', 'tipp');
+  } else if (ziel.art === 'ton') {
+    stand.ton = !stand.ton;
+    ton.setze(stand.ton);
+    ton.wecke();
+    anzeige.setzeTon(stand.ton);
+    sichereStand(stand);
+  } else if (ziel.art === 'uhr') {
+    gibEin('warten', 'tipp');
+  } else if (ziel.art === 'feld') {
+    const s = spiel.zustand.spieler;
+    const dx = ziel.x - s.x;
+    const dy = ziel.y - s.y;
+    if (dx === 0 && dy === 0) gibEin('warten', 'tipp');
+    else if (abstand(ziel, s) === 1) gibEin(dx === 1 ? 'rechts' : dx === -1 ? 'links' : dy === 1 ? 'runter' : 'hoch', 'tipp');
+  }
+}
+
+function schleife(jetzt) {
+  anzeige.zeichne(jetzt);
+  window.requestAnimationFrame(schleife);
+}
+
+// Nur beim Nachstellen mit festem Seed: Der Zustand lässt sich von außen ablesen, nicht ändern.
+if (festerSeed() !== null) window.endstationZustand = () => JSON.stringify(spiel.zustand);
+
+ton.setze(stand.ton);
+anzeige.setzeTon(stand.ton);
+anzeige.melder.takt = () => ton.takt();
+anzeige.passeAn();
+starteFahrt(performance.now());
+// Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
+verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
+for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => anzeige.passeAn());
+window.requestAnimationFrame(schleife);
+})();
+</script>
+</body>
+</html>

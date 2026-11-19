@@ -1,0 +1,2914 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#080a10">
+<title>Endstation</title>
+<link rel="icon" href="data:,">
+<style>
+/* Die Seite ist nur der Rahmen. Alles Sichtbare zeichnet der Canvas.
+   Zielgerät ist das iPhone mit Safari: nichts scrollt, nichts zoomt, nichts lässt sich markieren. */
+
+html {
+  height: 100%;
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  /* Höhe: erst der Wert, den jeder Browser kennt. Wo es die dynamische Höhe gibt, gilt sie:
+     Sie folgt den Leisten von Safari, damit unten nichts abgeschnitten wird. */
+  height: 100%;
+  box-sizing: border-box;
+  /* Notch und Home-Balken bleiben frei, der Canvas füllt nur den sicheren Bereich. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (height: 100dvh) {
+  body {
+    height: 100dvh;
+  }
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+</style>
+</head>
+<body>
+<canvas id="bild"></canvas>
+<script>
+(function () {
+'use strict';
+
+// --- ../prototyp/freier-platz/src/kern/abteil.js
+// Wagen 7 als fester Plan: wo Gang, Sitze, Lampen und Fahrgäste sind.
+// Kennt weder Bildschirm noch Browser. Nichts hier hängt vom Zufall ab.
+//
+//        Spalte  0  1  2  3  4
+//   Reihe 0      #  #  Z  #  #     Z = Zieltür, # = Wand
+//   Reihe 1      s  s  .  s  s     s = Sitz, . = Gang
+//   Reihe 2      s  s  .  F  s     F = schlafender Fahrgast, Lampe B
+//   Reihe 3      s  s  .  s  s
+//   Reihe 4      s  s  .  s  s
+//   Reihe 5      T  S  .  s  s     S = Spieler, T = Tasche, Lampe A
+//   Reihe 6      s  s  .  s  P     P = wacher Fahrgast
+//   Reihe 7      #  #  K  #  #     K = Schaffner am Anfang
+
+const SPALTEN = 5;
+const REIHEN = 8;
+const GANGSPALTE = 2;
+
+const ZIELTUER = { x: 2, y: 0 };
+const SCHAFFNERSTART = { x: 2, y: 7 };
+const SPIELERPLATZ = { x: 1, y: 5 };
+const TASCHENPLATZ = { x: 0, y: 5 };
+const SCHLAEFERPLATZ = { x: 3, y: 2 };
+const WACHERPLATZ = { x: 4, y: 6 };
+
+const SCHRITTE = {
+  hoch: { x: 0, y: -1 },
+  rechts: { x: 1, y: 0 },
+  runter: { x: 0, y: 1 },
+  links: { x: -1, y: 0 },
+};
+const GEGENUEBER = { hoch: 'runter', rechts: 'links', runter: 'hoch', links: 'rechts' };
+
+// Nur an zwei Sitzpaaren brennt eine Leselampe. Stellung "fenster": Das Licht fällt vom Gang
+// zum Fenster. Stellung "gang": Es fällt vom Fenster zum Gang.
+const LAMPEN = {
+  A: { reihe: 5, gangplatz: 1, fensterplatz: 0 },
+  B: { reihe: 2, gangplatz: 3, fensterplatz: 4 },
+};
+const LAMPENNAMEN = ['A', 'B'];
+
+function istGang(x, y) {
+  return x === GANGSPALTE && y >= 0 && y < REIHEN;
+}
+
+function istSitz(x, y) {
+  return x >= 0 && x < SPALTEN && x !== GANGSPALTE && y >= 1 && y <= REIHEN - 2;
+}
+
+// Abstand für "in Reichweite": ein Feld weit, auch schräg
+function reichweite(a, b) {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+// --- ../prototyp/freier-platz/src/kern/licht.js
+// Licht und Schatten. Die eine unwirkliche Regel des Wagens steckt in falschBelegt():
+// Für den Schaffner belegt auch ein Schatten einen Platz.
+
+
+
+// Alle, die gerade sitzen, von links nach rechts ist egal. Der Spieler nur, wenn er auf einem Sitz ist.
+function sitzende(z) {
+  const liste = [];
+  if (istSitz(z.spieler.x, z.spieler.y)) {
+    liste.push({ wer: 'spieler', x: z.spieler.x, y: z.spieler.y, wach: true, gelocht: z.spieler.gelocht });
+  }
+  liste.push({ wer: 'schlaefer', x: SCHLAEFERPLATZ.x, y: SCHLAEFERPLATZ.y, wach: z.schlaefer.wach, gelocht: z.schlaefer.gelocht });
+  liste.push({ wer: 'wacher', x: WACHERPLATZ.x, y: WACHERPLATZ.y, wach: true, gelocht: z.wacher.gelocht });
+  return liste;
+}
+
+function sitztJemand(z, x, y) {
+  return sitzende(z).some((f) => f.x === x && f.y === y);
+}
+
+function liegtTasche(z, x, y) {
+  return z.tasche && x === TASCHENPLATZ.x && y === TASCHENPLATZ.y;
+}
+
+// In welche Richtung das Licht einer Lampe fällt: -1 nach links, +1 nach rechts
+function lichtrichtung(name, stellung) {
+  const zumFenster = Math.sign(LAMPEN[name].fensterplatz - LAMPEN[name].gangplatz);
+  return stellung === 'fenster' ? zumFenster : -zumFenster;
+}
+
+// Wer in einem beleuchteten Paar sitzt, wirft seinen Schatten ein Feld weiter in Lichtrichtung:
+// auf den Nachbarsitz, auf das Gangfeld oder an die Wand (dann liegt er auf keinem Feld).
+function bestimmeSchatten(z) {
+  const liste = [];
+  for (const name of LAMPENNAMEN) {
+    const lampe = LAMPEN[name];
+    const richtung = lichtrichtung(name, z.lampen[name]);
+    for (const figur of sitzende(z)) {
+      if (figur.y !== lampe.reihe || (figur.x !== lampe.gangplatz && figur.x !== lampe.fensterplatz)) continue;
+      const x = figur.x + richtung;
+      liste.push({ von: figur.wer, lampe: name, x, y: lampe.reihe, wand: x < 0 || x >= SPALTEN });
+    }
+  }
+  return liste;
+}
+
+// Sitze einer Reihe, auf denen niemand sitzt, auf denen aber eine Tasche oder ein Schatten liegt.
+// Die Tasche steht vor dem Schatten: Auf sie zeigt der Schaffner zuerst.
+function falschBelegt(z, reihe) {
+  const funde = [];
+  if (z.tasche && TASCHENPLATZ.y === reihe && !sitztJemand(z, TASCHENPLATZ.x, TASCHENPLATZ.y)) {
+    funde.push({ x: TASCHENPLATZ.x, y: TASCHENPLATZ.y, was: 'tasche' });
+  }
+  for (const s of z.schatten) {
+    if (s.wand || s.y !== reihe || !istSitz(s.x, s.y) || sitztJemand(z, s.x, s.y)) continue;
+    funde.push({ x: s.x, y: s.y, was: 'schatten' });
+  }
+  return funde;
+}
+
+// --- ../prototyp/freier-platz/src/kern/schaffner.js
+// Der Schaffner. Er geht im Gang von unten nach oben und verlässt den Wagen durch die Zieltür.
+// Je Runde tut er genau eines, nach fester Rangfolge. Er wird nie schneller, lauter oder ärgerlich.
+
+
+
+
+// Was er in dieser Runde tut. Entscheidet nur, ändert nichts.
+//   1. warten, wenn in seiner Reihe ein Sitz falsch belegt ist
+//   2. lochen, wenn dort jemand Waches sitzt, den er noch nicht gelocht hat (von links nach rechts)
+//   3. grüßen, wenn dort der Schlafende sitzt und noch nicht gegrüßt wurde
+//   4. gehen
+function schaffnerVorhaben(z) {
+  const k = z.schaffner;
+  const funde = falschBelegt(z, k.y);
+  if (funde.length) return { tat: 'wartet', ziel: funde[0] };
+  const gaeste = sitzende(z).filter((f) => f.y === k.y && f.wach && !f.gelocht).sort((a, b) => a.x - b.x);
+  if (gaeste.length) return { tat: 'locht', wen: gaeste[0].wer, x: gaeste[0].x, y: gaeste[0].y };
+  if (k.y === SCHLAEFERPLATZ.y && !z.schlaefer.wach && !z.schlaefer.gegruesst) return { tat: 'gruesst' };
+  return { tat: 'geht' };
+}
+
+function liegtSchattenAuf(z, x, y) {
+  return z.schatten.some((s) => !s.wand && s.x === x && s.y === y);
+}
+
+// Sein Schritt in dieser Runde. Ändert den Zustand und meldet, was zu sehen ist.
+function schaffnerSchritt(z, ereignisse) {
+  const k = z.schaffner;
+  if (k.weg) return;
+  const hatGewartet = k.tat === 'wartet';
+  const vorhaben = schaffnerVorhaben(z);
+
+  if (vorhaben.tat === 'wartet') {
+    const ziel = vorhaben.ziel;
+    const gleichesZiel = hatGewartet && k.ziel && k.ziel.x === ziel.x && k.ziel.y === ziel.y && k.ziel.was === ziel.was;
+    const erstesMal = k.gesagt.indexOf(k.y) < 0;
+    if (erstesMal) k.gesagt.push(k.y);
+    k.tat = 'wartet';
+    k.ziel = { x: ziel.x, y: ziel.y, was: ziel.was };
+    ereignisse.push({
+      typ: 'wartet',
+      reihe: k.y,
+      ziel: { x: ziel.x, y: ziel.y, was: ziel.was },
+      neu: !hatGewartet, // er hebt die Zange
+      folgt: hatGewartet && !gleichesZiel, // die Zange bleibt oben und wandert zum neuen Ding
+      satz: erstesMal, // "Bitte den Platz freimachen.", nur beim ersten Mal in dieser Reihe
+    });
+    return;
+  }
+
+  // zufrieden: kurzes Nicken, dann geht es mit Regel 2, 3 oder 4 weiter
+  if (hatGewartet) ereignisse.push({ typ: 'nickt' });
+  k.ziel = null;
+
+  if (vorhaben.tat === 'locht') {
+    if (vorhaben.wen === 'spieler') z.spieler.gelocht = true;
+    else z[vorhaben.wen].gelocht = true;
+    k.tat = 'locht';
+    ereignisse.push({ typ: 'locht', wen: vorhaben.wen, x: vorhaben.x, y: vorhaben.y });
+    return;
+  }
+  if (vorhaben.tat === 'gruesst') {
+    z.schlaefer.gegruesst = true;
+    k.tat = 'gruesst';
+    ereignisse.push({ typ: 'gruesst', x: SCHLAEFERPLATZ.x, y: SCHLAEFERPLATZ.y });
+    return;
+  }
+
+  // gehen: ein Feld nach oben, an der Zieltür hinaus
+  if (k.y === ZIELTUER.y) {
+    k.weg = true;
+    k.tat = 'weg';
+    ereignisse.push({ typ: 'schaffnerWeg', von: { x: GANGSPALTE, y: k.y } });
+    return;
+  }
+  const oben = k.y - 1;
+  if (z.spieler.x === GANGSPALTE && z.spieler.y === oben) {
+    k.tat = 'steht';
+    ereignisse.push({ typ: 'steht' });
+    return;
+  }
+  // über einen Schatten im Gang macht er einen sichtbar großen Schritt
+  const gross = liegtSchattenAuf(z, GANGSPALTE, k.y) || liegtSchattenAuf(z, GANGSPALTE, oben);
+  ereignisse.push({ typ: 'schaffnerSchritt', von: { x: GANGSPALTE, y: k.y }, nach: { x: GANGSPALTE, y: oben }, gross });
+  k.y = oben;
+  k.tat = 'geht';
+}
+
+// --- ../prototyp/freier-platz/src/kern/fahrt.js
+// Eine Fahrt durch Wagen 7. Kennt weder Bildschirm noch Browser.
+//
+//   const fahrt = erzeugeFahrt();
+//   const ereignisse = fahrt.act('links');
+//
+// Handlungen: 'hoch' | 'rechts' | 'runter' | 'links' | 'warten'
+//             { tipp: 'feld', x, y }      ein Feld antippen: gehen oder benutzen
+//             { tipp: 'lampe', name }     eine Leselampe antippen, name ist 'A' oder 'B'
+//
+// runde(zustand, handlung) ist eine reine Funktion: Sie gibt den neuen Zustand und die Liste
+// der Ereignisse zurück und lässt den alten Zustand unberührt. Eine Eingabe, die nichts
+// bewirkt, kostet keine Runde: Der Zustand bleibt derselbe, gemeldet wird nur die Reaktion.
+//
+// So läuft eine Runde:
+//   Der Spieler macht genau eine Handlung: gehen, benutzen, anstoßen oder warten.
+//   Danach antwortet die Welt in fester Reihenfolge:
+//     1. Schatten neu bestimmen
+//     2. ein Schritt des Schaffners
+//     3. in jeder dritten Runde der Schienenstoß
+//     4. Abschluss prüfen
+
+
+
+
+
+const STOSS_ALLE = 3; // in jeder dritten Runde ruckt der Zug
+
+function neueFahrt() {
+  const z = {
+    status: 'faehrt', // 'faehrt' | 'ende'
+    runde: 0,
+    spieler: { x: SPIELERPLATZ.x, y: SPIELERPLATZ.y, tasche: false, gelocht: false },
+    tasche: true, // liegt auf dem Fensterplatz neben dem Spieler
+    lampen: { A: 'fenster', B: 'fenster' },
+    schlaefer: { wach: false, gelocht: false, gegruesst: false },
+    wacher: { gelocht: false },
+    // tat: was er zuletzt getan hat: 'kommt' | 'geht' | 'wartet' | 'locht' | 'gruesst' | 'steht' | 'geschoben' | 'weg'
+    // ziel: worauf die Zange zeigt, solange er wartet. gesagt: Reihen, in denen der Satz schon fiel.
+    // blick: wohin die Mütze nach einem Anstoßen zeigt
+    schaffner: { y: SCHAFFNERSTART.y, weg: false, tat: 'kommt', ziel: null, gesagt: [], blick: null },
+    angestossen: false, // die letzte Handlung war ein Anstoßen
+    schatten: [],
+    tatsachen: null, // steht nach der Tür fest
+  };
+  z.schatten = bestimmeSchatten(z);
+  return z;
+}
+
+function kopie(z) {
+  return JSON.parse(JSON.stringify(z));
+}
+
+function stehtSchaffner(z, x, y) {
+  return !z.schaffner.weg && x === GANGSPALTE && y === z.schaffner.y;
+}
+
+// Zwischen den Reihen stehen Lehnen: von Sitz zu Sitz nur seitwärts, in eine Reihe nur vom Gang aus,
+// zum Fensterplatz nur über den freien Gangplatz. Im Gang geht es hoch und runter.
+function darfGehen(z, von, nach) {
+  if (istGang(von.x, von.y) && istGang(nach.x, nach.y)) return Math.abs(von.y - nach.y) === 1;
+  if (von.y !== nach.y || Math.abs(von.x - nach.x) !== 1) return false;
+  if (!istGang(von.x, von.y) && !istSitz(von.x, von.y)) return false;
+  if (!istGang(nach.x, nach.y) && !istSitz(nach.x, nach.y)) return false;
+  if (istSitz(nach.x, nach.y) && (sitztJemand(z, nach.x, nach.y) || liegtTasche(z, nach.x, nach.y))) return false;
+  return true;
+}
+
+function richtungZu(von, nach) {
+  for (const name of Object.keys(SCHRITTE)) {
+    if (von.x + SCHRITTE[name].x === nach.x && von.y + SCHRITTE[name].y === nach.y) return name;
+  }
+  return null;
+}
+
+function gehe(z, nach, richtung, ereignisse, rueckt) {
+  const von = { x: z.spieler.x, y: z.spieler.y };
+  z.spieler.x = nach.x;
+  z.spieler.y = nach.y;
+  ereignisse.push({ typ: 'schritt', von, nach: { x: nach.x, y: nach.y }, richtung, rueckt: rueckt === true });
+  return true;
+}
+
+function nimmTasche(z, ereignisse) {
+  z.tasche = false;
+  z.spieler.tasche = true;
+  ereignisse.push({ typ: 'nimmt', von: { x: TASCHENPLATZ.x, y: TASCHENPLATZ.y } });
+  return true;
+}
+
+// Gegen den Schaffner wischen.
+// Würde er in dieser Runde ohnehin weitergehen, rückt der Spieler einfach nach.
+// Bleibt er stehen, ist es Anstoßen. Direkt noch einmal dagegen ist Vorbeidrängen.
+function gegenSchaffner(z, richtung, ereignisse, warAngestossen) {
+  const k = z.schaffner;
+  const s = z.spieler;
+  const von = { x: s.x, y: s.y };
+  const sein = { x: GANGSPALTE, y: k.y };
+
+  // Probe: Was täte er, wenn der Spieler seinen Platz schon verlassen hätte?
+  const probe = kopie(z);
+  probe.spieler.x = sein.x;
+  probe.spieler.y = sein.y;
+  probe.schatten = bestimmeSchatten(probe);
+  const kommtEntgegen = von.x === GANGSPALTE && von.y === k.y - 1; // der Spieler steht auf dem Feld, auf das er will
+  if (schaffnerVorhaben(probe).tat === 'geht' && !kommtEntgegen) {
+    return gehe(z, sein, richtung, ereignisse, true);
+  }
+
+  if (warAngestossen) {
+    // Vorbeidrängen: Der Spieler nimmt sein Feld. Er weicht auf das Feld aus, von dem der Spieler kam,
+    // wenn es ein Gangfeld ist, sonst ein Gangfeld nach unten.
+    const ausweich = istGang(von.x, von.y) ? von : { x: GANGSPALTE, y: k.y + 1 };
+    ereignisse.push({ typ: 'draengt', richtung, von, nach: sein, schaffnerNach: { x: ausweich.x, y: ausweich.y } });
+    s.x = sein.x;
+    s.y = sein.y;
+    k.y = ausweich.y;
+    k.tat = 'geschoben';
+    k.ziel = null;
+    return true;
+  }
+
+  // Anstoßen: Er dreht die Mütze zum Spieler, sonst nichts.
+  z.angestossen = true;
+  k.blick = GEGENUEBER[richtung];
+  ereignisse.push({ typ: 'anstoss', richtung, blick: k.blick });
+  return true;
+}
+
+function wische(z, richtung, ereignisse, warAngestossen) {
+  const s = z.spieler;
+  const schritt = SCHRITTE[richtung];
+  const von = { x: s.x, y: s.y };
+  const nach = { x: s.x + schritt.x, y: s.y + schritt.y };
+  if (stehtSchaffner(z, nach.x, nach.y)) return gegenSchaffner(z, richtung, ereignisse, warAngestossen);
+  // gegen die Tasche wischen heißt: sie nehmen
+  if (liegtTasche(z, nach.x, nach.y) && von.y === nach.y && istSitz(von.x, von.y)) return nimmTasche(z, ereignisse);
+  if (darfGehen(z, von, nach)) return gehe(z, nach, richtung, ereignisse, false);
+  ereignisse.push({ typ: 'gehtNicht', zu: nach });
+  return false;
+}
+
+function tippeFeld(z, x, y, ereignisse) {
+  const s = z.spieler;
+  const ziel = { x, y };
+  if (x === s.x && y === s.y) {
+    ereignisse.push({ typ: 'nichts', zu: ziel });
+    return false;
+  }
+  const nah = reichweite(s, ziel) <= 1;
+  const zuWeit = () => {
+    ereignisse.push({ typ: 'zuWeit', zu: ziel });
+    return false;
+  };
+  const nichts = () => {
+    ereignisse.push({ typ: 'nichts', zu: ziel });
+    return false;
+  };
+
+  if (stehtSchaffner(z, x, y)) {
+    if (!nah) return zuWeit();
+    if (z.schaffner.tat !== 'wartet') return nichts();
+    // Wartet er gerade, wiederholt er seinen Satz. Das kostet eine Runde.
+    ereignisse.push({ typ: 'satz', reihe: y });
+    return true;
+  }
+  if (liegtTasche(z, x, y)) return nah ? nimmTasche(z, ereignisse) : zuWeit();
+  if (x === SCHLAEFERPLATZ.x && y === SCHLAEFERPLATZ.y) {
+    if (!nah) return zuWeit();
+    if (z.schlaefer.wach) return nichts();
+    // Er wacht auf, sieht zum Schaffner, dann zum Nebensitz, hebt die Schultern, bleibt sitzen. Löst nichts.
+    z.schlaefer.wach = true;
+    ereignisse.push({ typ: 'weckt', schaffner: z.schaffner.weg ? null : { x: GANGSPALTE, y: z.schaffner.y } });
+    return true;
+  }
+  if (x === WACHERPLATZ.x && y === WACHERPLATZ.y) return nah ? nichts() : zuWeit();
+
+  // ein freies Nachbarfeld antippen heißt gehen
+  const richtung = richtungZu(s, ziel);
+  if (richtung && darfGehen(z, s, ziel)) return gehe(z, ziel, richtung, ereignisse, false);
+  if (!nah) return zuWeit();
+  ereignisse.push({ typ: 'gehtNicht', zu: ziel });
+  return false;
+}
+
+// Die Lampe ist in Reichweite, wenn der Spieler im Paar sitzt oder höchstens ein Feld
+// vom Gangplatz des Paares entfernt ist.
+function lampeInReichweite(z, name) {
+  const lampe = LAMPEN[name];
+  const s = z.spieler;
+  const imPaar = s.y === lampe.reihe && (s.x === lampe.gangplatz || s.x === lampe.fensterplatz);
+  return imPaar || reichweite(s, { x: lampe.gangplatz, y: lampe.reihe }) <= 1;
+}
+
+function tippeLampe(z, name, ereignisse) {
+  if (!LAMPEN[name]) return false;
+  if (!lampeInReichweite(z, name)) {
+    ereignisse.push({ typ: 'zuWeit', lampe: name });
+    return false;
+  }
+  z.lampen[name] = z.lampen[name] === 'fenster' ? 'gang' : 'fenster';
+  ereignisse.push({ typ: 'lampe', name, stellung: z.lampen[name] });
+  return true;
+}
+
+// Die Handlung des Spielers. Gibt zurück, ob sie eine Runde kostet.
+function spielerHandelt(z, handlung, ereignisse, warAngestossen) {
+  if (handlung === 'warten') {
+    ereignisse.push({ typ: 'warten' });
+    return true;
+  }
+  if (typeof handlung === 'string') {
+    if (!SCHRITTE[handlung]) return false;
+    return wische(z, handlung, ereignisse, warAngestossen);
+  }
+  if (handlung && handlung.tipp === 'feld') return tippeFeld(z, handlung.x, handlung.y, ereignisse);
+  if (handlung && handlung.tipp === 'lampe') return tippeLampe(z, handlung.name, ereignisse);
+  return false;
+}
+
+// 1. Schatten neu bestimmen. Meldet jeden Schatten, der wandert, entsteht oder vergeht.
+function bestimmeSchattenNeu(z, ereignisse) {
+  const alt = z.schatten;
+  const neu = bestimmeSchatten(z);
+  z.schatten = neu;
+  for (const von of ['spieler', 'schlaefer']) {
+    const a = alt.filter((s) => s.von === von)[0] || null;
+    const n = neu.filter((s) => s.von === von)[0] || null;
+    if (!a && !n) continue;
+    if (a && n && a.x === n.x && a.y === n.y && a.wand === n.wand) continue;
+    ereignisse.push({ typ: 'schatten', von, alt: a, neu: n });
+    // Fällt ein Schatten auf das Feld des Schaffners, weicht er mit einem kleinen Schritt aus und kommt zurück.
+    if (n && !n.wand && stehtSchaffner(z, n.x, n.y)) ereignisse.push({ typ: 'weichtAus', von });
+  }
+}
+
+// Nach der Tür nennt die Anzeige höchstens zwei Tatsachen über den Wagen, in fester Rangfolge.
+function nenneTatsachen(z) {
+  const liste = [];
+  if (!z.schaffner.weg && z.schaffner.tat === 'wartet') liste.push({ art: 'wartet', reihe: z.schaffner.y });
+  if (z.tasche) liste.push({ art: 'tasche' });
+  if (z.schlaefer.wach) liste.push({ art: 'wach' });
+  return liste.slice(0, 2);
+}
+
+function weltAntwortet(z, ereignisse) {
+  bestimmeSchattenNeu(z, ereignisse);
+  schaffnerSchritt(z, ereignisse);
+  if (z.runde % STOSS_ALLE === 0) {
+    const k = z.schaffner;
+    // wartet er wegen eines Schattens, zuckt die Zange mit
+    ereignisse.push({ typ: 'stoss', zange: !k.weg && k.tat === 'wartet' && k.ziel.was === 'schatten' });
+  }
+  if (z.spieler.x === ZIELTUER.x && z.spieler.y === ZIELTUER.y) {
+    z.status = 'ende';
+    z.tatsachen = nenneTatsachen(z);
+    ereignisse.push({ typ: 'ende', tatsachen: z.tatsachen, lochung: z.spieler.gelocht, runde: z.runde });
+  }
+}
+
+function runde(alt, handlung) {
+  if (alt.status !== 'faehrt') return { zustand: alt, ereignisse: [] };
+  const z = kopie(alt);
+  const ereignisse = [];
+  // "Direkt noch einmal" gilt nur für die nächste Handlung, die Mütze dreht sich danach zurück.
+  const warAngestossen = z.angestossen;
+  z.angestossen = false;
+  z.schaffner.blick = null;
+  if (!spielerHandelt(z, handlung, ereignisse, warAngestossen)) return { zustand: alt, ereignisse };
+  z.runde += 1;
+  weltAntwortet(z, ereignisse);
+  return { zustand: z, ereignisse };
+}
+
+// Wie im Hauptspiel: ein Ding mit zustand und act(). Der Zustand wird bei jeder Runde ersetzt.
+function erzeugeFahrt() {
+  const fahrt = {
+    zustand: neueFahrt(),
+    act(handlung) {
+      const ergebnis = runde(fahrt.zustand, handlung);
+      fahrt.zustand = ergebnis.zustand;
+      return ergebnis.ereignisse;
+    },
+  };
+  return fahrt;
+}
+
+// Für Tests und das Testprotokoll: Ist in dieser Reihe gerade kein Sitz falsch belegt?
+function reiheFrei(z, reihe) {
+  return falschBelegt(z, reihe).length === 0;
+}
+
+// --- ../prototyp/freier-platz/src/texte.js
+// Alle Texte, die im Prototyp zu lesen sind. Einzige Quelle, wie im Hauptspiel.
+// Nur Zeichenketten. Veränderliche Stellen stehen in geschweiften Klammern, etwa {n}.
+// Ein Schrägstrich mit Leerzeichen davor und danach trennt zwei Zeilen.
+
+const PLATZTEXTE = {
+  // Das Spiel selbst zeigt nur diese Texte.
+  spiel: {
+    anzeige: 'Wagen 7',
+    warten: 'Warten',
+    neueFahrt: 'Neue Fahrt',
+    satz: 'Bitte den Platz / freimachen.',
+    // Nach der Tür: höchstens zwei Tatsachen über den Wagen, sonst nur die Uhrzeit.
+    tatsache: {
+      wartet: 'Der Schaffner / wartet in Reihe {n}.',
+      tasche: 'Auf Platz 51 / liegt eine Tasche.',
+      wach: 'Der Fahrgast in / Reihe 2 ist wach.',
+    },
+  },
+
+  // Das Testprotokoll ist für Spieler unsichtbar. Es erscheint nur, wenn der Auftraggeber
+  // lange auf die Zuganzeige drückt.
+  protokoll: {
+    titel: 'Letzte Fahrt',
+    runden: 'Runden',
+    tascheWeg: 'Tasche weg',
+    lochung: 'Lochung',
+    reiheZweiFrei: 'Reihe 2 frei',
+    tuer: 'Tür',
+    lampe: 'Lampe',
+    warten: 'Warten',
+    anstossen: 'Anstoßen',
+    draengen: 'Vorbeidrängen',
+    wecken: 'Wecken',
+    folge: 'Folge',
+    karten: 'Karten',
+    nie: '-',
+    keine: 'Noch keine Fahrt',
+  },
+};
+
+// Setzt Werte in die Platzhalter eines Texts ein.
+function setzeEin(text, werte) {
+  return text.replace(/\{(\w+)\}/g, (ganz, name) => (werte[name] !== undefined ? String(werte[name]) : ganz));
+}
+
+// Die Zeilen einer Tatsache, wie die Anzeige sie nach der Tür zeigt.
+function tatsachenZeilen(tatsachen) {
+  const zeilen = [];
+  for (const t of tatsachen) {
+    const text = setzeEin(PLATZTEXTE.spiel.tatsache[t.art], { n: t.reihe });
+    for (const zeile of text.split(' / ')) zeilen.push(zeile);
+  }
+  return zeilen;
+}
+
+// --- anzeige/formen.js
+// Farben und kleine Zeichenhilfen für die ganze Anzeige.
+
+const FARBE = {
+  nacht: '#080a10',
+  wand: '#2b3550',
+  wandKante: '#3a4666',
+  wandDunkel: '#171d2c',
+  boden: '#151c2b',
+  feld: '#212c44',
+  feldKante: '#2a3858',
+  glas: '#0c1626',
+  glasGlanz: '#1c2d48',
+  tafel: '#120e08',
+  tafelRand: '#2c2416',
+  bernstein: '#ffb347',
+  bernsteinAus: '#33260f',
+  rot: '#e8402f',
+  rotHell: '#ff7a63',
+  herz: '#f08a7a',
+  ruhe: '#bfe3ff',
+  leer: '#39435c',
+  gruen: '#6fdc8f',
+  warm: '#ffd9a0',
+  spieler: { mantel: '#eadfc6', kopf: '#f7eedb', schuh: '#8d7b5e', schal: '#ffb347' },
+  pendler: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658', tasche: '#4a392b', arm: '#56667d' },
+  gruppe: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', rucksack: '#2f6155', wimpel: '#f2d264' },
+  draengler: { mantel: '#9a5a74', kopf: '#dbb9c6', schuh: '#4f2c3c', arm: '#7c455c' },
+};
+
+function rundesRechteck(stift, x, y, b, h, r) {
+  const k = Math.min(r, b / 2, h / 2);
+  stift.beginPath();
+  stift.moveTo(x + k, y);
+  stift.lineTo(x + b - k, y);
+  stift.quadraticCurveTo(x + b, y, x + b, y + k);
+  stift.lineTo(x + b, y + h - k);
+  stift.quadraticCurveTo(x + b, y + h, x + b - k, y + h);
+  stift.lineTo(x + k, y + h);
+  stift.quadraticCurveTo(x, y + h, x, y + h - k);
+  stift.lineTo(x, y + k);
+  stift.quadraticCurveTo(x, y, x + k, y);
+  stift.closePath();
+}
+
+function kreis(stift, x, y, r) {
+  stift.beginPath();
+  stift.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
+}
+
+function begrenze(wert, von, bis) {
+  return wert < von ? von : wert > bis ? bis : wert;
+}
+
+// weiches Auslaufen
+function sanft(p) {
+  return 1 - (1 - p) * (1 - p) * (1 - p);
+}
+
+// Auslaufen mit kleinem Überschwingen, für den Flusszustand
+function leicht(p) {
+  const c = 1.9;
+  return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2);
+}
+
+// hin und zurück: 0 -> 1 -> 0
+function hinUndHer(p) {
+  return Math.sin(p * Math.PI);
+}
+
+// --- anzeige/matrix.js
+// Punktmatrix-Schrift der Zuganzeige. Jedes Zeichen ist 5 Punkte breit und 7 hoch,
+// Unterlängen brauchen zwei Zeilen mehr. Alles Geschriebene im Spiel nutzt diese Schrift,
+// damit es auf jedem Gerät gleich aussieht.
+
+const ZEICHEN = {
+  ' ': '..... ..... ..... ..... ..... ..... .....',
+  A: '.###. #...# #...# ##### #...# #...# #...#',
+  B: '####. #...# #...# ####. #...# #...# ####.',
+  C: '.###. #...# #.... #.... #.... #...# .###.',
+  D: '####. #...# #...# #...# #...# #...# ####.',
+  E: '##### #.... #.... ####. #.... #.... #####',
+  F: '##### #.... #.... ####. #.... #.... #....',
+  G: '.###. #...# #.... #.### #...# #...# .###.',
+  H: '#...# #...# #...# ##### #...# #...# #...#',
+  I: '.###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  J: '..### ...#. ...#. ...#. ...#. #..#. .##..',
+  K: '#...# #..#. #.#.. ##... #.#.. #..#. #...#',
+  L: '#.... #.... #.... #.... #.... #.... #####',
+  M: '#...# ##.## #.#.# #.#.# #...# #...# #...#',
+  N: '#...# ##..# #.#.# #..## #...# #...# #...#',
+  O: '.###. #...# #...# #...# #...# #...# .###.',
+  P: '####. #...# #...# ####. #.... #.... #....',
+  Q: '.###. #...# #...# #...# #.#.# #..#. .##.#',
+  R: '####. #...# #...# ####. #.#.. #..#. #...#',
+  S: '.#### #.... #.... .###. ....# ....# ####.',
+  T: '##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..',
+  U: '#...# #...# #...# #...# #...# #...# .###.',
+  V: '#...# #...# #...# #...# #...# .#.#. ..#..',
+  W: '#...# #...# #...# #.#.# #.#.# ##.## #...#',
+  X: '#...# #...# .#.#. ..#.. .#.#. #...# #...#',
+  Y: '#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..',
+  Z: '##### ....# ...#. ..#.. .#... #.... #####',
+  Ä: '#...# .###. #...# #...# ##### #...# #...#',
+  Ö: '#...# .###. #...# #...# #...# #...# .###.',
+  Ü: '#...# ..... #...# #...# #...# #...# .###.',
+  a: '..... ..... .###. ....# .#### #...# .####',
+  b: '#.... #.... #.##. ##..# #...# #...# ####.',
+  c: '..... ..... .###. #.... #.... #...# .###.',
+  d: '....# ....# .##.# #..## #...# #...# .####',
+  e: '..... ..... .###. #...# ##### #.... .###.',
+  f: '..##. .#..# .#... ###.. .#... .#... .#...',
+  g: '..... ..... .#### #...# #...# #...# .#### ....# .###.',
+  h: '#.... #.... #.##. ##..# #...# #...# #...#',
+  i: '..#.. ..... .##.. ..#.. ..#.. ..#.. .###.',
+  j: '...#. ..... ..##. ...#. ...#. ...#. ...#. #..#. .##..',
+  k: '#.... #.... #..#. #.#.. ##... #.#.. #..#.',
+  l: '.##.. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  m: '..... ..... ##.#. #.#.# #.#.# #.#.# #.#.#',
+  n: '..... ..... #.##. ##..# #...# #...# #...#',
+  o: '..... ..... .###. #...# #...# #...# .###.',
+  p: '..... ..... ####. #...# #...# #...# ####. #.... #....',
+  q: '..... ..... .#### #...# #...# #...# .#### ....# ....#',
+  r: '..... ..... #.##. ##..# #.... #.... #....',
+  s: '..... ..... .#### #.... .###. ....# ####.',
+  t: '.#... .#... ###.. .#... .#... .#..# ..##.',
+  u: '..... ..... #...# #...# #...# #..## .##.#',
+  v: '..... ..... #...# #...# #...# .#.#. ..#..',
+  w: '..... ..... #...# #...# #.#.# #.#.# .#.#.',
+  x: '..... ..... #...# .#.#. ..#.. .#.#. #...#',
+  y: '..... ..... #...# #...# #...# #...# .#### ....# .###.',
+  z: '..... ..... ##### ...#. ..#.. .#... #####',
+  ä: '.#.#. ..... .###. ....# .#### #...# .####',
+  ö: '.#.#. ..... .###. #...# #...# #...# .###.',
+  ü: '.#.#. ..... #...# #...# #...# #..## .##.#',
+  ß: '.##.. #..#. #..#. #.##. #...# #...# #.##.',
+  0: '.###. #...# #..## #.#.# ##..# #...# .###.',
+  1: '..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.',
+  2: '.###. #...# ....# ...#. ..#.. .#... #####',
+  3: '##### ...#. ..#.. ...#. ....# #...# .###.',
+  4: '...#. ..##. .#.#. #..#. ##### ...#. ...#.',
+  5: '##### #.... ####. ....# ....# #...# .###.',
+  6: '..##. .#... #.... ####. #...# #...# .###.',
+  7: '##### ....# ...#. ..#.. .#... .#... .#...',
+  8: '.###. #...# #...# .###. #...# #...# .###.',
+  9: '.###. #...# #...# .#### ....# ...#. .##..',
+  '.': '..... ..... ..... ..... ..... .##.. .##..',
+  ',': '..... ..... ..... ..... .##.. ..#.. .#...',
+  ':': '..... .##.. .##.. ..... .##.. .##.. .....',
+  '!': '..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..',
+  '?': '.###. #...# ....# ...#. ..#.. ..... ..#..',
+  '-': '..... ..... ..... ##### ..... ..... .....',
+  '+': '..... ..#.. ..#.. ##### ..#.. ..#.. .....',
+  '/': '....# ....# ...#. ..#.. .#... #.... #....',
+};
+
+const ZEICHENBREITE = 6; // fünf Punkte und eine Lücke
+const ZEILENHOEHE = 9; // sieben Punkte und zwei für Unterlängen
+
+const MUSTER = {};
+for (const [zeichen, bild] of Object.entries(ZEICHEN)) MUSTER[zeichen] = bild.split(' ');
+
+function hatZeichen(zeichen) {
+  return MUSTER[zeichen] !== undefined;
+}
+
+// Breite eines Texts in Punkten, ohne die Lücke nach dem letzten Zeichen
+function textBreite(text) {
+  return Math.max(0, [...text].length * ZEICHENBREITE - 1);
+}
+
+// Ein Punktfeld: spalten mal zeilen, jeder Punkt an oder aus.
+function neuesPunktfeld(spalten, zeilen) {
+  return { spalten, zeilen, an: new Uint8Array(spalten * zeilen) };
+}
+
+function schreibe(feld, text, spalte, zeile) {
+  let x = spalte;
+  for (const zeichen of text) {
+    const muster = MUSTER[zeichen] || MUSTER['?'];
+    for (let r = 0; r < muster.length; r++) {
+      for (let c = 0; c < 5; c++) {
+        const px = x + c;
+        const py = zeile + r;
+        if (muster[r][c] === '#' && px >= 0 && px < feld.spalten && py >= 0 && py < feld.zeilen) {
+          feld.an[py * feld.spalten + px] = 1;
+        }
+      }
+    }
+    x += ZEICHENBREITE;
+  }
+}
+
+function schreibeMittig(feld, text, zeile) {
+  schreibe(feld, text, Math.round((feld.spalten - textBreite(text)) / 2), zeile);
+}
+
+// Zeichnet das Punktfeld. raster ist der Abstand der Punkte in Pixeln.
+// dunkel ist die Farbe der unbeleuchteten Punkte, null lässt sie weg.
+function zeichnePunktfeld(stift, feld, x, y, raster, hell, dunkel) {
+  const r = raster * 0.38;
+  for (const durchgang of dunkel ? [0, 1] : [1]) {
+    stift.fillStyle = durchgang ? hell : dunkel;
+    stift.beginPath();
+    for (let py = 0; py < feld.zeilen; py++) {
+      for (let px = 0; px < feld.spalten; px++) {
+        if (feld.an[py * feld.spalten + px] !== durchgang) continue;
+        const cx = x + (px + 0.5) * raster;
+        const cy = y + (py + 0.5) * raster;
+        stift.moveTo(cx + r, cy);
+        stift.arc(cx, cy, r, 0, Math.PI * 2);
+      }
+    }
+    stift.fill();
+  }
+}
+
+// --- ../prototyp/freier-platz/src/anzeige/masse.js
+// Wo auf dem Bildschirm was liegt. Alles in CSS-Pixeln, passt ab 360 x 600.
+// Reine Rechnung ohne Browser, damit Tests sie prüfen können.
+//
+// Von oben nach unten: Zuganzeige mit Lautsprecher, der Wagen, darunter die Daumenzone
+// mit Fahrkarte (links) und dem Knopf "Warten" (rechts). Unter der Daumenzone bleibt derselbe
+// Abstand frei wie im Hauptspiel unter dem untersten Feld: Dort sitzen beim iPhone die Leiste
+// von Safari und der Home-Balken. Breite und Höhe sind die des Canvas, also schon ohne Notch und Balken.
+
+
+
+
+
+
+const FREI_UNTEN = 26; // so viel bleibt unter der Daumenzone frei
+const WARTEKNOPF = 64; // kleinste Höhe und Breite des Knopfs "Warten"
+const TIPPFLAECHE = 48; // kleinste Trefferfläche für alles andere
+const LAMPENARM = 0.88; // Länge des Lampenarms in Feldern
+
+function berechneMasse(breite, hoehe) {
+  const rand = 10;
+  const nutzbar = Math.min(breite, 520);
+  const links = Math.round((breite - nutzbar) / 2);
+  const raster = nutzbar >= 380 ? 3 : 2.5;
+  const polster = 6;
+  const tonBreite = 44; // Platz für den Lautsprecher rechts neben der Anzeige
+  const spalten = Math.floor((nutzbar - 2 * rand - tonBreite - 2 * polster) / raster);
+  const zeilen = ZEILENHOEHE + 2;
+  const tafel = {
+    x: links + rand,
+    y: rand,
+    b: spalten * raster + 2 * polster,
+    h: Math.ceil(zeilen * raster + 2 * polster),
+    raster,
+    spalten,
+    zeilen,
+    polster,
+  };
+  const ton = { x: Math.round(links + nutzbar - rand - tonBreite / 2 + 4), y: Math.round(tafel.y + tafel.h / 2), r: TIPPFLAECHE / 2 };
+  const oben = tafel.y + tafel.h + 8;
+
+  // Daumenzone
+  const zoneH = Math.max(WARTEKNOPF, Math.min(84, Math.round(hoehe * 0.11)));
+  const zoneY = hoehe - FREI_UNTEN - zoneH;
+
+  // der Wagen dazwischen, so groß wie möglich
+  const platz = zoneY - 8 - oben;
+  const s = Math.max(12, Math.floor(Math.min((nutzbar - 16) / (SPALTEN + 0.4), platz / (REIHEN + 0.2))));
+  const wandSeite = Math.round(s * 0.2);
+  const kante = Math.round(s * 0.1);
+  const bodenB = s * SPALTEN;
+  const bodenH = s * REIHEN;
+  const luft = Math.max(0, platz - (bodenH + 2 * kante));
+  const bodenX = Math.round((breite - bodenB) / 2);
+  const bodenY = Math.round(oben + kante + luft * 0.6); // auf hohen Bildschirmen näher am Daumen
+
+  const knopfB = Math.max(WARTEKNOPF, Math.ceil(textBreite(PLATZTEXTE.spiel.warten) * raster + 28));
+  const warten = { x: links + nutzbar - rand - knopfB, y: zoneY, b: knopfB, h: zoneH, raster };
+  const karte = { x: links + rand, y: zoneY, b: Math.min(170, warten.x - (links + rand) - 14), h: zoneH };
+
+  return {
+    breite,
+    hoehe,
+    s,
+    tafel,
+    ton,
+    boden: { x: bodenX, y: bodenY, b: bodenB, h: bodenH },
+    rumpf: { x: bodenX - wandSeite, y: bodenY - kante, b: bodenB + 2 * wandSeite, h: bodenH + 2 * kante },
+    wandSeite,
+    kante,
+    zone: { x: links + rand, y: zoneY, b: nutzbar - 2 * rand, h: zoneH },
+    karte,
+    warten,
+  };
+}
+
+// Bildschirmpunkt -> Feld im Wagen, oder null
+function feldAn(masse, px, py) {
+  const x = Math.floor((px - masse.boden.x) / masse.s);
+  const y = Math.floor((py - masse.boden.y) / masse.s);
+  if (x < 0 || x >= SPALTEN || y < 0 || y >= REIHEN) return null;
+  return { x, y };
+}
+
+// Mitte eines Feldes auf dem Bildschirm
+function feldMitte(masse, x, y) {
+  return { x: masse.boden.x + (x + 0.5) * masse.s, y: masse.boden.y + (y + 0.5) * masse.s };
+}
+
+// Die Lampe sitzt auf der Lehne zwischen den beiden Sitzen ihres Paares. Ihr Arm schwenkt
+// zur einen oder anderen Seite. Der Kopf sitzt auf der Seite, von der das Licht kommt.
+function lampenGelenk(masse, name) {
+  const lampe = LAMPEN[name];
+  return {
+    x: masse.boden.x + (Math.min(lampe.gangplatz, lampe.fensterplatz) + 1) * masse.s,
+    y: masse.boden.y + lampe.reihe * masse.s + masse.s * 0.09,
+  };
+}
+
+function lampenKopf(masse, name, stellung) {
+  const gelenk = lampenGelenk(masse, name);
+  return { x: gelenk.x - lichtrichtung(name, stellung) * LAMPENARM * masse.s, y: gelenk.y };
+}
+
+function lampenRadius(masse) {
+  return Math.max(TIPPFLAECHE / 2, masse.s * 0.44);
+}
+
+// Welche Lampe liegt unter dem Finger? stellungen: { A: 'fenster' | 'gang', B: ... }
+function lampeAn(masse, stellungen, px, py) {
+  const r = lampenRadius(masse);
+  for (const name of Object.keys(LAMPEN)) {
+    const kopf = lampenKopf(masse, name, stellungen[name]);
+    if (Math.hypot(px - kopf.x, py - kopf.y) <= r) return name;
+  }
+  return null;
+}
+
+// Die Anzeige nach der Tür: Tafel mit bis zu vier Zeilen, darunter die Karte und der Knopf "Neue Fahrt".
+const ENDZEILEN = 4;
+
+function endeMasse(masse) {
+  const b = Math.min(masse.breite - 32, 400);
+  const x = Math.round((masse.breite - b) / 2);
+  const raster = b >= 360 ? 3 : 2.5;
+  const polster = 6;
+  const spalten = Math.floor((b - 16 - 2 * polster) / raster);
+  const zeilen = ENDZEILEN * ZEILENHOEHE + (ENDZEILEN - 1) * 2;
+  const tafelH = Math.ceil(zeilen * raster + 2 * polster);
+  const karteH = 96;
+  const karteB = Math.min(210, b - 60);
+  const knopfB = Math.ceil(textBreite(PLATZTEXTE.spiel.neueFahrt) * raster + 32);
+  const h = 8 + tafelH + 16 + karteH + 18 + WARTEKNOPF + 12;
+  const y = Math.max(6, Math.round((masse.hoehe - FREI_UNTEN - h) / 2));
+  return {
+    x,
+    y,
+    b,
+    h,
+    tafel: { x: x + 8, y: y + 8, b: b - 16, h: tafelH, raster, spalten, zeilen, polster },
+    karte: { x: Math.round(masse.breite / 2 - karteB / 2), y: y + 8 + tafelH + 16, b: karteB, h: karteH },
+    knopf: { x: Math.round(masse.breite / 2 - knopfB / 2), y: y + 8 + tafelH + 16 + karteH + 18, b: knopfB, h: WARTEKNOPF, raster },
+  };
+}
+
+// Das Testprotokoll: eine dunkle Tafel über dem Bild, kleine Schrift.
+function protokollMasse(masse) {
+  const raster = 2;
+  const b = Math.min(masse.breite - 24, 420);
+  const zeichen = Math.floor((b - 24) / raster / ZEICHENBREITE);
+  return { x: Math.round((masse.breite - b) / 2), y: 12, b, raster, zeichen, zeilenhoehe: (ZEILENHOEHE + 2) * raster, polster: 12 };
+}
+
+function imKasten(kasten, px, py) {
+  return px >= kasten.x && px <= kasten.x + kasten.b && py >= kasten.y && py <= kasten.y + kasten.h;
+}
+
+// --- ../prototyp/freier-platz/src/anzeige/abteilbild.js
+// Was sich im Wagen nie bewegt, als fertige Bilder: Rumpf, Boden, Sitze, Türen, Zuganzeige.
+// Vor den Fenstern ist nichts zu sehen, nur dunkles Glas.
+
+
+
+
+
+function neueFlaeche(breite, hoehe, dichte) {
+  const flaeche = document.createElement('canvas');
+  flaeche.width = Math.max(1, Math.round(breite * dichte));
+  flaeche.height = Math.max(1, Math.round(hoehe * dichte));
+  const stift = flaeche.getContext('2d');
+  stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+  return { flaeche, stift };
+}
+
+// Ein Sitz von oben, die Lehne steht am oberen Rand: Zwischen den Reihen kommt man nicht durch.
+function malePlatz(stift, x, y, s) {
+  const p = s * 0.09;
+  stift.fillStyle = '#22304c';
+  rundesRechteck(stift, x + p, y + p, s - 2 * p, s - 2 * p, s * 0.14);
+  stift.fill();
+  stift.fillStyle = '#2c3d61';
+  rundesRechteck(stift, x + p * 1.9, y + s * 0.34, s - p * 3.8, s * 0.5, s * 0.1);
+  stift.fill();
+  stift.fillStyle = '#3a4f7b';
+  rundesRechteck(stift, x + p * 1.5, y + p * 1.3, s - p * 3, s * 0.24, s * 0.09);
+  stift.fill();
+  stift.fillStyle = '#4a6193';
+  rundesRechteck(stift, x + s * 0.36, y + p * 1.3, s * 0.28, s * 0.09, s * 0.04);
+  stift.fill();
+}
+
+function maleWandfeld(stift, x, y, s) {
+  stift.fillStyle = FARBE.wand;
+  stift.fillRect(x, y, s, s);
+  stift.fillStyle = FARBE.wandKante;
+  stift.fillRect(x, y, s, s * 0.08);
+  stift.fillStyle = FARBE.wandDunkel;
+  stift.fillRect(x, y + s * 0.86, s, s * 0.14);
+  stift.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  rundesRechteck(stift, x + s * 0.14, y + s * 0.24, s * 0.72, s * 0.46, s * 0.05);
+  stift.fill();
+}
+
+// Eine Tür mit zwei Flügeln und kleinen Scheiben, quer über ein Gangfeld.
+function maleFluegel(stift, x, y, s, hoch) {
+  stift.fillStyle = FARBE.wandDunkel;
+  stift.fillRect(x + s * 0.05, y, s * 0.9, hoch);
+  stift.fillStyle = '#35415f';
+  stift.fillRect(x + s * 0.09, y + 1, s * 0.4, hoch - 2);
+  stift.fillRect(x + s * 0.51, y + 1, s * 0.4, hoch - 2);
+  stift.fillStyle = FARBE.glas;
+  stift.fillRect(x + s * 0.16, y + hoch * 0.2, s * 0.26, hoch * 0.45);
+  stift.fillRect(x + s * 0.58, y + hoch * 0.2, s * 0.26, hoch * 0.45);
+  stift.fillStyle = FARBE.glasGlanz;
+  stift.fillRect(x + s * 0.18, y + hoch * 0.26, 1.5, hoch * 0.3);
+  stift.fillRect(x + s * 0.6, y + hoch * 0.26, 1.5, hoch * 0.3);
+}
+
+// Der Wagen als fertiges Bild. Der Ursprung ist die linke obere Ecke des Rumpfs.
+function maleAbteil(masse, dichte) {
+  const { rumpf, boden, s, wandSeite } = masse;
+  const { flaeche, stift } = neueFlaeche(rumpf.b, rumpf.h, dichte);
+  const bx = boden.x - rumpf.x;
+  const by = boden.y - rumpf.y;
+
+  stift.fillStyle = FARBE.wand;
+  rundesRechteck(stift, 0, 0, rumpf.b, rumpf.h, s * 0.2);
+  stift.fill();
+  stift.fillStyle = FARBE.wandKante;
+  rundesRechteck(stift, 0, 0, rumpf.b, s * 0.1, s * 0.2);
+  stift.fill();
+
+  // Fenster: neben jeder Sitzreihe eines, dahinter nur Nacht
+  for (let y = 1; y <= REIHEN - 2; y++) {
+    for (const fx of [2, rumpf.b - wandSeite + 2]) {
+      stift.fillStyle = FARBE.glas;
+      rundesRechteck(stift, fx, by + (y + 0.1) * s, wandSeite - 4, s * 0.8, 3);
+      stift.fill();
+      stift.fillStyle = FARBE.glasGlanz;
+      stift.fillRect(fx + 1.5, by + (y + 0.2) * s, 1.5, s * 0.25);
+    }
+  }
+
+  stift.fillStyle = FARBE.boden;
+  stift.fillRect(bx, by, boden.b, boden.h);
+  for (let y = 0; y < REIHEN; y++) {
+    for (let x = 0; x < SPALTEN; x++) {
+      const px = bx + x * s;
+      const py = by + y * s;
+      if (x !== GANGSPALTE && !istSitz(x, y)) {
+        maleWandfeld(stift, px, py, s);
+        continue;
+      }
+      stift.fillStyle = FARBE.feld;
+      rundesRechteck(stift, px + 1.5, py + 1.5, s - 3, s - 3, s * 0.1);
+      stift.fill();
+      stift.fillStyle = FARBE.feldKante;
+      rundesRechteck(stift, px + 1.5, py + 1.5, s - 3, 2, 1);
+      stift.fill();
+      if (istSitz(x, y)) malePlatz(stift, px, py, s);
+    }
+  }
+
+  // oben die Zieltür, unten die Tür, durch die der Schaffner kam
+  maleFluegel(stift, bx + ZIELTUER.x * s, by + ZIELTUER.y * s, s, s * 0.3);
+  maleFluegel(stift, bx + SCHAFFNERSTART.x * s, by + (SCHAFFNERSTART.y + 1) * s - s * 0.2, s, s * 0.2);
+  return flaeche;
+}
+
+// Eine Tafel in Punktmatrix: dunkler Grund, bernsteinfarbene Punkte.
+// zeilen: Liste von { text, spalte, zeile } in Punkten. Gibt ein fertiges Bild zurück.
+function malePunkttafel(tafel, zeilen, dichte, mitRand) {
+  const { flaeche, stift } = neueFlaeche(tafel.b, tafel.h, dichte);
+  stift.fillStyle = FARBE.tafel;
+  rundesRechteck(stift, 0, 0, tafel.b, tafel.h, 5);
+  stift.fill();
+  if (mitRand) {
+    stift.strokeStyle = FARBE.tafelRand;
+    stift.lineWidth = 1;
+    rundesRechteck(stift, 0.5, 0.5, tafel.b - 1, tafel.h - 1, 5);
+    stift.stroke();
+  }
+  const feld = neuesPunktfeld(tafel.spalten, tafel.zeilen);
+  for (const z of zeilen) schreibe(feld, z.text, z.spalte, z.zeile);
+  zeichnePunktfeld(stift, feld, tafel.polster, tafel.polster, tafel.raster, FARBE.bernstein, FARBE.bernsteinAus);
+  return flaeche;
+}
+
+// --- ../prototyp/freier-platz/src/anzeige/gestalten.js
+// Alles, was im Wagen 7 zu sehen ist: Menschen, Schaffner, Tasche, Lampen, Schatten, Fahrkarte.
+// Einfache Formen, niemand hat ein Gesicht. Schatten gibt es nur als flache, geworfene Schatten
+// im Lampenlicht: Deshalb hat hier keine Figur den runden Bodenschatten des Hauptspiels.
+
+
+
+const PLATZFARBE = {
+  licht: '255, 217, 160',
+  schatten: '3, 5, 12',
+  schaffner: { mantel: '#3a55a4', kopf: '#d3d8e4', schuh: '#10141f', muetze: '#1f2e5e', band: '#d2553f', schirm: '#0d1322', knopf: '#ffb347', arm: '#2f4688' },
+  schlaefer: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658' },
+  wacher: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', buch: '#e9dcc0' },
+  tasche: { leder: '#8a6547', naht: '#5c4331', griff: '#4a3526', schild: '#e9dcc0' },
+  zange: '#cfd6e2',
+  papier: '#e9dcc0',
+  papierKante: '#c9bb9a',
+  papierFalz: '#d8caa9',
+  lampe: { arm: '#8796ae', kopf: '#fff1d6', schirm: '#5b6680' },
+};
+
+function strich(stift, punkte, farbe, dicke) {
+  stift.strokeStyle = farbe;
+  stift.lineWidth = dicke;
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  stift.beginPath();
+  stift.moveTo(punkte[0][0], punkte[0][1]);
+  for (let i = 1; i < punkte.length; i++) stift.lineTo(punkte[i][0], punkte[i][1]);
+  stift.stroke();
+}
+
+// Rumpf und Kopf. (cx, fy) ist der Punkt unter der Figur, s die Feldgröße.
+// o: farben, sitzt, neigung, kopfX und kopfY (Versatz des Kopfs in Feldern), schultern (Heben in Feldern)
+function maleMensch(stift, cx, fy, s, o) {
+  const sitzt = o.sitzt === true;
+  const hoch = s * (sitzt ? 0.6 : 0.74);
+  const schulter = s * (sitzt ? 0.37 : 0.35);
+  const saum = s * (sitzt ? 0.46 : 0.4);
+  const kopf = s * 0.12;
+  const heben = (o.schultern || 0) * s;
+  const schulterY = fy - hoch + kopf * 1.75 - heben;
+  const schub = (o.neigung || 0) * hoch * 0.16;
+  const r = Math.min(schulter * 0.3, hoch * 0.16);
+  const f = o.farben;
+
+  if (!sitzt) {
+    stift.fillStyle = f.schuh;
+    rundesRechteck(stift, cx - saum * 0.42, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+    stift.fill();
+    rundesRechteck(stift, cx + saum * 0.06, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+    stift.fill();
+  }
+
+  stift.fillStyle = f.mantel;
+  stift.beginPath();
+  stift.moveTo(cx - saum / 2, fy - hoch * 0.05);
+  stift.lineTo(cx - schulter / 2 + schub, schulterY + r);
+  stift.quadraticCurveTo(cx - schulter / 2 + schub, schulterY, cx - schulter / 2 + schub + r, schulterY);
+  stift.lineTo(cx + schulter / 2 + schub - r, schulterY);
+  stift.quadraticCurveTo(cx + schulter / 2 + schub, schulterY, cx + schulter / 2 + schub, schulterY + r);
+  stift.lineTo(cx + saum / 2, fy - hoch * 0.05);
+  stift.closePath();
+  stift.fill();
+
+  const kopfX = cx + schub * 1.35 + (o.kopfX || 0) * s;
+  const kopfY = schulterY - kopf * 0.72 + heben * 0.6 + (o.kopfY || 0) * s;
+  stift.fillStyle = f.kopf;
+  kreis(stift, kopfX, kopfY, kopf);
+  stift.fill();
+  return { schulterY, kopfX, kopfY, schub, schulter, kopf, hoch };
+}
+
+// Die Tasche: liegt auf dem Fensterplatz oder ist beim Spieler. gross: 1 auf dem Sitz, kleiner in der Hand.
+function maleTasche(stift, cx, cy, s, gross) {
+  const f = PLATZFARBE.tasche;
+  const b = s * 0.46 * gross;
+  const h = s * 0.3 * gross;
+  const x = cx - b / 2;
+  const y = cy - h / 2;
+  strich(stift, [[x + b * 0.3, y + 1], [x + b * 0.34, y - h * 0.34], [x + b * 0.66, y - h * 0.34], [x + b * 0.7, y + 1]], f.griff, Math.max(1.5, s * 0.04 * gross));
+  stift.fillStyle = f.leder;
+  rundesRechteck(stift, x, y, b, h, s * 0.07 * gross);
+  stift.fill();
+  stift.fillStyle = f.naht;
+  stift.fillRect(x + b * 0.08, y + h * 0.3, b * 0.84, Math.max(1, h * 0.09));
+  stift.fillStyle = f.schild;
+  stift.fillRect(x + b * 0.42, y + h * 0.5, b * 0.16, h * 0.24);
+}
+
+// Der Spieler: heller Mantel, bernsteinfarbener Schal, wie im Hauptspiel.
+// o: sitzt, neigung, traegt (hat die Tasche), sx (Seite der Tasche im Stehen)
+function maleReisenden(stift, cx, fy, s, o) {
+  const f = FARBE.spieler;
+  if (o.traegt && !o.sitzt) maleTasche(stift, cx + s * 0.27, fy - s * 0.2, s, 0.62);
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: o.sitzt, neigung: o.neigung || 0 });
+  stift.fillStyle = f.schal;
+  rundesRechteck(stift, cx - k.schulter * 0.42 + k.schub, k.schulterY - s * 0.025, k.schulter * 0.84, s * 0.085, s * 0.04);
+  stift.fill();
+  stift.beginPath();
+  stift.moveTo(cx + k.schulter * 0.1 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + k.schulter * 0.34 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + k.schulter * 0.36 + k.schub, k.schulterY + s * 0.24);
+  stift.lineTo(cx + k.schulter * 0.12 + k.schub, k.schulterY + s * 0.22);
+  stift.closePath();
+  stift.fill();
+  // im Sitzen liegt die Tasche auf dem Schoß
+  if (o.traegt && o.sitzt) maleTasche(stift, cx - s * 0.02, fy - s * 0.13, s, 0.66);
+  // ein Arm, der sich nach etwas streckt und es nicht erreicht
+  if (o.arm) {
+    const sx = cx + Math.sign(o.arm.x || 0.001) * k.schulter * 0.4 + k.schub;
+    const sy = k.schulterY + s * 0.09;
+    strich(stift, [[sx, sy], [sx + o.arm.x * s, sy + o.arm.y * s]], '#d6caae', s * 0.075);
+    stift.fillStyle = f.kopf;
+    kreis(stift, sx + o.arm.x * s, sy + o.arm.y * s, s * 0.04);
+    stift.fill();
+  }
+  return k;
+}
+
+// Der Schlafende: zur Seite gesunken, Kopf auf der Brust. Wach sitzt er gerade.
+// o: wach 0..1, atem (-1..1), kopfX, kopfY, schultern
+function maleSchlaefer(stift, cx, fy, s, o) {
+  const schlaf = 1 - o.wach;
+  const k = maleMensch(stift, cx, fy + (o.atem || 0) * schlaf * s * 0.008, s, {
+    farben: PLATZFARBE.schlaefer,
+    sitzt: true,
+    neigung: 0.55 * schlaf,
+    kopfX: 0.05 * schlaf + (o.kopfX || 0),
+    kopfY: 0.075 * schlaf + (o.kopfY || 0),
+    schultern: o.schultern || 0,
+  });
+  // Krawatte, lose
+  stift.fillStyle = PLATZFARBE.schlaefer.schuh;
+  stift.beginPath();
+  stift.moveTo(cx - s * 0.022 + k.schub, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.022 + k.schub, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.03 + k.schub * 0.5, k.schulterY + s * 0.18);
+  stift.lineTo(cx + k.schub * 0.5, k.schulterY + s * 0.22);
+  stift.lineTo(cx - s * 0.03 + k.schub * 0.5, k.schulterY + s * 0.18);
+  stift.closePath();
+  stift.fill();
+  return k;
+}
+
+// Der wache Fahrgast: liest.
+function maleWachen(stift, cx, fy, s) {
+  const f = PLATZFARBE.wacher;
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: true, kopfY: 0.012 });
+  stift.fillStyle = f.buch;
+  stift.fillRect(cx - s * 0.13, fy - s * 0.3, s * 0.12, s * 0.15);
+  stift.fillRect(cx + s * 0.01, fy - s * 0.3, s * 0.12, s * 0.15);
+  stift.fillStyle = f.schuh;
+  stift.fillRect(cx - s * 0.008, fy - s * 0.3, s * 0.016, s * 0.15);
+  return k;
+}
+
+// Die Lochzange. (hx, hy) ist die Hand, (dx, dy) die Richtung, offen 0..1.
+function maleZange(stift, hx, hy, dx, dy, s, offen) {
+  const lang = s * 0.24;
+  const gx = hx + dx * lang * 0.42; // Gelenk
+  const gy = hy + dy * lang * 0.42;
+  const qx = -dy;
+  const qy = dx;
+  const weit = 0.07 + 0.2 * offen;
+  const farbe = PLATZFARBE.zange;
+  const dicke = Math.max(1.6, s * 0.04);
+  // Griffe hinter dem Gelenk
+  strich(stift, [[hx - dx * s * 0.03 + qx * s * 0.045, hy - dy * s * 0.03 + qy * s * 0.045], [gx, gy]], farbe, dicke);
+  strich(stift, [[hx - dx * s * 0.03 - qx * s * 0.045, hy - dy * s * 0.03 - qy * s * 0.045], [gx, gy]], farbe, dicke);
+  // Backen davor
+  const rest = lang * 0.58;
+  for (const seite of [-1, 1]) {
+    const c = Math.cos(weit * seite);
+    const sn = Math.sin(weit * seite);
+    strich(stift, [[gx, gy], [gx + (dx * c - dy * sn) * rest, gy + (dx * sn + dy * c) * rest]], farbe, dicke);
+  }
+}
+
+const ZANGENLAENGE = 0.24; // in Feldern, von der Hand bis zur Spitze
+
+// Der Schaffner. Er sieht in jeder Warterunde gleich aus.
+// o: blick ('hoch' | 'links' | 'rechts' | 'runter'), nick 0..1, gruss 0..1, neigung,
+//    zeigt { x, y } (Bildpunkt, auf den die Zange zielt) oder null, streck 0..1, offen 0..1 (Zange)
+function maleSchaffner(stift, cx, fy, s, o) {
+  const f = PLATZFARBE.schaffner;
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: false, neigung: o.neigung || 0, kopfY: (o.nick || 0) * 0.04 });
+  // zwei Knöpfe
+  stift.fillStyle = f.knopf;
+  kreis(stift, cx + k.schub * 0.8, k.schulterY + s * 0.12, s * 0.022);
+  stift.fill();
+  kreis(stift, cx + k.schub * 0.5, k.schulterY + s * 0.24, s * 0.022);
+  stift.fill();
+
+  // Mütze: Kuppe, rotes Band, Schirm in Blickrichtung
+  const gruss = o.gruss || 0;
+  const my = k.kopfY - k.kopf * 0.22 - gruss * s * 0.09;
+  stift.fillStyle = f.muetze;
+  stift.beginPath();
+  stift.arc(k.kopfX, my, k.kopf * 1.08, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  stift.fillStyle = f.band;
+  rundesRechteck(stift, k.kopfX - k.kopf * 1.1, my - k.kopf * 0.12, k.kopf * 2.2, k.kopf * 0.34, k.kopf * 0.1);
+  stift.fill();
+  stift.fillStyle = f.schirm;
+  if (o.blick === 'links' || o.blick === 'rechts') {
+    const r = o.blick === 'links' ? -1 : 1;
+    rundesRechteck(stift, k.kopfX + (r > 0 ? k.kopf * 0.55 : -k.kopf * 1.75), my + k.kopf * 0.12, k.kopf * 1.2, k.kopf * 0.28, k.kopf * 0.12);
+    stift.fill();
+  } else if (o.blick === 'runter') {
+    rundesRechteck(stift, k.kopfX - k.kopf * 0.8, my + k.kopf * 0.16, k.kopf * 1.6, k.kopf * 0.3, k.kopf * 0.14);
+    stift.fill();
+  }
+
+  // der freie Arm tippt beim Grüßen an die Mütze
+  if (gruss > 0.02) {
+    const sx = cx - k.schulter * 0.44 + k.schub;
+    const sy = k.schulterY + s * 0.08;
+    const hx = k.kopfX - k.kopf * 1.05;
+    const hy = my + k.kopf * 0.1 + (1 - gruss) * s * 0.3;
+    strich(stift, [[sx, sy], [sx - s * 0.1, sy + s * 0.1 * (1 - gruss)], [hx, hy]], f.arm, s * 0.075);
+    stift.fillStyle = f.kopf;
+    kreis(stift, hx, hy, s * 0.038);
+    stift.fill();
+  }
+
+  // der Arm mit der Zange: hängt an der Seite oder zeigt genau auf das störende Ding
+  const streck = o.zeigt ? o.streck || 0 : 0;
+  const seite = o.zeigt ? (o.zeigt.x < cx ? -1 : 1) : 1;
+  const sx = cx + seite * k.schulter * 0.42 + k.schub;
+  const sy = k.schulterY + s * 0.09;
+  const ruheX = cx + k.schulter * 0.5 + s * 0.03;
+  const ruheY = k.schulterY + s * 0.3;
+  let hx = ruheX;
+  let hy = ruheY;
+  let dx = 0.25;
+  let dy = 0.97;
+  if (streck > 0.001) {
+    const zx = o.zeigt.x - sx;
+    const zy = o.zeigt.y - sy;
+    const weit = Math.max(1, Math.hypot(zx, zy));
+    const armlang = Math.max(s * 0.12, weit - s * ZANGENLAENGE);
+    const zielX = sx + (zx / weit) * armlang;
+    const zielY = sy + (zy / weit) * armlang;
+    hx = ruheX + (zielX - ruheX) * streck;
+    hy = ruheY + (zielY - ruheY) * streck;
+    const rx = dx + (zx / weit - dx) * streck;
+    const ry = dy + (zy / weit - dy) * streck;
+    const rl = Math.max(0.001, Math.hypot(rx, ry));
+    dx = rx / rl;
+    dy = ry / rl;
+  }
+  const schulterX = streck > 0.001 ? sx + (cx + k.schulter * 0.42 + k.schub - sx) * (1 - streck) : cx + k.schulter * 0.42 + k.schub;
+  strich(stift, [[schulterX, sy], [hx, hy]], f.arm, s * 0.08);
+  stift.fillStyle = f.kopf;
+  kreis(stift, hx, hy, s * 0.04);
+  stift.fill();
+  maleZange(stift, hx, hy, dx, dy, s, o.offen === undefined ? 1 : o.offen);
+  return { spitzeX: hx + dx * s * ZANGENLAENGE, spitzeY: hy + dy * s * ZANGENLAENGE, kopfX: k.kopfX, kopfY: my - k.kopf * 1.08 };
+}
+
+// Der geworfene Schatten: der Umriss einer sitzenden Figur, flach hingelegt.
+// (bx, by) ist sein Fuß, richtung -1 oder +1, laenge und dicke in Pixeln.
+function maleWurfschatten(stift, bx, by, richtung, laenge, dicke, staerke) {
+  if (laenge < 1 || staerke <= 0.01) return;
+  const u = (t) => bx + richtung * t * laenge;
+  const kr = Math.min(dicke * 0.3, laenge * 0.19);
+  stift.fillStyle = `rgba(${PLATZFARBE.schatten}, ${0.62 * staerke})`;
+  stift.beginPath();
+  // Rumpf: am Saum breit, an den Schultern schmaler und rund
+  stift.moveTo(u(0), by - dicke * 0.5);
+  stift.lineTo(u(0.5), by - dicke * 0.41);
+  stift.quadraticCurveTo(u(0.61), by - dicke * 0.41, u(0.61), by - dicke * 0.27);
+  stift.lineTo(u(0.61), by + dicke * 0.27);
+  stift.quadraticCurveTo(u(0.61), by + dicke * 0.41, u(0.5), by + dicke * 0.41);
+  stift.lineTo(u(0), by + dicke * 0.5);
+  stift.closePath();
+  // Kopf, im selben Drehsinn, damit sich beide Flächen vereinen
+  const kx = u(0.61) + richtung * kr * 0.8;
+  stift.moveTo(kx + kr, by);
+  stift.arc(kx, by, kr, 0, Math.PI * 2, richtung < 0);
+  stift.fill();
+}
+
+// Der blasse Lichtkeil zeigt, wohin das Licht fällt.
+// kopf: Lampenkopf, richtung -1 oder +1, weit: Reichweite in Pixeln, oben und unten: Rand der Reihe
+function maleLichtkeil(stift, kopf, richtung, weit, oben, unten, s, staerke) {
+  if (staerke <= 0.01 || weit < 2) return;
+  const fern = kopf.x + richtung * weit;
+  const verlauf = stift.createLinearGradient(kopf.x, 0, fern, 0);
+  verlauf.addColorStop(0, `rgba(${PLATZFARBE.licht}, ${0.34 * staerke})`);
+  verlauf.addColorStop(0.5, `rgba(${PLATZFARBE.licht}, ${0.17 * staerke})`);
+  verlauf.addColorStop(1, `rgba(${PLATZFARBE.licht}, ${0.05 * staerke})`);
+  stift.save();
+  stift.globalCompositeOperation = 'lighter';
+  stift.fillStyle = verlauf;
+  const auf = Math.min(weit, s * 0.5);
+  stift.beginPath();
+  stift.moveTo(kopf.x, kopf.y - s * 0.02);
+  stift.lineTo(kopf.x + richtung * auf, oben);
+  stift.lineTo(fern, oben);
+  stift.lineTo(fern, unten);
+  stift.lineTo(kopf.x + richtung * auf, unten);
+  stift.lineTo(kopf.x, kopf.y + s * 0.1);
+  stift.closePath();
+  stift.fill();
+  stift.restore();
+}
+
+// Die Leselampe: Gelenk auf der Lehne, Arm, Kopf. winkel 0 zeigt nach rechts, Pi nach links.
+function maleLampe(stift, gelenk, winkel, s, armlaenge) {
+  const f = PLATZFARBE.lampe;
+  const kx = gelenk.x + Math.cos(winkel) * armlaenge;
+  const ky = gelenk.y + Math.sin(winkel) * armlaenge;
+  strich(stift, [[gelenk.x, gelenk.y], [kx, ky]], f.arm, Math.max(1.5, s * 0.035));
+  stift.fillStyle = f.schirm;
+  kreis(stift, gelenk.x, gelenk.y, s * 0.05);
+  stift.fill();
+  const hof = stift.createRadialGradient(kx, ky, 0, kx, ky, s * 0.3);
+  hof.addColorStop(0, `rgba(${PLATZFARBE.licht}, 0.5)`);
+  hof.addColorStop(1, `rgba(${PLATZFARBE.licht}, 0)`);
+  stift.save();
+  stift.globalCompositeOperation = 'lighter';
+  stift.fillStyle = hof;
+  kreis(stift, kx, ky, s * 0.3);
+  stift.fill();
+  stift.restore();
+  // Schirm auf der abgewandten Seite, die helle Öffnung zeigt in Lichtrichtung
+  stift.fillStyle = f.schirm;
+  kreis(stift, kx, ky, s * 0.105);
+  stift.fill();
+  stift.fillStyle = f.kopf;
+  kreis(stift, kx - Math.cos(winkel) * s * 0.03, ky - Math.sin(winkel) * s * 0.03, s * 0.075);
+  stift.fill();
+  return { x: kx, y: ky };
+}
+
+// Die Fahrkarte: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen.
+// Die Lochung des Schaffners ist eine schmale Sichel. loch: 0 keine, bis 1 ganz da.
+function maleFahrkarte(stift, x, y, b, h, loch, gedrueckt) {
+  const d = gedrueckt * 2;
+  stift.save();
+  stift.translate(x + b / 2, y + h / 2 + d);
+  stift.rotate(-0.035);
+  const kx = -b / 2 + 4;
+  const ky = -h / 2 + 5;
+  const kb = b - 8;
+  const kh = h - 10;
+  stift.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  rundesRechteck(stift, kx + 2, ky + 3, kb, kh, 5);
+  stift.fill();
+  stift.fillStyle = PLATZFARBE.papier;
+  rundesRechteck(stift, kx, ky, kb, kh, 5);
+  stift.fill();
+  stift.fillStyle = PLATZFARBE.papierKante;
+  rundesRechteck(stift, kx, ky + kh - 3, kb, 3, 2);
+  stift.fill();
+  // eine Abrisskante, sonst nichts
+  stift.fillStyle = PLATZFARBE.papierFalz;
+  for (let i = 0; i < 9; i++) stift.fillRect(kx + kb * 0.24, ky + 4 + (i * (kh - 8)) / 9, 1.5, (kh - 8) / 18);
+
+  if (loch > 0.01) {
+    // schmale Sichel: ein Kreis, aus dem ein zweiter herausgeschnitten ist
+    const r = Math.min(kh * 0.27, 17) * (0.6 + 0.4 * loch);
+    const lx = kx + kb * 0.66;
+    const ly = ky + kh * 0.5;
+    stift.save();
+    stift.translate(lx, ly);
+    stift.rotate(0.9); // schräg gestanzt, wie mit der Hand angesetzt
+    stift.beginPath();
+    stift.arc(0, 0, r, 0, Math.PI * 2);
+    stift.clip();
+    stift.fillStyle = FARBE.nacht;
+    stift.beginPath();
+    stift.rect(-r * 2, -r * 2, r * 4, r * 4);
+    stift.arc(r * 0.3, 0, r * 0.99, 0, Math.PI * 2, true);
+    stift.fill('evenodd');
+    stift.restore();
+  }
+  stift.restore();
+}
+
+// Ein Schnipsel in Sichelform, der nach dem Lochen fällt.
+function maleSchnipsel(stift, x, y, s, staerke) {
+  if (staerke <= 0.01) return;
+  stift.save();
+  stift.globalAlpha *= staerke;
+  stift.strokeStyle = PLATZFARBE.papier;
+  stift.lineWidth = Math.max(1.5, s * 0.035);
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.arc(x, y, s * 0.05, 0.6, 2.9);
+  stift.stroke();
+  stift.restore();
+}
+
+// Lautsprecher: an oder durchgestrichen, wie im Hauptspiel
+function maleTonschalter(stift, ton, an) {
+  const x = ton.x;
+  const y = ton.y;
+  stift.fillStyle = '#5b6680';
+  stift.strokeStyle = '#5b6680';
+  stift.lineWidth = 2;
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(x - 9, y - 3.5);
+  stift.lineTo(x - 4, y - 3.5);
+  stift.lineTo(x + 1, y - 8);
+  stift.lineTo(x + 1, y + 8);
+  stift.lineTo(x - 4, y + 3.5);
+  stift.lineTo(x - 9, y + 3.5);
+  stift.closePath();
+  stift.fill();
+  stift.beginPath();
+  if (an) {
+    stift.arc(x + 2, y, 5, -0.9, 0.9);
+    stift.stroke();
+    stift.beginPath();
+    stift.arc(x + 2, y, 9, -0.9, 0.9);
+  } else {
+    stift.moveTo(x + 5, y - 4);
+    stift.lineTo(x + 12, y + 4);
+    stift.moveTo(x + 12, y - 4);
+    stift.lineTo(x + 5, y + 4);
+  }
+  stift.stroke();
+}
+
+// --- ../prototyp/freier-platz/src/anzeige/buehne.js
+// Die Bühne spielt ab, was der Kern meldet. Sie entscheidet nie über Spielregeln.
+//
+// "bild" ist der Stand, der gerade zu sehen ist. Er läuft dem echten Zustand hinterher, während
+// die Ereignisse einer Runde nacheinander ablaufen. Kommt eine neue Eingabe, bevor alles gezeigt
+// ist, springt das Bild sofort ans Ende: Niemand wartet auf das Spiel. Danach steht alles still.
+
+
+
+
+
+
+
+
+
+
+const ABFAHRT_PLATZ = 23 * 60 + 41; // wie im Hauptspiel: Jede Runde ist eine Minute
+const ENDE_PAUSE = 450; // so lange nimmt das Endbild noch nichts an
+
+function platzUhrzeit(runde) {
+  const minuten = (ABFAHRT_PLATZ + runde) % (24 * 60);
+  return `${String(Math.floor(minuten / 60)).padStart(2, '0')}:${String(minuten % 60).padStart(2, '0')}`;
+}
+
+// Wie lange ein Ereignis das nächste aufhält, in Millisekunden.
+const DAUER = {
+  schritt: 150,
+  nimmt: 220,
+  lampe: 300,
+  schatten: 300,
+  weichtAus: 400,
+  nickt: 260,
+  locht: 520,
+  gruesst: 420,
+  schaffnerWeg: 260,
+  steht: 160,
+  anstoss: 260,
+  draengt: 300,
+  weckt: 1100,
+  satz: 200,
+  warten: 60,
+};
+const SATZ_PAUSE = 110; // so lange ist die Blase weg, wenn er den Satz wiederholt
+
+function dauerVon(e, danach) {
+  if (e.typ === 'wartet') return e.neu ? 300 : e.folgt ? 420 : 0;
+  if (e.typ === 'schaffnerSchritt') return e.gross ? 320 : 200;
+  // der Schatten wandert zugleich mit dem, was ihn bewegt
+  if ((e.typ === 'schritt' || e.typ === 'lampe') && danach && danach.typ === 'schatten') return 0;
+  return DAUER[e.typ] || 0;
+}
+
+function erzeugeBuehne(leinwand) {
+  const stift = leinwand.getContext('2d');
+  const ruhig = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let masse = null;
+  let dichte = 1;
+  let z = null; // der echte Zustand, nur zum Lesen
+  let abteil = null;
+  let tafelbild = null;
+  let knopfbild = null;
+  let tonAn = false;
+
+  const bild = {
+    spieler: { x: 0, y: 0, px: 0, py: 0, sx: 0, sy: 0, arm: null, traegt: false },
+    tasche: { liegt: true, px: 0, py: 0, gross: 1 },
+    lampen: { A: { w: 0 }, B: { w: 0 } }, // 0 steht auf Fenster, 1 auf Gang
+    schatten: { spieler: { da: 0, d: -1, wand: 0 }, schlaefer: { da: 0, d: 1, wand: 0 } },
+    schaffner: { da: 1, py: 0, sx: 0, sy: 0, hupf: 0, blick: 'hoch', nick: 0, gruss: 0, zeigt: null, streck: 0, offen: 1, tipp: 0, zettel: 0 },
+    schlaefer: { wach: 0, kopfX: 0, kopfY: 0, schultern: 0 },
+    karte: { loch: 0 },
+  };
+  let wartend = []; // Ereignisse, die noch dran sind: { zeit, e }
+  let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
+  let schnipsel = [];
+  let blase = null; // der Satz des Schaffners
+  let ende = null; // das Bild nach der Tür
+  let protokoll = null; // Zeilen des Testprotokolls, solange es offen ist
+  let schaffnerKopf = null; // wo sein Kopf zuletzt gemalt wurde, für Tipps und die Sprechblase
+  let spielerKopf = null;
+  const wirkung = { stoss: -1e9, warten: -1e9, karte: -1e9, neueFahrt: -1e9 };
+  const melder = { klang: null };
+
+  // ---------------------------------------------------------------- Aufbau
+
+  function passeAn() {
+    // Maß ist der Canvas selbst: Er folgt der dynamischen Höhe und lässt Notch und Home-Balken frei.
+    const breite = Math.max(200, leinwand.clientWidth || window.innerWidth);
+    const hoehe = Math.max(240, leinwand.clientHeight || window.innerHeight);
+    dichte = Math.min(window.devicePixelRatio || 1, 2.5);
+    leinwand.width = Math.round(breite * dichte);
+    leinwand.height = Math.round(hoehe * dichte);
+    masse = berechneMasse(breite, hoehe);
+    abteil = maleAbteil(masse, dichte);
+    tafelbild = malePunkttafel(masse.tafel, [{ text: PLATZTEXTE.spiel.anzeige, spalte: 2, zeile: 1 }], dichte, true);
+    knopfbild = null;
+    if (ende) ende.tafelbild = null;
+    // Die Zange zielt auf Bildpunkte: Nach einer Größenänderung neu ausrichten, wenn gerade nichts abläuft.
+    if (z && !wartend.length) gleicheAb();
+  }
+
+  function lampenwert(name) {
+    return z.lampen[name] === 'gang' ? 1 : 0;
+  }
+
+  // Worauf die Zange zielt, als Bildpunkt: die Tasche oder der Schatten auf dem Sitz.
+  function zielpunkt(ziel) {
+    const mitte = feldMitte(masse, ziel.x, ziel.y);
+    return { x: mitte.x, y: mitte.y + masse.s * (ziel.was === 'tasche' ? 0.0 : 0.08) };
+  }
+
+  // Bild und Zustand in Deckung bringen
+  function gleicheAb() {
+    const s = bild.spieler;
+    s.x = s.px = z.spieler.x;
+    s.y = s.py = z.spieler.y;
+    s.sx = s.sy = 0;
+    s.arm = null;
+    s.traegt = z.spieler.tasche;
+    bild.tasche.liegt = z.tasche;
+    bild.tasche.px = TASCHENPLATZ.x;
+    bild.tasche.py = TASCHENPLATZ.y;
+    bild.tasche.gross = 1;
+    for (const name of LAMPENNAMEN) bild.lampen[name].w = lampenwert(name);
+    for (const von of ['spieler', 'schlaefer']) {
+      const eintrag = z.schatten.filter((e) => e.von === von)[0];
+      const b = bild.schatten[von];
+      b.da = eintrag ? 1 : 0;
+      if (eintrag) {
+        b.d = lichtrichtung(eintrag.lampe, z.lampen[eintrag.lampe]);
+        b.wand = eintrag.wand ? 1 : 0;
+      }
+    }
+    const k = bild.schaffner;
+    const echt = z.schaffner;
+    k.da = echt.weg ? 0 : 1;
+    k.py = echt.y;
+    k.sx = k.sy = k.hupf = k.nick = k.gruss = k.tipp = k.zettel = 0;
+    k.offen = 1;
+    k.zeigt = echt.tat === 'wartet' ? zielpunkt(echt.ziel) : null;
+    k.streck = k.zeigt ? 1 : 0;
+    k.blick = echt.blick || (k.zeigt ? (echt.ziel.x < GANGSPALTE ? 'links' : 'rechts') : 'hoch');
+    bild.schlaefer.wach = z.schlaefer.wach ? 1 : 0;
+    bild.schlaefer.kopfX = bild.schlaefer.kopfY = bild.schlaefer.schultern = 0;
+    bild.karte.loch = z.spieler.gelocht ? 1 : 0;
+    if (z.status === 'ende' && !ende) zeigeEnde(z.tatsachen, z.spieler.gelocht, z.runde, -1e9);
+  }
+
+  // Eine Bewegung über die Zeit. schritt(p) bekommt 0..1. "bleibt" läuft auch weiter, wenn eine Eingabe alles abkürzt.
+  function bewege(start, dauer, schritt, bleibt) {
+    laeufer.push({ start, dauer, schritt, bleibt: bleibt === true });
+  }
+
+  function klinge(name) {
+    if (melder.klang) melder.klang(name);
+  }
+
+  // ---------------------------------------------------------------- Ereignisse
+
+  function zeigeBlase() {
+    blase = { zeilen: PLATZTEXTE.spiel.satz.split(' / ') };
+  }
+
+  function zeigeEnde(tatsachen, lochung, runde, jetzt) {
+    blase = null; // hinter dem Abschlussbild bleibt nichts stehen
+    const zeilen = tatsachenZeilen(tatsachen);
+    ende = { zeilen: zeilen.length ? zeilen : [platzUhrzeit(runde)], lochung, start: jetzt, tafelbild: null, knopfbild: null };
+  }
+
+  function lasseSchnipselFallen(x, y, jetzt) {
+    const teil = { x, y, fall: 0, staerke: 1 };
+    schnipsel.push(teil);
+    bewege(jetzt, 480, (p) => {
+      teil.fall = p * p;
+      teil.staerke = 1 - p * p;
+      if (p >= 1) schnipsel = schnipsel.filter((t) => t !== teil);
+    }, true);
+  }
+
+  // Zeigt ein Ereignis. sofort: ohne Bewegung, weil eine Eingabe das Abspielen abgekürzt hat.
+  // Was dann zu sehen sein muss, stellt gleicheAb() aus dem Zustand her. Nur der Satz bliebe sonst ungesehen.
+  function wendeAn(e, jetzt, sofort) {
+    if (sofort) {
+      if ((e.typ === 'satz' || (e.typ === 'wartet' && e.satz)) && !ende) zeigeBlase();
+      return;
+    }
+    const s = bild.spieler;
+    const k = bild.schaffner;
+    const groesse = masse.s;
+
+    if (e.typ === 'schritt') {
+      s.x = e.nach.x;
+      s.y = e.nach.y;
+      klinge('schritt');
+      bewege(jetzt, DAUER.schritt, (p) => {
+        const q = sanft(p);
+        s.px = e.von.x + (e.nach.x - e.von.x) * q;
+        s.py = e.von.y + (e.nach.y - e.von.y) * q;
+      });
+    } else if (e.typ === 'gehtNicht' || e.typ === 'zuWeit' || e.typ === 'nichts') {
+      // kurz zeigen, dass es nicht geht: hinlehnen und zurück. Zu weit: Der Arm streckt sich und reicht nicht.
+      let ziel = e.zu ? feldMitte(masse, e.zu.x, e.zu.y) : null;
+      if (e.lampe) ziel = lampenkopfJetzt(e.lampe);
+      const hier = feldMitte(masse, s.x, s.y);
+      const dx = ziel ? ziel.x - hier.x : 0;
+      const dy = ziel ? ziel.y - hier.y : 0;
+      const weit = Math.hypot(dx, dy);
+      if (weit < 1) {
+        bewege(jetzt, 140, (p) => {
+          s.sy = -hinUndHer(p) * 0.05;
+        });
+        return;
+      }
+      const hub = e.typ === 'zuWeit' ? 0.1 : 0.13;
+      bewege(jetzt, e.typ === 'zuWeit' ? 260 : 110, (p) => {
+        const q = hinUndHer(p);
+        s.sx = (dx / weit) * q * hub;
+        s.sy = (dy / weit) * q * hub;
+        s.arm = e.typ === 'zuWeit' && p < 1 ? { x: (dx / weit) * q * 0.3, y: (dy / weit) * q * 0.3 } : null;
+      });
+    } else if (e.typ === 'nimmt') {
+      const t = bild.tasche;
+      klinge('nimmt');
+      bewege(jetzt, DAUER.nimmt, (p) => {
+        const q = sanft(p);
+        t.px = e.von.x + (s.px - e.von.x) * q;
+        t.py = e.von.y + (s.py - e.von.y) * q;
+        t.gross = 1 - 0.34 * q;
+        if (p >= 1) {
+          t.liegt = false;
+          s.traegt = true;
+        }
+      });
+    } else if (e.typ === 'lampe') {
+      const l = bild.lampen[e.name];
+      const von = l.w;
+      const nach = e.stellung === 'gang' ? 1 : 0;
+      klinge('klick');
+      bewege(jetzt, DAUER.lampe, (p) => {
+        l.w = von + (nach - von) * sanft(p);
+      });
+    } else if (e.typ === 'schatten') {
+      const b = bild.schatten[e.von];
+      const vonDa = b.da;
+      const vonD = b.d;
+      const vonWand = b.wand;
+      const nachDa = e.neu ? 1 : 0;
+      const nachD = e.neu ? lichtrichtung(e.neu.lampe, z.lampen[e.neu.lampe]) : vonD;
+      const nachWand = e.neu ? (e.neu.wand ? 1 : 0) : vonWand;
+      const taucht = vonDa < 0.01; // er entsteht: gleich an der richtigen Stelle
+      bewege(jetzt, DAUER.schatten, (p) => {
+        const q = sanft(p);
+        b.da = vonDa + (nachDa - vonDa) * q;
+        b.d = taucht ? nachD : vonD + (nachD - vonD) * q;
+        b.wand = taucht ? nachWand : vonWand + (nachWand - vonWand) * q;
+      });
+    } else if (e.typ === 'weichtAus') {
+      // ein kleiner Schritt zurück, weg vom Schatten, und wieder hin
+      bewege(jetzt, DAUER.weichtAus, (p) => {
+        k.sy = Math.sin(Math.min(1, p * 1.25) * Math.PI) * 0.26;
+        k.hupf = hinUndHer(Math.min(1, p * 2.5)) * 0.05;
+      });
+    } else if (e.typ === 'nickt') {
+      const vorher = k.zeigt;
+      bewege(jetzt, DAUER.nickt, (p) => {
+        k.nick = hinUndHer(p);
+        if (k.zeigt !== vorher) return; // inzwischen zeigt die Zange schon auf etwas Neues
+        // zufrieden: Die Zange sinkt
+        k.streck = Math.min(k.streck, 1 - sanft(p));
+        if (p >= 1) k.zeigt = null;
+      });
+    } else if (e.typ === 'wartet') {
+      const ziel = zielpunkt(e.ziel);
+      k.blick = e.ziel.x < GANGSPALTE ? 'links' : 'rechts';
+      if (e.neu) {
+        k.zeigt = ziel;
+        bewege(jetzt, 240, (p) => {
+          k.streck = sanft(p);
+        });
+        // auf einen Schatten tippt die Zange einmal
+        if (e.ziel.was === 'schatten') tippeMitZange(jetzt + 240);
+      } else if (e.folgt) {
+        // die Zange bleibt oben, wandert zum neuen Ding und tippt einmal darauf
+        const von = k.zeigt || ziel;
+        k.zeigt = { x: von.x, y: von.y };
+        k.streck = 1;
+        bewege(jetzt, 200, (p) => {
+          const q = sanft(p);
+          k.zeigt.x = von.x + (ziel.x - von.x) * q;
+          k.zeigt.y = von.y + (ziel.y - von.y) * q;
+        });
+        tippeMitZange(jetzt + 200);
+      }
+      if (e.satz) zeigeBlase();
+    } else if (e.typ === 'satz') {
+      // Er wiederholt den Satz: Die Blase geht kurz weg und neu auf, sonst sähe der Tipp aus wie nichts.
+      blase = null;
+      bewege(jetzt + SATZ_PAUSE, 0, () => {
+        if (!ende) zeigeBlase();
+      });
+    } else if (e.typ === 'locht') {
+      // Die Zange geht zum Fahrschein, schließt, ein Schnipsel fällt.
+      const gast = feldMitte(masse, e.x, e.y);
+      const seite = e.x < GANGSPALTE ? -1 : 1;
+      k.blick = seite < 0 ? 'links' : 'rechts';
+      const cx = masse.boden.x + (GANGSPALTE + 0.5) * groesse;
+      const schein = { x: cx + seite * Math.min(Math.abs(gast.x - cx) - groesse * 0.36, groesse * 1.0), y: gast.y + groesse * 0.02 };
+      k.zeigt = schein;
+      const istSpieler = e.wen === 'spieler';
+      let geknipst = false;
+      bewege(jetzt, DAUER.locht, (p) => {
+        if (k.zeigt !== schein) return;
+        k.streck = p < 0.34 ? sanft(p / 0.34) : p > 0.7 ? 1 - sanft((p - 0.7) / 0.3) : 1;
+        k.offen = p < 0.34 ? 1 : p < 0.62 ? 0 : sanft((p - 0.62) / 0.38);
+        k.zettel = p < 0.2 ? p / 0.2 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.2) : 1;
+        if (p >= 0.34 && !geknipst) {
+          geknipst = true;
+          klinge('knips');
+          lasseSchnipselFallen(schein.x, schein.y, jetzt + DAUER.locht * 0.34);
+          if (istSpieler) {
+            // die Lochung entsteht auf der Fahrkarte
+            bewege(jetzt + DAUER.locht * 0.34, 160, (q) => {
+              bild.karte.loch = Math.max(bild.karte.loch, sanft(q));
+            }, true);
+            lasseSchnipselFallen(masse.karte.x + masse.karte.b * 0.66, masse.karte.y + masse.karte.h * 0.6, jetzt + DAUER.locht * 0.34);
+          }
+        }
+        if (p >= 1) {
+          k.zeigt = null;
+          k.zettel = 0;
+          k.blick = 'hoch';
+        }
+      });
+    } else if (e.typ === 'gruesst') {
+      k.blick = e.x < GANGSPALTE ? 'links' : 'rechts';
+      bewege(jetzt, DAUER.gruesst, (p) => {
+        k.gruss = Math.sin(Math.min(1, p * 1.15) * Math.PI);
+        if (p >= 1) k.blick = 'hoch';
+      });
+    } else if (e.typ === 'schaffnerSchritt') {
+      k.blick = 'hoch';
+      klinge('schritt');
+      bewege(jetzt, e.gross ? 320 : 200, (p) => {
+        k.py = e.von.y + (e.nach.y - e.von.y) * sanft(p);
+        // über einen Schatten im Gang macht er einen sichtbar großen Schritt
+        k.hupf = e.gross ? hinUndHer(p) * 0.2 : 0;
+      });
+    } else if (e.typ === 'schaffnerWeg') {
+      k.blick = 'hoch';
+      bewege(jetzt, DAUER.schaffnerWeg, (p) => {
+        k.py = e.von.y - 0.55 * sanft(p);
+        k.da = 1 - p;
+      });
+    } else if (e.typ === 'steht') {
+      // er will weiter, vor ihm steht der Spieler
+      bewege(jetzt, DAUER.steht, (p) => {
+        k.sy = -hinUndHer(p) * 0.07;
+      });
+    } else if (e.typ === 'anstoss') {
+      const r = SCHRITTE[e.richtung];
+      bewege(jetzt, 200, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.2;
+        s.sy = r.y * hinUndHer(p) * 0.2;
+      });
+      // er dreht die Mütze zum Spieler, sonst nichts. Zeigt der Schirm schon dorthin, sieht man ihn
+      // trotzdem: Er wendet sich kurz zum Spieler hin.
+      const zu = SCHRITTE[e.blick];
+      bewege(jetzt + 90, 10, () => {
+        k.blick = e.blick;
+      });
+      bewege(jetzt + 60, 240, (p) => {
+        k.sx = zu.x * hinUndHer(p) * 0.06;
+        k.sy = zu.y * hinUndHer(p) * 0.05;
+      });
+    } else if (e.typ === 'draengt') {
+      const vonK = k.py;
+      const quer = e.von.x === e.nach.x ? 1 : 0; // im Gang aneinander vorbei
+      s.x = e.nach.x;
+      s.y = e.nach.y;
+      k.zeigt = null;
+      k.streck = 0;
+      k.blick = 'hoch';
+      klinge('schritt');
+      bewege(jetzt, DAUER.draengt, (p) => {
+        const q = sanft(p);
+        s.px = e.von.x + (e.nach.x - e.von.x) * q;
+        s.py = e.von.y + (e.nach.y - e.von.y) * q;
+        s.sx = quer * hinUndHer(p) * 0.2;
+        k.py = vonK + (e.schaffnerNach.y - vonK) * q;
+        k.sx = -quer * hinUndHer(p) * 0.2;
+      });
+    } else if (e.typ === 'warten') {
+      wirkung.warten = jetzt;
+    } else if (e.typ === 'weckt') {
+      // Er wacht auf, sieht zum Schaffner, dann zum Nebensitz, hebt die Schultern, bleibt sitzen.
+      const f = bild.schlaefer;
+      let bx = -0.8;
+      let by = 0.6;
+      if (e.schaffner) {
+        const dy = e.schaffner.y - SCHLAEFERPLATZ.y;
+        const weit = Math.hypot(1, dy);
+        bx = -1 / weit;
+        by = dy / weit;
+      }
+      const zumFenster = Math.sign(LAMPEN.B.fensterplatz - LAMPEN.B.gangplatz);
+      bewege(jetzt, DAUER.weckt, (p) => {
+        const t = p * 4.4; // vier Abschnitte und ein Ausklang
+        f.wach = Math.min(1, sanft(Math.min(1, t)));
+        const zuIhm = t < 1 ? 0 : t < 2 ? sanft(t - 1) : t < 2.4 ? 1 - sanft((t - 2) / 0.4) : 0;
+        const zumSitz = t < 2.2 ? 0 : t < 3 ? sanft((t - 2.2) / 0.8) : t < 3.4 ? 1 - sanft((t - 3) / 0.4) : 0;
+        f.kopfX = bx * 0.05 * zuIhm + zumFenster * 0.055 * zumSitz;
+        f.kopfY = by * 0.035 * zuIhm + 0.01 * zumSitz;
+        f.schultern = t < 3.3 ? 0 : hinUndHer(Math.min(1, (t - 3.3) / 1.0)) * 0.05;
+      });
+    } else if (e.typ === 'stoss') {
+      // Schienenstoß: Das Bild ruckt, beide Lampen schwingen, ihre Schatten zucken. Ta-tack.
+      wirkung.stoss = jetzt;
+      wirkung.stossZange = e.zange;
+      klinge('tatack');
+    } else if (e.typ === 'ende') {
+      zeigeEnde(e.tatsachen, e.lochung, e.runde, jetzt + 300);
+    }
+  }
+
+  function tippeMitZange(start) {
+    const k = bild.schaffner;
+    bewege(start, 180, (p) => {
+      k.tipp = hinUndHer(p);
+    });
+  }
+
+  // Nimmt die Ereignisse einer Runde entgegen und verteilt sie auf die nächsten Augenblicke.
+  function spiele(ereignisse, zustand, jetzt) {
+    z = zustand;
+    let zeit = jetzt;
+    // Rückt der Spieler dem Schaffner nach, bewegen sich beide zugleich.
+    let zugleich = ereignisse.length > 0 && ereignisse[0].typ === 'schritt' && ereignisse[0].rueckt;
+    for (let i = 0; i < ereignisse.length; i++) {
+      const e = ereignisse[i];
+      wartend.push({ zeit, e });
+      if (zugleich) {
+        if (e.typ === 'schaffnerSchritt' || e.typ === 'schaffnerWeg') {
+          zugleich = false;
+          zeit += dauerVon(e, null);
+        }
+        continue;
+      }
+      zeit += dauerVon(e, ereignisse[i + 1]);
+    }
+    wartend.push({ zeit, e: null });
+    arbeiteAb(jetzt);
+  }
+
+  function arbeiteAb(jetzt) {
+    while (wartend.length && wartend[0].zeit <= jetzt) {
+      const dran = wartend[0];
+      if (dran.e) {
+        wartend.shift();
+        wendeAn(dran.e, jetzt, false);
+        continue;
+      }
+      // der Abgleich am Ende wartet, bis keine Bewegung mehr läuft
+      if (laeufer.some((l) => !l.bleibt)) break;
+      wartend.shift();
+      gleicheAb();
+    }
+  }
+
+  // Alles, was noch läuft, sofort zu Ende bringen. Der Satz verschwindet mit der nächsten Eingabe.
+  function beschleunige(jetzt) {
+    blase = null;
+    for (const dran of wartend) if (dran.e) wendeAn(dran.e, jetzt, true);
+    wartend = [];
+    for (const l of laeufer) if (!l.bleibt) l.schritt(1);
+    laeufer = laeufer.filter((l) => l.bleibt);
+    if (z) gleicheAb();
+  }
+
+  function neueFahrt(zustand) {
+    z = zustand;
+    wartend = [];
+    laeufer = [];
+    schnipsel = [];
+    blase = null;
+    ende = null;
+    wirkung.stoss = -1e9;
+    gleicheAb();
+  }
+
+  // ---------------------------------------------------------------- Zeichnen
+
+  function lampenwinkel(name, w, schwung) {
+    // Der Kopf sitzt auf der Seite, von der das Licht kommt. Beim Schwenken geht der Arm oben herum.
+    const rechtsBeiFenster = lichtrichtung(name, 'fenster') < 0;
+    return (rechtsBeiFenster ? -Math.PI * w : -Math.PI * (1 - w)) + schwung;
+  }
+
+  function lampenkopfJetzt(name) {
+    const gelenk = lampenGelenk(masse, name);
+    const winkel = lampenwinkel(name, bild.lampen[name].w, 0);
+    return { x: gelenk.x + Math.cos(winkel) * LAMPENARM * masse.s, y: gelenk.y + Math.sin(winkel) * LAMPENARM * masse.s };
+  }
+
+  // Schienenstoß: zwei kurze Ausschläge kurz nacheinander, 0..1 und wieder 0
+  function stossAusschlag(jetzt) {
+    const seit = jetzt - wirkung.stoss;
+    if (seit < 0 || seit > 520) return 0;
+    const erster = seit < 150 ? Math.sin((seit / 150) * Math.PI) : 0;
+    const zweiter = seit > 190 && seit < 340 ? Math.sin(((seit - 190) / 150) * Math.PI) * 0.7 : 0;
+    return erster + zweiter;
+  }
+
+  function maleLicht(jetzt) {
+    const { boden, rumpf, s } = masse;
+    const seit = jetzt - wirkung.stoss;
+    const schwung = seit >= 0 && seit < 900 ? Math.sin(seit / 55) * 0.11 * (1 - seit / 900) : 0;
+    for (const name of LAMPENNAMEN) {
+      const gelenk = lampenGelenk(masse, name);
+      const winkel = lampenwinkel(name, bild.lampen[name].w, 0);
+      const kopf = { x: gelenk.x + Math.cos(winkel) * LAMPENARM * s, y: gelenk.y + Math.sin(winkel) * LAMPENARM * s };
+      const richtung = Math.cos(winkel) > 0 ? -1 : 1; // das Licht fällt vom Kopf weg über das Paar
+      const staerke = Math.pow(Math.abs(Math.cos(winkel)), 1.5);
+      const zumFenster = Math.sign(LAMPEN[name].fensterplatz - LAMPEN[name].gangplatz);
+      // bis an die Wand oder bis über das Gangfeld
+      const fern = richtung === zumFenster ? (zumFenster < 0 ? rumpf.x + 2 : rumpf.x + rumpf.b - 2) : boden.x + (GANGSPALTE + (zumFenster < 0 ? 1 : 0)) * s;
+      const oben = boden.y + LAMPEN[name].reihe * s + s * 0.03;
+      maleLichtkeil(stift, kopf, richtung, Math.abs(fern - kopf.x), oben, oben + s * 0.94, s, staerke * (1 + schwung * 0.8));
+    }
+  }
+
+  function maleSchattenAlle(jetzt) {
+    const { boden, rumpf, s, wandSeite } = masse;
+    const zucken = stossAusschlag(jetzt) * Math.max(3, s * 0.07);
+    stift.save();
+    stift.beginPath();
+    stift.rect(rumpf.x + 1, rumpf.y, rumpf.b - 2, rumpf.h);
+    stift.clip();
+    for (const von of ['spieler', 'schlaefer']) {
+      const b = bild.schatten[von];
+      if (b.da < 0.01 || Math.abs(b.d) < 0.02) continue;
+      const besitzerX = von === 'spieler' ? bild.spieler.px + bild.spieler.sx : SCHLAEFERPLATZ.x;
+      const besitzerY = von === 'spieler' ? bild.spieler.py : SCHLAEFERPLATZ.y;
+      const richtung = b.d < 0 ? -1 : 1;
+      const lang = (s * 0.84 * (1 - b.wand) + (wandSeite - 2) * b.wand) * Math.abs(b.d);
+      const fussX = boden.x + (besitzerX + 0.5 + richtung * 0.52) * s + richtung * zucken;
+      const fussY = boden.y + (besitzerY + 0.6) * s;
+      maleWurfschatten(stift, fussX, fussY, richtung, lang, s * 0.5, b.da);
+    }
+    stift.restore();
+  }
+
+  function maleLampen(jetzt) {
+    const s = masse.s;
+    const seit = jetzt - wirkung.stoss;
+    const schwung = seit >= 0 && seit < 900 ? Math.sin(seit / 55) * 0.11 * (1 - seit / 900) : 0;
+    for (const name of LAMPENNAMEN) {
+      maleLampe(stift, lampenGelenk(masse, name), lampenwinkel(name, bild.lampen[name].w, schwung), s, LAMPENARM * s);
+    }
+  }
+
+  function maleBlase(anker) {
+    const raster = 2;
+    const breit = Math.max(textBreite(blase.zeilen[0]), textBreite(blase.zeilen[1] || ''));
+    const b = breit * raster + 18;
+    const h = blase.zeilen.length * (ZEILENHOEHE + 1) * raster + 12;
+    const x = begrenze(Math.round(anker.x - b / 2), 6, masse.breite - b - 6);
+    const oben = masse.tafel.y + masse.tafel.h + 4;
+    let y = Math.max(oben, Math.round(anker.y - h - 12));
+    let fuss = anker.x; // wo die Spitze an der Blase ansetzt
+    let spitze = { x: anker.x, y: y + h + 8 };
+    // Steht die eigene Figur direkt über ihm im Gang, geht die Blase über sie hinweg,
+    // und die Spitze reicht neben ihr herunter bis zu seinem Kopf.
+    const p = bild.spieler;
+    if (spielerKopf && Math.round(p.px) === GANGSPALTE && Math.round(p.py) === Math.round(bild.schaffner.py) - 1) {
+      const seite = bild.schaffner.zeigt && bild.schaffner.zeigt.x > anker.x ? -1 : 1; // weg von der Zange
+      y = Math.max(oben, Math.round(spielerKopf.y - h - 8));
+      fuss = begrenze(anker.x + seite * masse.s * 0.38, x + 12, x + b - 12);
+      spitze = { x: anker.x + seite * masse.s * 0.12, y: anker.y - masse.s * 0.1 };
+    }
+    stift.fillStyle = 'rgba(13, 17, 25, 0.96)';
+    rundesRechteck(stift, x, y, b, h, 8);
+    stift.fill();
+    // die Spitze zeigt auf den, der spricht
+    stift.beginPath();
+    stift.moveTo(fuss - 7, y + h - 1);
+    stift.lineTo(spitze.x, spitze.y);
+    stift.lineTo(fuss + 7, y + h - 1);
+    stift.closePath();
+    stift.fill();
+    stift.strokeStyle = FARBE.tafelRand;
+    stift.lineWidth = 1;
+    rundesRechteck(stift, x + 0.5, y + 0.5, b - 1, h - 1, 8);
+    stift.stroke();
+    const feld = neuesPunktfeld(breit, blase.zeilen.length * (ZEILENHOEHE + 1));
+    blase.zeilen.forEach((zeile, i) => schreibeMittig(feld, zeile, i * (ZEILENHOEHE + 1)));
+    zeichnePunktfeld(stift, feld, x + 9, y + 7, raster, FARBE.bernstein, null);
+  }
+
+  function maleWelt(t, jetzt) {
+    const { boden, rumpf, s } = masse;
+    stift.drawImage(abteil, rumpf.x, rumpf.y, rumpf.b, rumpf.h);
+    maleLicht(jetzt);
+    maleSchattenAlle(jetzt);
+    if (bild.tasche.liegt) {
+      maleTasche(stift, boden.x + (bild.tasche.px + 0.5) * s, boden.y + (bild.tasche.py + 0.62) * s, s, bild.tasche.gross);
+    }
+    maleLampen(jetzt);
+
+    // Figuren von hinten nach vorn, der Schaffner mit seinem Arm zuletzt in seiner Reihe
+    const p = bild.spieler;
+    const k = bild.schaffner;
+    const reihe = [
+      { y: SCHLAEFERPLATZ.y, wer: 'schlaefer' },
+      { y: WACHERPLATZ.y, wer: 'wacher' },
+      { y: p.py + p.sy + 0.001, wer: 'spieler' },
+    ];
+    if (k.da > 0.01) reihe.push({ y: k.py + k.sy + 0.002, wer: 'schaffner' });
+    reihe.sort((a, b) => a.y - b.y);
+    let anker = null;
+    schaffnerKopf = null;
+    for (const eintrag of reihe) {
+      if (eintrag.wer === 'schlaefer') {
+        const atem = ruhig ? 0 : Math.sin(t * 1.1);
+        maleSchlaefer(stift, boden.x + (SCHLAEFERPLATZ.x + 0.5) * s, boden.y + (SCHLAEFERPLATZ.y + 0.86) * s, s, {
+          wach: bild.schlaefer.wach,
+          atem,
+          kopfX: bild.schlaefer.kopfX,
+          kopfY: bild.schlaefer.kopfY,
+          schultern: bild.schlaefer.schultern,
+        });
+      } else if (eintrag.wer === 'wacher') {
+        maleWachen(stift, boden.x + (WACHERPLATZ.x + 0.5) * s, boden.y + (WACHERPLATZ.y + 0.86) * s, s);
+      } else if (eintrag.wer === 'spieler') {
+        // im Sitzen ist die Figur kleiner; beim Hinsetzen und Aufstehen geht das eine ins andere über
+        const sitzt = istSitz(Math.round(p.px), Math.round(p.py));
+        const gemalt = maleReisenden(stift, boden.x + (p.px + p.sx + 0.5) * s, boden.y + (p.py + p.sy + (sitzt ? 0.86 : 0.9)) * s, s, { sitzt, traegt: p.traegt, arm: p.arm });
+        spielerKopf = { x: gemalt.kopfX, y: gemalt.kopfY - gemalt.kopf };
+      } else {
+        stift.save();
+        stift.globalAlpha = k.da;
+        const cx = boden.x + (GANGSPALTE + 0.5 + k.sx) * s;
+        const fy = boden.y + (k.py + k.sy + 0.9 - k.hupf) * s;
+        let zeigt = null;
+        if (k.zeigt) {
+          const zucken = wirkung.stossZange ? stossAusschlag(jetzt) * Math.max(3, s * 0.07) : 0;
+          zeigt = { x: k.zeigt.x + (k.zeigt.x < cx ? -zucken : zucken), y: k.zeigt.y + k.tipp * s * 0.09 };
+        }
+        const neigung = zeigt ? (zeigt.x < cx ? -1 : 1) * 0.5 * k.streck : 0;
+        const gemalt = maleSchaffner(stift, cx, fy, s, { blick: k.blick, nick: k.nick, gruss: k.gruss, neigung, zeigt, streck: k.streck, offen: k.offen });
+        if (k.zettel > 0.01) {
+          // der Fahrschein, den er gerade locht
+          stift.globalAlpha = k.da * k.zettel;
+          stift.fillStyle = '#e9dcc0';
+          stift.fillRect(gemalt.spitzeX - s * 0.02, gemalt.spitzeY - s * 0.07, s * 0.17, s * 0.11);
+        }
+        stift.restore();
+        anker = { x: cx, y: gemalt.kopfY };
+        if (k.da > 0.5) schaffnerKopf = anker;
+      }
+    }
+    for (const teil of schnipsel) maleSchnipsel(stift, teil.x, teil.y + teil.fall * s * 0.4, s, teil.staerke);
+    if (blase && anker) maleBlase(anker);
+  }
+
+  function maleKnopf(kasten, text, gedrueckt, bildspeicher) {
+    const d = gedrueckt * 2;
+    stift.fillStyle = '#0b0e15';
+    rundesRechteck(stift, kasten.x, kasten.y + 3, kasten.b, kasten.h - 3, 12);
+    stift.fill();
+    stift.fillStyle = gedrueckt > 0.01 ? '#2a3550' : '#1c2437';
+    rundesRechteck(stift, kasten.x, kasten.y + d, kasten.b, kasten.h - 4, 12);
+    stift.fill();
+    stift.strokeStyle = '#3a4666';
+    stift.lineWidth = 1;
+    rundesRechteck(stift, kasten.x + 0.5, kasten.y + d + 0.5, kasten.b - 1, kasten.h - 5, 12);
+    stift.stroke();
+    const breit = textBreite(text);
+    const feld = neuesPunktfeld(breit, ZEILENHOEHE);
+    schreibe(feld, text, 0, 0);
+    const tx = kasten.x + (kasten.b - breit * kasten.raster) / 2;
+    const ty = kasten.y + d + (kasten.h - 4 - 7 * kasten.raster) / 2;
+    zeichnePunktfeld(stift, feld, tx, ty, kasten.raster, FARBE.bernstein, null);
+    return bildspeicher;
+  }
+
+  function maleEnde(jetzt) {
+    const ein = begrenze((jetzt - ende.start) / 250, 0, 1);
+    if (ein <= 0) return;
+    const m = endeMasse(masse);
+    stift.save();
+    stift.fillStyle = `rgba(5, 7, 12, ${0.8 * ein})`;
+    stift.fillRect(0, 0, masse.breite, masse.hoehe);
+    stift.globalAlpha = sanft(ein);
+    stift.fillStyle = '#10141d';
+    rundesRechteck(stift, m.x, m.y, m.b, m.h, 16);
+    stift.fill();
+    stift.strokeStyle = '#2a3346';
+    stift.lineWidth = 1;
+    rundesRechteck(stift, m.x + 0.5, m.y + 0.5, m.b - 1, m.h - 1, 16);
+    stift.stroke();
+    if (!ende.tafelbild) {
+      // die Zeilen stehen mittig auf der Tafel, eine Leerzeile trennt zwei Tatsachen
+      const hoch = ende.zeilen.length * (ZEILENHOEHE + 2) - 2;
+      const erste = Math.max(0, Math.floor((m.tafel.zeilen - hoch) / 2));
+      const zeilen = ende.zeilen.slice(0, ENDZEILEN).map((text, i) => ({
+        text,
+        spalte: Math.round((m.tafel.spalten - textBreite(text)) / 2),
+        zeile: erste + i * (ZEILENHOEHE + 2),
+      }));
+      ende.tafelbild = malePunkttafel(m.tafel, zeilen, dichte, false);
+    }
+    stift.drawImage(ende.tafelbild, m.tafel.x, m.tafel.y, m.tafel.b, m.tafel.h);
+    maleFahrkarte(stift, m.karte.x, m.karte.y, m.karte.b, m.karte.h, ende.lochung ? 1 : 0, 0);
+    const druck = begrenze(1 - (jetzt - wirkung.neueFahrt) / 140, 0, 1);
+    maleKnopf(m.knopf, PLATZTEXTE.spiel.neueFahrt, druck, null);
+    stift.restore();
+  }
+
+  function maleProtokoll() {
+    const m = protokollMasse(masse);
+    const h = protokoll.length * m.zeilenhoehe + 2 * m.polster;
+    stift.fillStyle = 'rgba(5, 7, 12, 0.86)';
+    stift.fillRect(0, 0, masse.breite, masse.hoehe);
+    stift.fillStyle = '#10141d';
+    rundesRechteck(stift, m.x, m.y, m.b, h, 10);
+    stift.fill();
+    stift.strokeStyle = '#2a3346';
+    stift.lineWidth = 1;
+    rundesRechteck(stift, m.x + 0.5, m.y + 0.5, m.b - 1, h - 1, 10);
+    stift.stroke();
+    const feld = neuesPunktfeld(m.zeichen * 6, protokoll.length * (ZEILENHOEHE + 2));
+    protokoll.forEach((zeile, i) => schreibe(feld, zeile, 0, i * (ZEILENHOEHE + 2)));
+    zeichnePunktfeld(stift, feld, m.x + m.polster, m.y + m.polster, m.raster, '#c9d2de', null);
+  }
+
+  function zeichne(jetzt) {
+    if (!masse || !z) return;
+    // Safari ändert die Höhe, wenn seine Leisten kommen und gehen, oft ohne verlässliches Signal.
+    if (leinwand.clientWidth && (leinwand.clientWidth !== masse.breite || leinwand.clientHeight !== masse.hoehe)) {
+      passeAn();
+    }
+    const t = jetzt / 1000;
+
+    // erst laufende Bewegungen weiterführen, dann neue Ereignisse beginnen: So überschreibt das Ende
+    // einer Bewegung nie, was das nächste Ereignis gerade gesetzt hat
+    for (const l of laeufer.slice()) {
+      if (jetzt < l.start) continue;
+      const p = l.dauer <= 0 ? 1 : (jetzt - l.start) / l.dauer;
+      l.schritt(begrenze(p, 0, 1));
+      if (p >= 1) laeufer = laeufer.filter((x) => x !== l);
+    }
+    arbeiteAb(jetzt);
+
+    stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+    stift.globalAlpha = 1;
+    stift.globalCompositeOperation = 'source-over';
+    stift.fillStyle = FARBE.nacht;
+    stift.fillRect(0, 0, masse.breite, masse.hoehe);
+
+    stift.save();
+    // der Schienenstoß: Das Bild ruckt zwei Pixel
+    if (!ruhig) stift.translate(0, Math.round(stossAusschlag(jetzt) * 2));
+    maleWelt(t, jetzt);
+    stift.restore();
+
+    // Anzeigen am Rand
+    const { tafel } = masse;
+    if (tafelbild) stift.drawImage(tafelbild, tafel.x, tafel.y, tafel.b, tafel.h);
+    maleTonschalter(stift, masse.ton, tonAn);
+    const kartendruck = begrenze(1 - (jetzt - wirkung.karte) / 160, 0, 1);
+    maleFahrkarte(stift, masse.karte.x, masse.karte.y, masse.karte.b, masse.karte.h, bild.karte.loch, kartendruck);
+    const druck = begrenze(1 - (jetzt - wirkung.warten) / 140, 0, 1);
+    maleKnopf(masse.warten, PLATZTEXTE.spiel.warten, druck, knopfbild);
+
+    if (ende) maleEnde(jetzt);
+    if (protokoll) maleProtokoll();
+  }
+
+  // ---------------------------------------------------------------- Auskunft
+
+  // Was liegt an diesem Bildschirmpunkt?
+  function wasLiegtBei(px, py) {
+    if (protokoll) return { art: 'protokoll' };
+    if (ende) {
+      if (imKasten(endeMasse(masse).knopf, px, py)) return { art: 'neueFahrt' };
+      return { art: 'ende' };
+    }
+    if (Math.hypot(px - masse.ton.x, py - masse.ton.y) <= masse.ton.r) return { art: 'ton' };
+    if (imKasten(masse.tafel, px, py)) return { art: 'anzeige' };
+    if (imKasten(masse.warten, px, py)) return { art: 'warten' };
+    if (imKasten(masse.karte, px, py)) return { art: 'karte' };
+    const lampe = lampeAn(masse, z.lampen, px, py);
+    const feld = feldAn(masse, px, py);
+    // Steht der Schaffner auf dem Feld unter dem Finger, bekommt die Lampe den Tipp nur,
+    // wenn er näher an ihrem Kopf liegt als an seinem.
+    if (lampe && feld && schaffnerKopf && !z.schaffner.weg && feld.x === GANGSPALTE && feld.y === z.schaffner.y) {
+      const kopf = lampenKopf(masse, lampe, z.lampen[lampe]);
+      if (Math.hypot(px - schaffnerKopf.x, py - schaffnerKopf.y) < Math.hypot(px - kopf.x, py - kopf.y)) return { art: 'feld', x: feld.x, y: feld.y };
+    }
+    if (lampe) return { art: 'lampe', name: lampe };
+    if (feld) return { art: 'feld', x: feld.x, y: feld.y };
+    return null;
+  }
+
+  return {
+    passeAn,
+    neueFahrt,
+    spiele,
+    beschleunige,
+    zeichne,
+    wasLiegtBei,
+    melder,
+    setzeTon: (an) => {
+      tonAn = an;
+    },
+    stupseKarte: (jetzt) => {
+      wirkung.karte = jetzt;
+    },
+    drueckeNeueFahrt: (jetzt) => {
+      wirkung.neueFahrt = jetzt;
+    },
+    zeigeProtokoll: (zeilen) => {
+      protokoll = zeilen;
+    },
+    zeigtProtokoll: () => protokoll !== null,
+    zeigtEnde: () => ende !== null,
+    endeBereit: (jetzt) => ende !== null && jetzt >= ende.start + ENDE_PAUSE,
+    protokollBreite: () => protokollMasse(masse).zeichen,
+    aufAnzeige: (px, py) => imKasten(masse.tafel, px, py),
+  };
+}
+
+// --- eingabe.js
+// Eingabe: Wischen, Tippen, Tastatur. Meldet nur, was der Mensch getan hat.
+// Ein Wisch löst aus, sobald der Finger weit genug gewandert ist, nicht erst beim Loslassen.
+
+const WISCHWEG = 18; // Pixel bis zum Auslösen
+const TIPPWEG = 9; // weniger Bewegung gilt als Tippen
+
+const TASTEN = {
+  ArrowUp: 'hoch',
+  ArrowRight: 'rechts',
+  ArrowDown: 'runter',
+  ArrowLeft: 'links',
+  KeyW: 'hoch',
+  KeyD: 'rechts',
+  KeyS: 'runter',
+  KeyA: 'links',
+  Space: 'warten',
+};
+
+function wischrichtung(dx, dy) {
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'rechts' : 'links';
+  return dy > 0 ? 'runter' : 'hoch';
+}
+
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen() }
+function verbindeEingabe(flaeche, melde) {
+  let finger = null;
+
+  flaeche.addEventListener('pointerdown', (e) => {
+    if (finger) return;
+    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
+    if (flaeche.setPointerCapture) {
+      try {
+        flaeche.setPointerCapture(e.pointerId);
+      } catch (fehler) {
+        // ohne Fang geht es auch
+      }
+    }
+    e.preventDefault();
+  });
+
+  flaeche.addEventListener('pointermove', (e) => {
+    if (!finger || e.pointerId !== finger.id || finger.erledigt) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
+    finger.erledigt = true;
+    melde.aktion(wischrichtung(dx, dy), 'wisch');
+  });
+
+  const loslassen = (e) => {
+    if (!finger || e.pointerId !== finger.id) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    const fertig = finger.erledigt;
+    finger = null;
+    if (e.type === 'pointerup') melde.losgelassen();
+    if (fertig || e.type !== 'pointerup') return;
+    if (Math.hypot(dx, dy) < TIPPWEG) {
+      // Der Canvas beginnt nicht immer in der Ecke: Neben Notch und Home-Balken bleibt ein Rand frei.
+      const kasten = flaeche.getBoundingClientRect();
+      melde.tipp(e.clientX - kasten.left, e.clientY - kasten.top);
+    }
+    else melde.aktion(wischrichtung(dx, dy), 'wisch'); // ein kurzer Wisch zählt auch
+  };
+  flaeche.addEventListener('pointerup', loslassen);
+  flaeche.addEventListener('pointercancel', loslassen);
+  flaeche.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Safari auf dem iPhone: kein Gummiband beim Ziehen, kein Zoom mit zwei Fingern oder Doppeltipp.
+  const halt = (e) => e.preventDefault();
+  document.addEventListener('touchmove', halt, { passive: false });
+  document.addEventListener('gesturestart', halt);
+  document.addEventListener('gesturechange', halt);
+  document.addEventListener('dblclick', halt);
+  // Den Ton gibt Safari erst frei, wenn ein Finger den Bildschirm wieder verlässt.
+  document.addEventListener('touchend', () => melde.losgelassen(), { passive: true });
+  document.addEventListener('click', () => melde.losgelassen());
+
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
+    if (!name) return;
+    e.preventDefault();
+    if (e.code === 'Enter' && !melde.karteOffen()) return;
+    melde.aktion(name, 'taste');
+  });
+}
+
+// --- ../prototyp/freier-platz/src/protokoll.js
+// Testprotokoll für den Auftraggeber: Was in der letzten Fahrt wann geschah.
+// Für Spieler unsichtbar. Es liegt nur auf dem Gerät und wird nirgends hingeschickt.
+// Reine Funktionen, damit sie sich in Node prüfen lassen.
+
+
+
+
+
+const FOLGE_HOECHSTENS = 600;
+const SCHRITTZEICHEN = { hoch: 'h', rechts: 'r', runter: 'u', links: 'l' };
+
+function leeresProtokoll() {
+  return {
+    runden: 0,
+    tascheWeg: null, // Runde, in der es geschah, oder null
+    lochung: null,
+    reiheZweiFrei: null,
+    tuer: null,
+    lampe: 0, // wie oft
+    warten: 0,
+    anstossen: 0,
+    draengen: 0,
+    wecken: 0,
+    folge: '', // ein Zeichen je Handlung, siehe docs/SPIELTEST-freier-platz.md
+  };
+}
+
+function zahlOderNull(wert) {
+  return typeof wert === 'number' && isFinite(wert) && wert >= 0 ? Math.floor(wert) : null;
+}
+
+function bereinigeProtokoll(roh) {
+  if (!roh || typeof roh !== 'object') return null;
+  const p = leeresProtokoll();
+  for (const name of ['runden', 'lampe', 'warten', 'anstossen', 'draengen', 'wecken']) p[name] = zahlOderNull(roh[name]) || 0;
+  for (const name of ['tascheWeg', 'lochung', 'reiheZweiFrei', 'tuer']) p[name] = zahlOderNull(roh[name]);
+  if (typeof roh.folge === 'string') p.folge = roh.folge.replace(/[^A-Za-z.]/g, '').slice(0, FOLGE_HOECHSTENS);
+  return p;
+}
+
+// Schreibt mit, was eine Eingabe ausgelöst hat. zustand ist der Stand danach.
+function schreibeMit(protokoll, ereignisse, zustand) {
+  const p = protokoll;
+  if (!ereignisse.length) return p;
+  const erstes = ereignisse[0];
+  let zeichen = '.'; // eine Eingabe ohne Wirkung
+  if (erstes.typ === 'schritt') zeichen = SCHRITTZEICHEN[erstes.richtung];
+  else if (erstes.typ === 'nimmt') zeichen = 'T';
+  else if (erstes.typ === 'lampe') zeichen = erstes.name;
+  else if (erstes.typ === 'weckt') zeichen = 'S';
+  else if (erstes.typ === 'satz') zeichen = 'K';
+  else if (erstes.typ === 'warten') zeichen = 'W';
+  else if (erstes.typ === 'anstoss') zeichen = 'X';
+  else if (erstes.typ === 'draengt') zeichen = 'V';
+  if (p.folge.length < FOLGE_HOECHSTENS) p.folge += zeichen;
+
+  p.runden = zustand.runde;
+  for (const e of ereignisse) {
+    if (e.typ === 'lampe') p.lampe += 1;
+    if (e.typ === 'warten') p.warten += 1;
+    if (e.typ === 'anstoss') p.anstossen += 1;
+    if (e.typ === 'draengt') p.draengen += 1;
+    if (e.typ === 'weckt') p.wecken += 1;
+    if (e.typ === 'nimmt' && p.tascheWeg === null) p.tascheWeg = zustand.runde;
+    if (e.typ === 'locht' && e.wen === 'spieler' && p.lochung === null) p.lochung = zustand.runde;
+    if (e.typ === 'ende' && p.tuer === null) p.tuer = zustand.runde;
+  }
+  if (p.reiheZweiFrei === null && zeichen !== '.' && reiheFrei(zustand, SCHLAEFERPLATZ.y)) p.reiheZweiFrei = zustand.runde;
+  return p;
+}
+
+function zeile(name, wert, breite) {
+  const text = wert === null ? PLATZTEXTE.protokoll.nie : String(wert);
+  const luecke = Math.max(1, breite - [...name].length - [...text].length);
+  return name + ' '.repeat(luecke) + text;
+}
+
+// Die Zeilen, die der Auftraggeber sieht. breite ist die Zahl der Zeichen je Zeile.
+function protokollZeilen(protokoll, karten, breite) {
+  const t = PLATZTEXTE.protokoll;
+  if (!protokoll) return [t.keine];
+  const p = protokoll;
+  const zeilen = [
+    t.titel,
+    zeile(t.runden, p.runden, breite),
+    zeile(t.tascheWeg, p.tascheWeg, breite),
+    zeile(t.lochung, p.lochung, breite),
+    zeile(t.reiheZweiFrei, p.reiheZweiFrei, breite),
+    zeile(t.tuer, p.tuer, breite),
+    zeile(t.lampe, p.lampe, breite),
+    zeile(t.warten, p.warten, breite),
+    zeile(t.anstossen, p.anstossen, breite),
+    zeile(t.draengen, p.draengen, breite),
+    zeile(t.wecken, p.wecken, breite),
+    t.folge + ':',
+  ];
+  // die Folge in Zeilen, höchstens fünf, das Ende zählt
+  const stuecke = [];
+  for (let i = 0; i < p.folge.length; i += breite) stuecke.push(p.folge.slice(i, i + breite));
+  for (const stueck of stuecke.slice(-5)) zeilen.push(stueck);
+  if (!stuecke.length) zeilen.push(t.nie);
+  // die aufgehobenen Karten, die neueste zuerst: + mit Lochung, - ohne
+  zeilen.push(t.karten + ':');
+  zeilen.push(karten.length ? karten.map((k) => (k.lochung ? '+' : '-')).join('').slice(0, breite) : t.nie);
+  return zeilen;
+}
+
+// --- ../prototyp/freier-platz/src/speicher.js
+// Was der Prototyp sich merkt, unter einem eigenen Schlüssel: die letzten 20 Fahrkarten,
+// Ton an oder aus und das Testprotokoll der letzten Fahrt. Wie im Hauptspiel darf der
+// Speicher jederzeit fehlen, leer sein oder Unsinn enthalten: ladePlatzStand() liefert
+// immer einen vollständigen Stand, und Schreiben darf scheitern.
+
+
+
+const PLATZSCHLUESSEL = 'endstation.freier-platz.1';
+const KARTEN_HOECHSTENS = 20;
+
+function leererPlatzStand() {
+  return { ton: false, karten: [], protokoll: null };
+}
+
+function bereinigeKarte(roh) {
+  if (!roh || typeof roh !== 'object') return null;
+  const zeilen = [];
+  if (Array.isArray(roh.zeilen)) {
+    for (const zeile of roh.zeilen.slice(0, 4)) if (typeof zeile === 'string') zeilen.push(zeile.slice(0, 40));
+  }
+  return { lochung: roh.lochung === true, zeilen };
+}
+
+// Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
+function bereinigePlatzStand(roh) {
+  const stand = leererPlatzStand();
+  if (!roh || typeof roh !== 'object') return stand;
+  if (typeof roh.ton === 'boolean') stand.ton = roh.ton;
+  if (Array.isArray(roh.karten)) {
+    for (const eintrag of roh.karten) {
+      const karte = bereinigeKarte(eintrag);
+      if (karte && stand.karten.length < KARTEN_HOECHSTENS) stand.karten.push(karte);
+    }
+  }
+  stand.protokoll = bereinigeProtokoll(roh.protokoll);
+  return stand;
+}
+
+// Die neue Karte kommt nach vorn, mehr als 20 werden nicht aufgehoben.
+function legeKarteAb(stand, karte) {
+  stand.karten.unshift({ lochung: karte.lochung === true, zeilen: karte.zeilen.slice(0, 4) });
+  stand.karten.length = Math.min(stand.karten.length, KARTEN_HOECHSTENS);
+}
+
+function ladePlatzStand() {
+  try {
+    return bereinigePlatzStand(JSON.parse(window.localStorage.getItem(PLATZSCHLUESSEL)));
+  } catch (fehler) {
+    return leererPlatzStand();
+  }
+}
+
+function sicherePlatzStand(stand) {
+  try {
+    window.localStorage.setItem(PLATZSCHLUESSEL, JSON.stringify(stand));
+    return true;
+  } catch (fehler) {
+    return false; // kein Speicher, kein Problem
+  }
+}
+
+// nur für Tests: ein frisches leeres Protokoll passt in den Stand
+function standMitProtokoll() {
+  const stand = leererPlatzStand();
+  stand.protokoll = leeresProtokoll();
+  return stand;
+}
+
+// --- ../prototyp/freier-platz/src/ton.js
+// Ton ist Zugabe: wenige erzeugte Klänge, keine Dateien. Beim Start ist er aus.
+// Jedes Geräusch hat ein sichtbares Gegenstück, ohne Ton fehlt keine Information.
+// Fehlertöne gibt es nicht. Wie im Hauptspiel entsteht der Klang erst nach der ersten Berührung.
+
+function erzeugePlatzTon() {
+  let ac = null;
+  let haupt = null;
+  let rauschen = null;
+  let an = false;
+
+  // Darf erst nach einer Eingabe aufgerufen werden, sonst sperrt der Browser den Ton.
+  function wecke() {
+    if (!an) return;
+    try {
+      if (!ac) {
+        const Klasse = window.AudioContext || window.webkitAudioContext;
+        if (!Klasse) return;
+        ac = new Klasse();
+        haupt = ac.createGain();
+        haupt.gain.value = 0.2;
+        haupt.connect(ac.destination);
+        rauschen = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const daten = rauschen.getChannelData(0);
+        let wert = 12345;
+        for (let i = 0; i < daten.length; i++) {
+          wert = (Math.imul(wert, 1664525) + 1013904223) >>> 0;
+          daten[i] = wert / 2147483648 - 1;
+        }
+      }
+      // "suspended" vor der ersten Berührung, "interrupted" nach einem Anruf oder App-Wechsel am iPhone
+      if (ac.state !== 'running') {
+        const versuch = ac.resume();
+        if (versuch && versuch.catch) versuch.catch(() => {});
+      }
+    } catch (fehler) {
+      ac = null;
+    }
+  }
+
+  function klang(von, bis, dauer, laut, form, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = form || 'sine';
+      o.frequency.setValueAtTime(von, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, bis), t + dauer);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      o.connect(g);
+      g.connect(haupt);
+      o.start(t);
+      o.stop(t + dauer + 0.02);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  function hauch(hoehe, dauer, laut, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const q = ac.createBufferSource();
+      const f = ac.createBiquadFilter();
+      const g = ac.createGain();
+      q.buffer = rauschen;
+      f.type = 'bandpass';
+      f.frequency.value = hoehe;
+      f.Q.value = 0.9;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      q.connect(f);
+      f.connect(g);
+      g.connect(haupt);
+      q.start(t, (t * 7) % 0.5, dauer + 0.05);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  const PLATZKLAENGE = {
+    schritt: () => hauch(1100, 0.05, 0.2),
+    nimmt: () => hauch(700, 0.09, 0.22),
+    klick: () => klang(1500, 1100, 0.03, 0.12, 'square'),
+    // Knips: die Zange schließt
+    knips: () => {
+      klang(2300, 900, 0.035, 0.45, 'square');
+      hauch(3200, 0.04, 0.4);
+    },
+    // Ta-tack: der Schienenstoß
+    tatack: () => {
+      hauch(170, 0.07, 0.5);
+      klang(72, 50, 0.08, 0.5, 'sine');
+      hauch(190, 0.06, 0.38, 0.19);
+      klang(80, 55, 0.07, 0.38, 'sine', 0.19);
+    },
+  };
+
+  return {
+    wecke,
+    spiele(name) {
+      if (PLATZKLAENGE[name]) PLATZKLAENGE[name]();
+    },
+    setze(wert) {
+      an = wert;
+    },
+  };
+}
+
+// --- ../prototyp/freier-platz/src/main.js
+// Einstieg des Prototyps "Der freie Platz": verbindet Kern, Bühne, Eingabe, Ton und Speicher.
+// Beim Öffnen sitzt man sofort im Wagen. Wird die Seite neu geladen, beginnt der Wagen von vorn.
+
+
+
+
+
+
+
+
+
+const ANSTOSS_SPERRE = 320; // nach dem Anstoßen wird so lange keine Eingabe angenommen und keine vorgemerkt
+const LANGER_DRUCK = 650; // so lange auf die Zuganzeige drücken öffnet das Testprotokoll
+
+const leinwand = document.getElementById('bild');
+const buehne = erzeugeBuehne(leinwand);
+const klang = erzeugePlatzTon();
+const stand = ladePlatzStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
+
+let fahrt = null;
+let gesperrtBis = 0;
+let loslassenSchlucken = false; // das Loslassen nach dem langen Druck schließt das Protokoll nicht gleich wieder
+let druck = null; // der Finger, der gerade auf der Zuganzeige liegt
+let letzteTaste = null; // nur die Eingabetaste beginnt nach der Tür eine neue Fahrt, gehalten nicht
+let protokollBeginnt = true; // die erste Eingabe einer Fahrt beginnt ein neues Protokoll
+
+function beginneFahrt() {
+  fahrt = erzeugeFahrt();
+  protokollBeginnt = true;
+  buehne.neueFahrt(fahrt.zustand);
+}
+
+function gibEin(handlung, quelle) {
+  const jetzt = performance.now();
+  klang.wecke();
+  if (buehne.zeigtProtokoll()) {
+    buehne.zeigeProtokoll(null);
+    return;
+  }
+  if (fahrt.zustand.status !== 'faehrt') {
+    // Das Spiel startet nie von selbst die nächste Fahrt. Am Rechner geht es auch mit der Eingabetaste,
+    // aber nicht mit Pfeil hoch oder W und nicht mit einer gehaltenen Taste.
+    if (quelle === 'taste' && letzteTaste === 'Enter' && buehne.endeBereit(jetzt)) beginneFahrt();
+    return;
+  }
+  if (jetzt < gesperrtBis) return;
+  buehne.beschleunige(jetzt);
+  const ereignisse = fahrt.act(handlung);
+  if (!ereignisse.length) return;
+  buehne.spiele(ereignisse, fahrt.zustand, jetzt);
+  if (ereignisse[0].typ === 'anstoss') gesperrtBis = jetzt + ANSTOSS_SPERRE;
+
+  // Testprotokoll der Fahrt, nach jeder Eingabe gesichert: So bleibt auch eine abgebrochene Fahrt lesbar.
+  if (protokollBeginnt || !stand.protokoll) stand.protokoll = leeresProtokoll();
+  protokollBeginnt = false;
+  schreibeMit(stand.protokoll, ereignisse, fahrt.zustand);
+  if (fahrt.zustand.status === 'ende') {
+    legeKarteAb(stand, { lochung: fahrt.zustand.spieler.gelocht, zeilen: tatsachenZeilen(fahrt.zustand.tatsachen) });
+  }
+  sicherePlatzStand(stand); // scheitert das, läuft das Spiel ohne Speichern weiter
+}
+
+function tippe(x, y) {
+  const jetzt = performance.now();
+  if (loslassenSchlucken) {
+    loslassenSchlucken = false;
+    return;
+  }
+  const ziel = buehne.wasLiegtBei(x, y);
+  if (!ziel) return;
+  if (ziel.art === 'protokoll') {
+    buehne.zeigeProtokoll(null);
+  } else if (ziel.art === 'neueFahrt') {
+    if (!buehne.endeBereit(jetzt)) return;
+    buehne.drueckeNeueFahrt(jetzt);
+    klang.wecke();
+    beginneFahrt();
+  } else if (ziel.art === 'ton') {
+    stand.ton = !stand.ton;
+    klang.setze(stand.ton);
+    klang.wecke();
+    buehne.setzeTon(stand.ton);
+    sicherePlatzStand(stand);
+  } else if (ziel.art === 'warten') {
+    gibEin('warten', 'tipp');
+  } else if (ziel.art === 'karte') {
+    buehne.stupseKarte(jetzt);
+  } else if (ziel.art === 'lampe') {
+    gibEin({ tipp: 'lampe', name: ziel.name }, 'tipp');
+  } else if (ziel.art === 'feld') {
+    gibEin({ tipp: 'feld', x: ziel.x, y: ziel.y }, 'tipp');
+  }
+}
+
+// Langes Drücken auf die Zuganzeige zeigt dem Auftraggeber das Protokoll der letzten Fahrt.
+function oeffneProtokoll() {
+  druck = null;
+  loslassenSchlucken = true; // egal wie lange der Finger noch liegt: Erst der nächste Tipp schließt es
+  buehne.zeigeProtokoll(protokollZeilen(stand.protokoll, stand.karten, buehne.protokollBreite()));
+}
+
+function beendeDruck() {
+  if (druck) window.clearTimeout(druck.wecker);
+  druck = null;
+}
+
+leinwand.addEventListener('pointerdown', (e) => {
+  beendeDruck();
+  loslassenSchlucken = false; // ein neuer Finger: Das alte Loslassen ist vorbei
+  const kasten = leinwand.getBoundingClientRect();
+  if (buehne.zeigtProtokoll() || !buehne.aufAnzeige(e.clientX - kasten.left, e.clientY - kasten.top)) return;
+  druck = { id: e.pointerId, x: e.clientX, y: e.clientY, wecker: window.setTimeout(oeffneProtokoll, LANGER_DRUCK) };
+});
+leinwand.addEventListener('pointermove', (e) => {
+  if (druck && e.pointerId === druck.id && Math.hypot(e.clientX - druck.x, e.clientY - druck.y) > 9) beendeDruck();
+});
+leinwand.addEventListener('pointerup', beendeDruck);
+leinwand.addEventListener('pointercancel', beendeDruck);
+
+function schleife(jetzt) {
+  // erst das nächste Bild bestellen: Ein Fehler beim Zeichnen hält dann nicht das ganze Spiel an
+  window.requestAnimationFrame(schleife);
+  buehne.zeichne(jetzt);
+}
+
+// Nur für die Prüfwerkzeuge: Mit #probe an der Adresse lässt sich der Zustand von außen ablesen, nicht ändern.
+if (/[#&]probe\b/.test(window.location.hash)) {
+  window.platzZustand = () => JSON.stringify(fahrt.zustand);
+  window.platzStand = () => JSON.stringify(stand);
+}
+
+klang.setze(stand.ton);
+buehne.setzeTon(stand.ton);
+buehne.melder.klang = (name) => klang.spiele(name);
+buehne.passeAn();
+beginneFahrt();
+// Vor der Eingabe angemeldet, damit gibEin() weiß, welche Taste es war.
+window.addEventListener('keydown', (e) => {
+  letzteTaste = e.repeat ? null : e.code;
+});
+// Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
+verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => klang.wecke(), karteOffen: () => buehne.zeigtEnde() });
+for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => buehne.passeAn());
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => buehne.passeAn());
+window.requestAnimationFrame(schleife);
+})();
+</script>
+</body>
+</html>
