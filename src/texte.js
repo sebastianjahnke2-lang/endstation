@@ -33,6 +33,12 @@ export const TEXTE = {
     ruhe: 'Ruhe bewahren',
   },
 
+  // Der Begleiter im Speisewagen nach einem Tod. Die Antworten sind Figuren auf dem Boden, nur „Pech" ist ein Wort.
+  begleiter: {
+    frage: 'Woran lag es?',
+    pech: 'Pech',
+  },
+
   // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft
   kontrolleur: {
     satz: 'Fahrkarte, bitte.',

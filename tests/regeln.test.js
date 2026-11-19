@@ -835,3 +835,67 @@ test('Fahrkarte: Sie kommt aus früheren Fahrten mit, Unsinn fällt weg', () => 
   assert.deepEqual(z.fahrkarte.lochungen, [{ art: 'pruefung', id: 'rempeln', hell: true }, { art: 'tod', durch: 'pendler', hell: false }]);
   assert.deepEqual(erzeugeSpiel(1, { fahrkarte: 'alt' }).zustand.fahrkarte, { lochungen: [] });
 });
+
+// ---------------------------------------------------------------- Begleiter und Reise (Etappe 2)
+
+import { optionenFuerFahrt, SPEISEWAGEN_NR } from '../src/kern/reise.js';
+
+function mitBegleiter(durch, seed = 9) {
+  const spiel = erzeugeSpiel(seed, { startWagen: SPEISEWAGEN_NR, begleiter: durch });
+  const z = spiel.zustand;
+  const b = z.begleiter;
+  // neben ihn: das Gangfeld in seiner Reihe
+  const neben = { x: b.x === 4 ? 3 : 1, y: b.y };
+  z.spieler.x = neben.x;
+  z.spieler.y = neben.y + 1;
+  return { spiel, z, b };
+}
+
+test('Begleiter: Nach einem Tod sitzt er im Speisewagen, sonst nicht', () => {
+  const { z } = mitBegleiter('draengler');
+  assert.equal(z.begleiter.durch, 'draengler');
+  assert.notEqual(z.wagen.plan[z.begleiter.y][z.begleiter.x], '.', 'er sitzt auf einem Platz');
+  assert.equal(erzeugeSpiel(9, { startWagen: SPEISEWAGEN_NR }).zustand.begleiter, null);
+});
+
+test('Begleiter: Wer neben ihn tritt, hört die Frage, drei Antworten liegen vor ihm, eine ist die ehrliche', () => {
+  const { spiel, z } = mitBegleiter('draengler');
+  const e = spiel.act('hoch'); // neben ihn
+  const g = e.find((x) => x.typ === 'gespraech');
+  assert.ok(g, typen(e).join(','));
+  assert.equal(g.antworten.length, 3);
+  assert.ok(g.antworten.some((a) => a.id === 'draengler'));
+  assert.ok(g.antworten.some((a) => a.id === 'pech'));
+  for (const a of g.antworten) assert.equal(z.wagen.plan[a.y][a.x], '.');
+});
+
+test('Begleiter: Die ehrliche Antwort gibt eine helle Lochung, eine andere hat keine Folge', () => {
+  for (const ehrlich of [true, false]) {
+    const { spiel, z } = mitBegleiter('pendler');
+    const g = spiel.act('hoch').find((x) => x.typ === 'gespraech');
+    const ziel = g.antworten.find((a) => (a.id === 'pendler') === ehrlich);
+    z.spieler.x = ziel.x;
+    z.spieler.y = ziel.y + (ziel.y < z.spieler.y ? 1 : -1);
+    const e = spiel.act(ziel.y < z.spieler.y ? 'hoch' : 'runter');
+    const a = e.find((x) => x.typ === 'antwort');
+    assert.ok(a, typen(e).join(','));
+    assert.equal(a.ehrlich, ehrlich);
+    assert.equal(z.fahrkarte.lochungen.some((l) => l.art === 'ehrlich'), ehrlich);
+    assert.equal(z.begleiter.gesprochen, true, 'nur einmal');
+  }
+});
+
+test('Reise: Nach einem Tod hinter dem Speisewagen beginnt die nächste Fahrt dort, davor vorn', () => {
+  const stand = { staerken: { warten: true }, mehrAmTisch: 1, fahrkarte: { lochungen: [{ art: 'pruefung', id: 'ruhe', hell: true }] } };
+  const hinten = optionenFuerFahrt(stand, { status: 'tot', wagenNr: 5, todDurch: 'gruppe' });
+  assert.equal(hinten.startWagen, SPEISEWAGEN_NR);
+  assert.equal(hinten.begleiter, 'gruppe');
+  assert.equal(hinten.fahrkarte, stand.fahrkarte, 'die Fahrkarte bleibt');
+  const vorn = optionenFuerFahrt(stand, { status: 'tot', wagenNr: 1, todDurch: 'pendler' });
+  assert.equal(vorn.startWagen, undefined);
+  assert.equal(vorn.begleiter, 'pendler');
+  const neu = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1 });
+  assert.deepEqual(neu.fahrkarte, { lochungen: [] }, 'nach dem Halt beginnt eine neue Reise');
+  assert.equal(neu.begleiter, undefined);
+  assert.deepEqual(optionenFuerFahrt(stand, null).staerken, { warten: true });
+});

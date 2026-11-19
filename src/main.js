@@ -3,6 +3,7 @@
 
 import { abstand } from './kern/feld.js';
 import { erzeugeSpiel } from './kern/spiel.js';
+import { optionenFuerFahrt } from './kern/reise.js';
 import { erzeugeAnzeige } from './anzeige/anzeige.js';
 import { verbindeEingabe } from './eingabe.js';
 import { ladeStand, sichereStand } from './speicher.js';
@@ -38,9 +39,13 @@ function starteFahrt(jetzt) {
   const fest = festerSeed();
   const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
   fahrten += 1;
-  // Nach dem Halt beginnt eine neue Reise mit frischer Fahrkarte. Nach einem Tod bleibt sie.
-  if (spiel && spiel.zustand.status === 'halt') stand.fahrkarte = { lochungen: [] };
-  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch, fahrkarte: stand.fahrkarte });
+  // Was die neue Fahrt mitnimmt: Stärken, Fahrkarte, nach einem Tod den Begleiter (siehe kern/reise.js)
+  const optionen = optionenFuerFahrt(stand, spiel ? spiel.zustand : null);
+  if (optionen.fahrkarte !== stand.fahrkarte) {
+    stand.fahrkarte = optionen.fahrkarte; // nach dem Halt beginnt eine neue Reise
+    sichereStand(stand);
+  }
+  spiel = erzeugeSpiel(seed, optionen);
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }

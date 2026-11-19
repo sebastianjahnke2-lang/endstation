@@ -180,9 +180,10 @@ function maleKontrolleur(stift, cx, fy, s, o) {
   const zeigt = o.zeigt && (o.heben || 0) > 0.01 ? o.zeigt : null;
   const seite = zeigt ? (zeigt.x < 0 ? -1 : zeigt.x > 0 ? 1 : 0) : 0;
   const k = maleKoerper(stift, cx, fy, masse, f, seite * 0.25 * (o.heben || 0));
-  // Mütze: Kuppe, rotes Band, Schirm zur Seite, auf die er sieht
+  // Mütze: Kuppe, rotes Band, Schirm zur Seite, auf die er sieht. Der Begleiter hat sie abgesetzt.
   const winkt = o.winkt || 0;
   const my = k.kopfY - masse.kopf * 0.22 - winkt * s * 0.06;
+  if (o.ohneMuetze) return k;
   stift.fillStyle = f.muetze;
   stift.beginPath();
   stift.arc(k.kopfX, my, masse.kopf * 1.08, Math.PI, 0);
@@ -232,7 +233,12 @@ function maleKontrolleur(stift, cx, fy, s, o) {
   return k;
 }
 
-const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler, kontrolleur: maleKontrolleur };
+// Der Begleiter: dieselbe Uniform, die Mütze abgesetzt, im Speisewagen sitzend. Am Halt ist er der Schaffner.
+function maleBegleiter(stift, cx, fy, s, o) {
+  return maleKontrolleur(stift, cx, fy, s, { ...o, zeigt: null, heben: 0, ohneMuetze: true });
+}
+
+const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler, kontrolleur: maleKontrolleur, begleiter: maleBegleiter };
 
 // Zeichnet eine Figur. (cx, fy) ist der Punkt zwischen den Füßen, s die Feldgröße.
 // o: t (Sekunden), takt (eigener Versatz), neigung, alpha, blitz, ruhig und was die Figur gerade tut.

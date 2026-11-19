@@ -114,6 +114,7 @@ export function erzeugeAnzeige(leinwand) {
     bild.tuer = z.tuerOffen ? 1 : 0;
     bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
     bild.angebot = z.angebot ? { id: z.angebot.id, x: z.angebot.x, y: z.angebot.y } : null;
+    bild.begleiter = z.begleiter ? { x: z.begleiter.x, y: z.begleiter.y, antworten: z.begleiter.antworten ? z.begleiter.antworten.map((a) => ({ ...a })) : null } : null;
     bild.pruefung = z.pruefung ? z.pruefung.id : null;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
@@ -388,6 +389,10 @@ export function erzeugeAnzeige(leinwand) {
       bild.angebot = null;
       bild.pruefung = e.id;
       rede = { text: TEXTE.pruefung[e.id], x: s.x, y: s.y };
+    } else if (e.typ === 'gespraech') {
+      if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
+    } else if (e.typ === 'antwort') {
+      if (bild.begleiter) bild.begleiter.antworten = null;
     } else if (e.typ === 'gelocht') {
       if (e.art === 'pruefung') {
         wirkung.lochung = jetzt;
@@ -732,6 +737,11 @@ export function erzeugeAnzeige(leinwand) {
         const fy = boden.y + (f.y + 0.8) * s + oy;
         maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false, gesicht: true });
       }
+      const b = bild.begleiter;
+      if (b) {
+        maleFigur(stift, 'begleiter', boden.x + (b.x + 0.5) * s, boden.y + (b.y + 0.8) * s + oy, s * 0.82, { t, takt: 5, ruhig });
+        if (b.antworten) for (const a of b.antworten) maleAntwort(a, t, oy);
+      }
     }
 
     const imWechsel = bild.schwenk > 0.01;
@@ -782,7 +792,30 @@ export function erzeugeAnzeige(leinwand) {
       }
     }
     if (rede && !karte && !imWechsel) maleRede(rede.text, rede, oy);
+    else if (bild.begleiter && bild.begleiter.antworten && !karte && !imWechsel) maleRede(TEXTE.begleiter.frage, bild.begleiter, oy);
     maleHinweis();
+  }
+
+  // Eine Antwort an den Begleiter: eine kleine Figur auf leuchtendem Boden, bei der Tür eine Tür, sonst „Pech".
+  function maleAntwort(a, t, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (a.x + 0.5) * s;
+    const cy = boden.y + (a.y + 0.5) * s + oy;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
+    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    if (a.id === 'pech') {
+      maleSchild(TEXTE.begleiter.pech, cx, cy);
+    } else if (a.id === 'tuer') {
+      stift.fillStyle = '#35415f';
+      stift.fillRect(cx - s * 0.16, cy - s * 0.26, s * 0.32, s * 0.5);
+      stift.fillStyle = FARBE.glas;
+      stift.fillRect(cx - s * 0.11, cy - s * 0.2, s * 0.22, s * 0.16);
+    } else {
+      maleFigur(stift, a.id, cx, cy + s * 0.3, s * 0.55, { t, takt: a.x, ruhig: true });
+    }
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.

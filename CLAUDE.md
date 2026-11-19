@@ -14,7 +14,7 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: **teilweise gebaut.** Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Nicht gebaut sind Fahrkarte, Angebote, Begleiter und Halt. Am 19.11. entschieden: Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Die Fahrkarte ist noch offen, erst danach Fahrkarte, Angebote, Begleiter und Halt bauen.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **teilweise gebaut.** Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod. Es fehlt noch der Halt mit Schaffner, Rückblick und Schlussbild.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -92,7 +92,10 @@ src/
     wagen.js        die sieben Wagen: Plan, Gegner, Bauregel; der dritte ist der Mittelwagen, der vierte der Speisewagen
     lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
     gegner.js       Verhalten von Pendler, Reisegruppe, Drängler, Kontrolleur
-    spiel.js        erzeugeSpiel(seed) -> { zustand, act(aktion) }
+    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen
+    begleiter.js    der Begleiter im Speisewagen nach einem Tod
+    reise.js        was eine neue Fahrt mitnimmt (für main.js und die Werkzeuge)
+    spiel.js        erzeugeSpiel(seed, optionen) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
     anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
     layout.js       Bildschirmaufteilung ab 360 x 600, nichts am unteren Rand

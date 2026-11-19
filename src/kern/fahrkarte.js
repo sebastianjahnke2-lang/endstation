@@ -4,6 +4,7 @@
 // Eine Lochung ist hell oder dunkel:
 //   { art: 'pruefung', id, hell: true }            eine erfüllte Prüfung
 //   { art: 'tod', durch, hell: false }             ein Tod; wird hell, wenn man es einmal anders macht
+//   { art: 'ehrlich', durch, hell: true }          die ehrliche Antwort an den Begleiter, je Ursache eine
 //
 // Angebot: In jedem Wagen außer dem sicheren leuchtet ein Symbol auf einem Feld. Drauftreten heißt
 // annehmen. Die Prüfung gilt bis zum Verlassen des Wagens, dann wird ausgewertet. Vorbeigehen kostet nichts,
@@ -41,6 +42,8 @@ export function bereinigeFahrkarte(roh) {
       karte.lochungen.push({ art: 'pruefung', id: l.id, hell: true });
     } else if (l.art === 'tod' && TODESARTEN.includes(l.durch) && karte.lochungen.filter((x) => x.art === 'tod').length < SONDER_HOECHSTENS) {
       karte.lochungen.push({ art: 'tod', durch: l.durch, hell: l.hell === true });
+    } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
+      karte.lochungen.push({ art: 'ehrlich', durch: l.durch, hell: true });
     }
   }
   return karte;

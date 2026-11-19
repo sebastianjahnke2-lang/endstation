@@ -8,6 +8,8 @@
 
 import { join } from 'node:path';
 import { erzeugeSpiel } from '../src/kern/spiel.js';
+import { optionenFuerFahrt } from '../src/kern/reise.js';
+import { bereinigeStand } from '../src/speicher.js';
 import { berechneLayout, RAND_UNTEN } from '../src/anzeige/layout.js';
 import { kartenMasse } from '../src/anzeige/karte.js';
 import { BOTS } from '../tests/bots.js';
@@ -101,6 +103,12 @@ for (const [taste, aktion] of [['ArrowLeft', 'links'], ['KeyD', 'rechts'], ['Spa
   await seite.keyboard.press(taste); soll.act(aktion); await pruefe('Taste ' + taste);
 }
 
+// Die nächste Fahrt so nachrechnen wie das Spiel: mit dem, was der Browser gemerkt hat, und der vorigen Fahrt.
+async function naechsteFahrt(seed) {
+  const gemerkt = bereinigeStand(JSON.parse(await seite.evaluate(() => window.localStorage.getItem('endstation.1'))));
+  return erzeugeSpiel(seed, optionenFuerFahrt(gemerkt, soll.zustand));
+}
+
 // 7. Schnelle Folge bis zum Tod: Eingaben mitten in der Bewegung
 async function spieleBisEnde(name) {
   const merk = {};
@@ -126,7 +134,7 @@ await wische(wx, wy, 0, 60);
 erwarte((await zustand()).status === 'tot', 'ein Wisch nach unten hat die Karte geschlossen');
 await wische(wx, wy, 0, -80);
 await seite.waitForTimeout(60);
-soll = erzeugeSpiel(SEED + 1);
+soll = await naechsteFahrt(SEED + 1);
 await pruefe('Wisch nach oben beginnt die zweite Fahrt');
 
 // 9. Zweite Fahrt, Karte per Tipp auf die Winkel schließen; dritte mit Pfeil nach oben
@@ -135,13 +143,13 @@ await seite.waitForTimeout(800);
 const winkel = kartenMasse(layout, 'tod').weiter;
 await tippe(punkt({ x: winkel.x + winkel.b / 2, y: winkel.y + winkel.h / 2 }));
 await seite.waitForTimeout(60);
-soll = erzeugeSpiel(SEED + 2);
+soll = await naechsteFahrt(SEED + 2);
 await pruefe('Tipp auf die Winkel beginnt die dritte Fahrt');
 await spieleBisEnde('dritte Fahrt');
 await seite.waitForTimeout(800);
 await seite.keyboard.press('ArrowUp');
 await seite.waitForTimeout(60);
-soll = erzeugeSpiel(SEED + 3);
+soll = await naechsteFahrt(SEED + 3);
 await pruefe('Pfeil nach oben beginnt die vierte Fahrt');
 await seite.waitForTimeout(400);
 await seite.screenshot({ path: join(ordner, `bedienung-${B}x${H}-spiel.png`) });

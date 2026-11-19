@@ -11,7 +11,7 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Gesichter: ja.** Verstandene Fahrgäste im Speisewagen haben ein Gesicht, wie im Fahrplan. Gegner und alle anderen Figuren bleiben ohne Gesicht, der Prototyp auch.
 - **Lob: nein.** Der Begleiter nennt nicht, was gelungen ist. Die Zeile im Fahrplan („nennt zuerst, was neu gelungen ist") gilt nicht mehr.
 - **Prototyp und Hauptspiel** (vom Auftraggeber an Claude übergeben): „Der freie Platz" bleibt ein eigener Versuch, bis der Spieltest gelaufen ist. Nennen mindestens drei von fünf Testpersonen den Schatten, wird er in Etappe 3 eine weitere Form des Autoritätswagens, neben Kontrolleur, Ruhebereich und erster Klasse. Damit ist auch „Rätsel oder Taktik" beantwortet: Das Hauptspiel bleibt ein Taktikspiel, Regelwagen wie dieser sind eine Szene darin. Die verbindlichen Vorgaben aus dem Prototyp-Auftrag gelten nur für den Prototyp. Fürs Hauptspiel entscheidet der Auftraggeber Punkt für Punkt, wie bei Gesichtern und Lob.
-- **Fahrkarte: noch offen.** Seine Antwort war „dunkel". Was das heißt, ist nachgefragt.
+- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt.
 
 ### Betrifft den Prototyp unmittelbar
 
@@ -29,7 +29,7 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 
 - **Rätsel oder Taktik.** Entschieden am 19.11., siehe oben. Ursprünglich: Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
 - **Prototyp und Fahrplan.** Entschieden am 19.11., siehe oben. Ursprünglich: `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
-- **Fahrkarte** (Antwort „dunkel", nachgefragt). Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
+- **Fahrkarte.** Entschieden am 19.11.: wie im Fahrplan. Ursprünglich: Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
 - **Mitgezählter Spielstil.** Auftrag: kein Punktestand, kein Moralwert, kein Persönlichkeitstest. Fahrplan Etappe 3: Spielstil mitzählen, Wärme und Kälte, Haltung der Figur nach Spielstil. Etappe 5: Bestwerte gegen sich selbst. Nicht umgesetzt, nur vermerkt.
 - **Kein Lob.** Entschieden am 19.11., siehe oben.
 - **Gesichter.** Entschieden am 19.11., siehe oben. Offen bleibt nur das eigene Gesicht am Ende (Vision), das gehört zum Halt.
@@ -103,6 +103,24 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 ## Etappe 2
 
 Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigegeben, danach „Mach jetzt weiter, danach kümmern wir uns um die Korrektur". Gebaut werden deshalb nur Teile, die seinen Vorgaben aus dem Prototyp-Auftrag nicht widersprechen: Kontrolleur, Aufbrechen, Präsenz, Stärken, Speisewagen ohne Gesichter und ohne Begleiter. Fahrkarte mit Symbolen, helle und dunkle Lochungen, Angebote, Begleiter und Halt mit Schaffner warten auf seine Entscheidung (siehe „Offen").
+
+### Fahrkarte und Prüfungen
+
+- **Sechs Prüfungen.** Drei stehen im Fahrplan: „Nicht aufregen" (kein Schlag), „Erst aussteigen lassen" (drei Züge hintereinander stillstehen), „Ohne Rempeln" (kein Treffer). Der Fahrplan nennt sechs Symbole, deshalb drei eigene im selben Ton: „Nicht drängeln" (nie auf ein rotes Feld treten), „Pünktlich" (den Wagen höchstens zwölf Züge nach dem Annehmen verlassen), „Ruhe bewahren" (volle Ruhe erreichen). Gelten bis zum Verlassen des Wagens, dann wird ausgewertet.
+- **Angebot:** In jedem Wagen außer dem Speisewagen leuchtet ein Symbol auf einem freien Feld, mindestens zwei Schritte vom Start. Angeboten wird nur, was noch nicht gelocht ist. Drauftreten nimmt an, die Worte stehen kurz über der Figur, das Symbol bleibt neben der Uhr, bis ausgewertet ist. Vorbeigehen und Nichterfüllen kosten nichts.
+- **Die Angebote würfeln mit eigenem Zufall.** Warum: Sonst sähen dieselben Wagen mit derselben Zahl anders aus als vorher, und die Zahlen der Bots sprängen ohne Grund.
+- **Dunkle Lochung** nach einem Tod, je Ursache höchstens eine, solange sie dunkel ist. **Sie wird hell, wenn man es einmal anders macht:** einen Wagen, in dem diese Ursache war, verlassen, ohne von ihr getroffen zu werden. Bei der Tür: einen Wagen verlassen, ohne aufzubrechen.
+- **Die Fahrkarte gilt für die ganze Reise:** vom ersten Wagen bis zum Halt, über Tode hinweg. Nach dem Halt beginnt eine neue Reise mit frischer Karte. Sie steht im Speicher (`fahrkarte` in `src/speicher.js`).
+- **Zu sehen ist die Karte auf der Endkarte:** sechs Symbole, gelochte mit einem hellen Loch, rechts Platz für Sonder-Lochungen, hell oder dunkel.
+
+### Begleiter
+
+- **Nach einem Tod sitzt er im Speisewagen,** in derselben Uniform wie der Kontrolleur, die Mütze abgesetzt, ohne Gesicht. Am Halt wird er der Schaffner sein.
+- **Lag der Tod hinter dem Speisewagen, beginnt die nächste Fahrt im Speisewagen, sonst vorn.** Abweichung vom Fahrplan („Nach einem Tod beginnt die nächste Fahrt im Speisewagen"): Wer in Wagen 1 bis 3 stirbt, würde sonst Wagen überspringen, die er nie geschafft hat. Er trifft den Begleiter dann, wenn er in den Speisewagen kommt.
+- **Wer neben ihn tritt, hört „Woran lag es?".** Darunter liegen drei Antworten auf dem Boden: die ehrliche (die Todesursache), eine andere Ursache und „Pech", in zufälliger Reihenfolge. Die Ursachen sind kleine Figuren, die Tür ist eine Tür, nur „Pech" ist ein Wort. Warum keine Wörter: Drei Schilder nebeneinander passen bei 360 Pixeln nicht. Draufgehen heißt antworten, wie beim Angebot.
+- **Die ehrliche Antwort gibt eine helle Lochung,** je Todesursache eine. Eine andere Antwort hat keine Folge. Er nennt nicht, was gelungen ist (Entscheidung vom 19.11.).
+- **Nicht gebaut: die letzte Szene gefahrlos wiederholen.**
+- **Was eine neue Fahrt mitnimmt, steht an einer Stelle:** `src/kern/reise.js`. Spiel und Prüfwerkzeuge nutzen sie beide, damit sie dieselbe Fahrt nachrechnen.
 
 ### Präsenz
 

@@ -96,7 +96,8 @@ export const WAGENPLAENE = [
       { typ: 'draengler', staerke: 'sprint', x: 0, y: 7 },
     ],
     // freie Plätze für die, die nach dem Gönnen später dazukommen
-    mehrPlaetze: [[4, 1], [0, 3], [4, 5], [0, 5], [4, 7]],
+    mehrPlaetze: [[4, 1], [0, 3], [0, 5], [4, 7]],
+    begleiterPlatz: [4, 5], // hier sitzt nach einem Tod der Begleiter
   },
   {
     art: 'grossraumwagen',
@@ -178,5 +179,6 @@ export function baueWagen(nr, z) {
   }
   const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
   const mehrPlaetze = (vorlage.mehrPlaetze || []).map(([x, y]) => ({ x: sx(x), y }));
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
+  const begleiterPlatz = vorlage.begleiterPlatz ? { x: sx(vorlage.begleiterPlatz[0]), y: vorlage.begleiterPlatz[1] } : null;
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }
