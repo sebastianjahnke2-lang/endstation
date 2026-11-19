@@ -7,7 +7,7 @@ description: Einen Wagen, eine Autorität oder eine Szene ins Spiel bringen. Fü
 
 Gilt für jeden neuen Wagen (Kampfwagen, Autoritätswagen, Speisewagen, leerer Wagen, Spiegelwagen, Kraftprobe), jede neue Autorität und jeden neuen Gegnertyp.
 
-Stand Etappe 1: Es gibt fünf Kampfwagen und drei Gegnertypen. Vorbild für alles Neue sind `src/kern/wagen.js` und `src/kern/gegner.js`.
+Stand 19.11.: Es gibt fünf Kampfwagen, den Mittelwagen als Autoritätswagen und vier Gegnertypen (Pendler, Reisegruppe, Drängler, Kontrolleur). Vorbild für alles Neue sind `src/kern/wagen.js` und `src/kern/gegner.js`.
 
 ## 1. Darf sie hinein?
 
@@ -48,7 +48,7 @@ Kein Weg wird gelobt oder getadelt. Jeder hat Folgen, keiner eine Strafe.
 - Stirbt ein Gegner, verfällt sein angekündigter Angriff. Gegner blockieren einander und treffen sich nicht.
 - Alle freien Felder sind erreichbar, die Tür immer.
 - Bauregel: Jedes freie Feld hat einen freien Nachbarn links oder rechts und einen oben oder unten. Keine Sackgassen, keine einspurigen Gänge.
-- Ein Gegner tritt heran oder kündigt an, nie beides im selben Zug. Höchstens ein Herz je Zug.
+- Ein Gegner tritt heran oder kündigt an, nie beides im selben Zug. Höchstens ein Treffer je Zug (ein Herz, beim Kontrolleur zwei).
 - Höchstens sechs Gegner gleichzeitig.
 - Ein Wagen dauert 30 bis 90 Sekunden.
 - Im Speisewagen und jedem anderen sicheren Ort passiert nie etwas Schlimmes.

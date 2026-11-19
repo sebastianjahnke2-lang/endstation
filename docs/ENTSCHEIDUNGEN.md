@@ -93,6 +93,41 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 - Unabhängige Prüfung am 19.11.: Regeln und Anzeige sind vollständig geprüft. Die Regeln wurden dabei über alle 40.501 erreichbaren Zustände mit einem eigenen Modell verglichen, ohne Abweichung. Die Funde zur Anzeige sind behoben, sechs fehlende Tests sind nachgetragen. Die Prüfer für Speicher, Tests und Ton sind am Nutzungslimit ausgefallen. Speicher und Sprachmittel für Safari ab iOS 13 habe ich danach selbst geprüft, ohne Befund. Ton und Haltung sind nicht noch einmal unabhängig geprüft.
 - Ob jemand die Regel errät und ob es komisch ist, zeigt nur der Spieltest.
 
+## Etappe 2, Teil Kontrolleur
+
+Der Auftraggeber hat am 19.11. aus Etappe 2 nur den Wagen mit dem Kontrolleur freigegeben. Fahrkarte, Angebote, Stärken, Präsenz, Speisewagen, Gönnen, Begleiter und Halt sind nicht gebaut. Mehrere davon widersprechen seinen Vorgaben aus dem Prototyp-Auftrag (siehe „Offen"), darüber entscheidet er.
+
+### Regeln
+
+- **Mittelwagen als dritter von jetzt sechs Wagen.** Warum: Der Fahrplan setzt den Autoritätswagen in die Mitte der Fahrt. Darin steht der Kontrolleur neben der Tür, dazu zwei Pendler. Ohne sie wäre Stillstehen nie eine Entscheidung.
+- **Seine Nähe sind die acht Felder um ihn herum.** Er geht nie von seinem Platz.
+- **„Er prüft nur, wer sich bewegt" heißt: wer sich innerhalb seiner Nähe bewegt.** Wer von außen hereintritt, wird nur angesprochen. Warum: Sonst könnte man nie ruhig neben ihn treten, ohne vorher geprüft zu werden.
+- **Prüfen ist ein angekündigter Angriff auf das Feld des Spielers,** wie bei jedem Gegner einen Zug vorher rot. Ein Treffer kostet zwei Herzen, so steht es im Fahrplan („2 Schaden"). Das weicht von der eigenen Regel aus Etappe 1 ab, nach der Rot immer genau ein Herz kostet. Es bleibt bei höchstens einem Treffer je Zug. Treffen mehrere, zählt der schwerere.
+- **Wer ihn schlägt, wird ebenso geprüft.** Kämpfen geht: fünf Schläge. Wer nach jedem Schlag aus seiner Nähe ausweicht und von außen wiederkommt, bleibt heil, braucht aber drei Züge je Schlag.
+- **Drei Züge ruhig heißt dreimal „Warten" hintereinander in seiner Nähe.** Gegen die Tür laufen und Schlagen zählen nicht als ruhig, Wegtreten beginnt von vorn.
+- **Durchgewinkt geht er fort.** Warum: Der Kernsatz sagt, dass Gegner verschwinden, sobald man sie versteht. Seine Tür geht dann auf, auch wenn noch Pendler im Wagen sind, ebenso nach seiner Niederlage. Im Wagen des Kontrolleurs gehört die Tür ihm.
+- **Aufbrechen gilt für jede Tür,** wie im Fahrplan: dreimal gegen die geschlossene Tür laufen, jeder Stoß kostet einen Zug, beim dritten geht sie auf und kostet ein Herz. Die Stöße zählen je Wagen und müssen nicht hintereinander kommen. Aufbrechen ist kein Treffer, die Ruhe bleibt. Mit dem letzten Herz ist es der Tod. Warum: dieselbe Regel für alle, Kanten bleiben drin.
+
+### Anzeige
+
+- **Er hält dem, der in seiner Nähe ist, die Lochzange hin.** Mit jedem ruhigen Zug sinkt sie ein Stück, beim dritten greift er an die Mütze und geht durch die Tür. So ist ohne Text zu sehen, dass Stillstehen etwas bewirkt.
+- **„Fahrkarte, bitte." steht als Schild über ihm,** beim Herantreten und bei jeder Prüfung. Es verschwindet mit der nächsten Eingabe.
+- **Der Hinweis „Anrempeln" erscheint nie über ihm.** Das Spiel schlägt keinen der Wege vor.
+- **Die geschlossene Tür gibt bei jedem Stoß sichtbar nach:** Ein Spalt mit Licht wird breiter. Das grüne Licht neben der Tür geht erst an, wenn sie offen ist.
+- **Er sieht dem Schaffner aus dem Prototyp ähnlich:** Mütze mit rotem Band, Lochzange. Ob es dieselbe Figur ist, bleibt offen.
+- **Kein eigener Name auf der Zuganzeige für ihn,** nur der Wagen heißt „Mittelwagen".
+
+### Schwierigkeit
+
+- **Die Zahlen bleiben fast gleich** (500 Fahrten je Bot): Mit Unachtsamkeit erreicht der ausgewogene Bot den Halt in 48 % der Fahrten, ohne Fehler in 79 %, der Ausweicher in 56 %, der Kämpfer in 0 %. Der Kämpfer scheitert jetzt meist am Kontrolleur.
+- **Ausweicher und Ausgewogener lassen den Kontrolleur in Ruhe,** erledigen die Pendler und stellen sich dann ruhig in seine Nähe. Im Mittelwagen bekommen sie kaum Treffer. Die Bots nutzen das Aufbrechen nicht.
+- **Der Test „es wird schwerer" zählt nur Kampfwagen.** Der Autoritätswagen ist bewusst leichter für den, der ihn durchschaut.
+
+### Nicht geprüft
+
+- Kein echtes iPhone und keine WebKit-Engine, nur Chromium mit iPhone-Profil bei allen sechs Pflichtgrößen.
+- Ob man ohne Hinweis herausfindet, dass er Ruhige durchlässt, zeigt nur der Test am Gerät.
+
 ## Etappe 1
 
 ### Regeln

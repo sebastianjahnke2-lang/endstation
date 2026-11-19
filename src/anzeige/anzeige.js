@@ -18,6 +18,7 @@ import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } f
 
 const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
 const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
+const SPALT_JE_STOSS = 0.16; // so weit gibt die geschlossene Tür bei jedem Stoß nach
 
 export function uhrzeit(zug) {
   const minuten = (ABFAHRT + zug) % (24 * 60);
@@ -44,8 +45,10 @@ export function erzeugeAnzeige(leinwand) {
     ruhe: 0,
     zug: 0,
     tuer: 0,
+    spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
   };
+  let rede = null; // der Satz des Kontrolleurs, bis zur nächsten Eingabe: { x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
   let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
   let geister = []; // Besiegte, die verblassen
@@ -109,6 +112,7 @@ export function erzeugeAnzeige(leinwand) {
     bild.ruhe = z.spieler.ruhe;
     bild.zug = z.zug;
     bild.tuer = z.tuerOffen ? 1 : 0;
+    bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
     bild.gegner = z.gegner.map((g) => {
@@ -122,6 +126,7 @@ export function erzeugeAnzeige(leinwand) {
       b.pausiert = g.pause > 0;
       b.gruppe = g.gruppe;
       b.rang = g.rang;
+      b.ruhig = g.ruhig || 0;
       return b;
     });
   }
@@ -302,6 +307,46 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ausgewichen') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'tuerStoss') {
+      // gegen die geschlossene Tür: Sie zuckt und gibt ein Stück nach
+      wirkung.tuerZu = jetzt;
+      bild.zug += 1;
+      const von = bild.spalt;
+      const nach = Math.min(1, e.n * SPALT_JE_STOSS);
+      bewege(jetzt, 110, (p) => {
+        s.sy = -hinUndHer(p) * 0.16;
+        bild.spalt = von + (nach - von) * sanft(p);
+      });
+    } else if (e.typ === 'aufgebrochen') {
+      bild.herzen = e.herzen;
+      wirkung.treffer = jetzt;
+      if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'kontrolle') {
+      const g = findeGegner(e.id);
+      if (g) rede = { x: g.x, y: g.y };
+    } else if (e.typ === 'ruhig') {
+      const g = findeGegner(e.id);
+      if (g) {
+        const von = g.ruhig || 0;
+        bewege(jetzt, 140, (p) => {
+          g.ruhig = von + (e.ruhig - von) * sanft(p);
+        });
+      }
+    } else if (e.typ === 'durchgewinkt') {
+      // Er greift an die Mütze und geht durch die Tür.
+      const g = findeGegner(e.id);
+      if (g) {
+        bild.gegner = bild.gegner.filter((x) => x !== g);
+        const geist = { g, alpha: 1 };
+        geister.push(geist);
+        bewege(jetzt, 420, (p) => {
+          g.winkt = Math.min(1, p * 2.5);
+          geist.alpha = p < 0.5 ? 1 : 1 - (p - 0.5) * 2;
+          g.sy = p < 0.5 ? 0 : -(p - 0.5) * 0.8;
+          if (p >= 1) geister = geister.filter((x) => x !== geist);
+        }, true);
+      }
+      rede = null;
     } else if (e.typ === 'tod') {
       const uebrig = WAGENZAHL - e.wagenNr;
       const text = uebrig === 1 ? TEXTE.ende.einWagen : fuelle(TEXTE.ende.mehrereWagen, { n: TEXTE.zahlwort[uebrig] });
@@ -311,6 +356,7 @@ export function erzeugeAnzeige(leinwand) {
 
   // Nimmt die Ereignisse eines Zugs entgegen und verteilt sie auf die nächsten Augenblicke.
   function spiele(ereignisse, jetzt) {
+    rede = null; // der Satz des Kontrolleurs verschwindet mit der nächsten Eingabe
     const phasen = [[], [], []];
     for (const e of ereignisse) phasen[e.phase].push(e);
     let zeit = jetzt;
@@ -356,6 +402,8 @@ export function erzeugeAnzeige(leinwand) {
     blitze = [];
     bild.gegner = [];
     bild.tuer = 0;
+    bild.spalt = 0;
+    rede = null;
     altesWagenbild = null;
     bild.wagenNr = -1;
     gleicheAb();
@@ -472,7 +520,20 @@ export function erzeugeAnzeige(leinwand) {
     const fy = boden.y + (g.py + g.sy + 0.86) * s + oy;
     let neigung = 0;
     if (g.typ === 'draengler' && g.ansage && g.ansage.length) neigung = Math.sign(g.ansage[0].x - g.x) * 0.55;
+    // Der Kontrolleur hält dem, der in seiner Nähe ist, die Zange hin. Sie sinkt, je länger man ruhig steht.
+    let zeigt = null;
+    let heben = 0;
+    if (g.typ === 'kontrolleur') {
+      const p = bild.spieler;
+      const nah = Math.max(Math.abs(p.x - g.x), Math.abs(p.y - g.y)) === 1;
+      const ziel = g.ansage && g.ansage.length ? g.ansage[0] : nah ? p : null;
+      if (ziel) zeigt = { x: ziel.x - g.x, y: ziel.y - g.y };
+      heben = g.ansage ? 1 : nah ? 1 - ((g.ruhig || 0) / GEGNERWERTE.kontrolleur.geduld) * 0.85 : 0;
+    }
     maleFigur(stift, g.typ, cx, fy, s, {
+      zeigt,
+      heben,
+      winkt: g.winkt || 0,
       t,
       takt: g.id * 1.7,
       alpha,
@@ -485,7 +546,7 @@ export function erzeugeAnzeige(leinwand) {
       ansagend: !!g.ansage,
     });
     if (alpha > 0.5) {
-      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : 0.86;
+      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : g.typ === 'kontrolleur' ? 0.94 : 0.86;
       malePunkte(stift, cx, fy - s * kopf, s, g.hp, GEGNERWERTE[g.typ].hp);
     }
   }
@@ -528,7 +589,8 @@ export function erzeugeAnzeige(leinwand) {
     if (!hinweis || karte || bild.schwenk > 0.01) return;
     const p = bild.spieler;
     const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
-    const nachbar = bild.gegner.find((a) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
+    // den Kontrolleur schlägt das Spiel nicht vor
+    const nachbar = bild.gegner.find((a) => a.typ !== 'kontrolleur' && Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
     if (hinweis.wischen && bild.zug === 0) {
       const ort = schildAn(p, 0.42);
       maleSchild(TEXTE.hinweis[hinweis.wischen], ort.cx, ort.cy);
@@ -553,7 +615,7 @@ export function erzeugeAnzeige(leinwand) {
     let zucken = 0;
     const seit = jetzt - wirkung.tuerZu;
     if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
-    maleTuer(stift, layout, bild.tuer, t, zucken, oy);
+    maleTuer(stift, layout, bild.tuer, t, zucken, oy, bild.spalt);
 
     const imWechsel = bild.schwenk > 0.01;
     if (!imWechsel) {
@@ -591,7 +653,24 @@ export function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
+    if (rede && !karte && !imWechsel) maleRede(TEXTE.kontrolleur.satz, rede, oy);
     maleHinweis();
+  }
+
+  // Ein Schild über dem Kopf dessen, der spricht, mit einer Spitze zu ihm hin.
+  function maleRede(text, feld, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (feld.x + 0.5) * s;
+    const h = ZEILENHOEHE * 2 + 10;
+    const cy = boden.y + feld.y * s - s * 0.04 - h / 2 + oy;
+    maleSchild(text, cx, cy);
+    stift.fillStyle = 'rgba(13, 17, 25, 0.94)';
+    stift.beginPath();
+    stift.moveTo(cx - 6, cy + h / 2 - 1);
+    stift.lineTo(cx, cy + h / 2 + 7);
+    stift.lineTo(cx + 6, cy + h / 2 - 1);
+    stift.closePath();
+    stift.fill();
   }
 
   function zeichne(jetzt) {

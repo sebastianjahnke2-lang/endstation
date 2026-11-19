@@ -893,6 +893,7 @@ const FARBE = {
   pendler: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658', tasche: '#4a392b', arm: '#56667d' },
   gruppe: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', rucksack: '#2f6155', wimpel: '#f2d264' },
   draengler: { mantel: '#9a5a74', kopf: '#dbb9c6', schuh: '#4f2c3c', arm: '#7c455c' },
+  kontrolleur: { mantel: '#33405f', kopf: '#c6ccd8', schuh: '#1d2538', arm: '#2b3752', muetze: '#28334f', band: '#c8463c', zange: '#cfd4de' },
 };
 
 function rundesRechteck(stift, x, y, b, h, r) {
@@ -1156,7 +1157,8 @@ function feldBei(layout, px, py) {
 // --- anzeige/figuren.js
 // Figuren und Hindernisse. Niemand hat ein Gesicht. Jede Figur ist am Umriss erkennbar:
 // der Spieler am Schal, der Pendler an der Aktentasche, die Reisegruppe am Rucksack
-// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern.
+// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern, der Kontrolleur
+// an Mütze und Lochzange.
 
 
 
@@ -1324,7 +1326,69 @@ function maleDraengler(stift, cx, fy, s, o) {
   return k;
 }
 
-const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler };
+// Der Kontrolleur. o.zeigt: Richtung zum Spieler (x, y) oder null. o.heben: wie weit er die Zange
+// hinhält (0 bis 1), sie sinkt, je länger man ruhig steht. o.winkt: Hand an der Mütze beim Durchwinken.
+// Kleine Geste im Stand: Ab und zu klickt er mit der Zange.
+function maleKontrolleur(stift, cx, fy, s, o) {
+  const f = FARBE.kontrolleur;
+  const atem = o.ruhig ? 0 : Math.sin(o.t * 1.1 + o.takt) * 0.008;
+  const masse = { hoch: s * 0.76 * (1 + atem), schulter: s * 0.37, saum: s * 0.4, kopf: s * 0.12 };
+  const zeigt = o.zeigt && (o.heben || 0) > 0.01 ? o.zeigt : null;
+  const seite = zeigt ? (zeigt.x < 0 ? -1 : zeigt.x > 0 ? 1 : 0) : 0;
+  const k = maleKoerper(stift, cx, fy, masse, f, seite * 0.25 * (o.heben || 0));
+  // Mütze: Kuppe, rotes Band, Schirm zur Seite, auf die er sieht
+  const winkt = o.winkt || 0;
+  const my = k.kopfY - masse.kopf * 0.22 - winkt * s * 0.06;
+  stift.fillStyle = f.muetze;
+  stift.beginPath();
+  stift.arc(k.kopfX, my, masse.kopf * 1.08, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  stift.fillStyle = f.band;
+  rundesRechteck(stift, k.kopfX - masse.kopf * 1.1, my - masse.kopf * 0.12, masse.kopf * 2.2, masse.kopf * 0.32, masse.kopf * 0.1);
+  stift.fill();
+  stift.fillStyle = f.muetze;
+  const schirm = seite || 1;
+  rundesRechteck(stift, k.kopfX + (schirm > 0 ? masse.kopf * 0.55 : -masse.kopf * 1.75), my + masse.kopf * 0.12, masse.kopf * 1.2, masse.kopf * 0.26, masse.kopf * 0.1);
+  stift.fill();
+
+  // der Arm mit der Lochzange
+  const sx = cx + (seite || 1) * masse.schulter * 0.44 + k.schub;
+  const sy = k.schulterY + s * 0.07;
+  let hx;
+  let hy;
+  if (winkt > 0.01) {
+    // durchwinken: die Hand geht an die Mütze
+    hx = k.kopfX + masse.kopf * 0.9;
+    hy = my + s * 0.02 + (1 - winkt) * s * 0.2;
+  } else if (zeigt) {
+    const weit = Math.hypot(zeigt.x, zeigt.y) || 1;
+    const h = o.heben;
+    hx = sx + (zeigt.x / weit) * s * 0.3 * h;
+    hy = sy + s * 0.2 * (1 - h) + (zeigt.y / weit) * s * 0.22 * h;
+  } else {
+    hx = sx + s * 0.04;
+    hy = sy + s * 0.22;
+  }
+  linie(stift, [[sx, sy], [hx, hy]], f.arm, s * 0.07);
+  stift.fillStyle = f.kopf;
+  kreis(stift, hx, hy, s * 0.033);
+  stift.fill();
+  if (winkt <= 0.01) {
+    // die Zange: zwei Schenkel, im Stand klickt sie ab und zu
+    const klick = o.ruhig ? 0 : (o.t * 0.23 + o.takt * 0.31) % 1 > 0.92 ? 1 : 0;
+    const offen = 0.35 - klick * 0.3;
+    const r = zeigt ? Math.atan2(zeigt.y, zeigt.x) : Math.PI / 2;
+    for (const w of [-offen, offen]) {
+      const ex = hx + Math.cos(r + w) * s * 0.11;
+      const ey = hy + Math.sin(r + w) * s * 0.11;
+      linie(stift, [[hx, hy], [ex, ey]], f.zange, s * 0.022);
+    }
+  }
+  return k;
+}
+
+const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler, kontrolleur: maleKontrolleur };
 
 // Zeichnet eine Figur. (cx, fy) ist der Punkt zwischen den Füßen, s die Feldgröße.
 // o: t (Sekunden), takt (eigener Versatz), neigung, alpha, blitz, ruhig und was die Figur gerade tut.
@@ -1539,8 +1603,11 @@ function maleWagenbild(layout, plan, dichte) {
 }
 
 // Die Tür oben. offen läuft von 0 (zu) bis 1 (auf). (ox, oy) verschiebt den ganzen Wagen.
-function maleTuer(stift, layout, offen, t, ox, oy) {
+// spalt: Wer gegen die geschlossene Tür läuft, drückt sie jedes Mal ein Stück auf.
+function maleTuer(stift, layout, offen, t, ox, oy, spalt) {
   const { boden, rumpf, s, wandOben } = layout;
+  const gruen = offen;
+  offen = Math.max(offen, spalt || 0);
   const x = boden.x + TUERFELD.x * s + ox;
   const y = rumpf.y + oy;
   stift.fillStyle = FARBE.wandDunkel;
@@ -1550,7 +1617,7 @@ function maleTuer(stift, layout, offen, t, ox, oy) {
     licht.addColorStop(0, '#fff1d6');
     licht.addColorStop(1, FARBE.warm);
     stift.fillStyle = licht;
-    stift.globalAlpha = offen;
+    stift.globalAlpha = Math.max(gruen, spalt ? 0.9 : 0); // durch den Spalt fällt schon Licht
     stift.fillRect(x + s * 0.1, y + 3, s * 0.8, wandOben - 3);
     stift.globalAlpha = 1;
   }
@@ -1569,7 +1636,7 @@ function maleTuer(stift, layout, offen, t, ox, oy) {
   // Lampe neben der Tür: aus, solange zu, grün, wenn frei
   const lx = x + s * 1.14;
   const ly = y + wandOben * 0.55;
-  if (offen > 0.5) {
+  if (gruen > 0.5) {
     const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 0.3);
     schein.addColorStop(0, 'rgba(111, 220, 143, 0.55)');
     schein.addColorStop(1, 'rgba(111, 220, 143, 0)');
@@ -1577,7 +1644,7 @@ function maleTuer(stift, layout, offen, t, ox, oy) {
     kreis(stift, lx, ly, s * 0.3);
     stift.fill();
   }
-  stift.fillStyle = offen > 0.5 ? FARBE.gruen : '#4b5672';
+  stift.fillStyle = gruen > 0.5 ? FARBE.gruen : '#4b5672';
   kreis(stift, lx, ly, s * 0.065);
   stift.fill();
 }
@@ -2045,6 +2112,7 @@ function maleKarte(stift, layout, karte, t) {
 
 const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
 const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
+const SPALT_JE_STOSS = 0.16; // so weit gibt die geschlossene Tür bei jedem Stoß nach
 
 function uhrzeit(zug) {
   const minuten = (ABFAHRT + zug) % (24 * 60);
@@ -2071,8 +2139,10 @@ function erzeugeAnzeige(leinwand) {
     ruhe: 0,
     zug: 0,
     tuer: 0,
+    spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
   };
+  let rede = null; // der Satz des Kontrolleurs, bis zur nächsten Eingabe: { x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
   let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
   let geister = []; // Besiegte, die verblassen
@@ -2136,6 +2206,7 @@ function erzeugeAnzeige(leinwand) {
     bild.ruhe = z.spieler.ruhe;
     bild.zug = z.zug;
     bild.tuer = z.tuerOffen ? 1 : 0;
+    bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
     bild.gegner = z.gegner.map((g) => {
@@ -2149,6 +2220,7 @@ function erzeugeAnzeige(leinwand) {
       b.pausiert = g.pause > 0;
       b.gruppe = g.gruppe;
       b.rang = g.rang;
+      b.ruhig = g.ruhig || 0;
       return b;
     });
   }
@@ -2329,6 +2401,46 @@ function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ausgewichen') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'tuerStoss') {
+      // gegen die geschlossene Tür: Sie zuckt und gibt ein Stück nach
+      wirkung.tuerZu = jetzt;
+      bild.zug += 1;
+      const von = bild.spalt;
+      const nach = Math.min(1, e.n * SPALT_JE_STOSS);
+      bewege(jetzt, 110, (p) => {
+        s.sy = -hinUndHer(p) * 0.16;
+        bild.spalt = von + (nach - von) * sanft(p);
+      });
+    } else if (e.typ === 'aufgebrochen') {
+      bild.herzen = e.herzen;
+      wirkung.treffer = jetzt;
+      if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'kontrolle') {
+      const g = findeGegner(e.id);
+      if (g) rede = { x: g.x, y: g.y };
+    } else if (e.typ === 'ruhig') {
+      const g = findeGegner(e.id);
+      if (g) {
+        const von = g.ruhig || 0;
+        bewege(jetzt, 140, (p) => {
+          g.ruhig = von + (e.ruhig - von) * sanft(p);
+        });
+      }
+    } else if (e.typ === 'durchgewinkt') {
+      // Er greift an die Mütze und geht durch die Tür.
+      const g = findeGegner(e.id);
+      if (g) {
+        bild.gegner = bild.gegner.filter((x) => x !== g);
+        const geist = { g, alpha: 1 };
+        geister.push(geist);
+        bewege(jetzt, 420, (p) => {
+          g.winkt = Math.min(1, p * 2.5);
+          geist.alpha = p < 0.5 ? 1 : 1 - (p - 0.5) * 2;
+          g.sy = p < 0.5 ? 0 : -(p - 0.5) * 0.8;
+          if (p >= 1) geister = geister.filter((x) => x !== geist);
+        }, true);
+      }
+      rede = null;
     } else if (e.typ === 'tod') {
       const uebrig = WAGENZAHL - e.wagenNr;
       const text = uebrig === 1 ? TEXTE.ende.einWagen : fuelle(TEXTE.ende.mehrereWagen, { n: TEXTE.zahlwort[uebrig] });
@@ -2338,6 +2450,7 @@ function erzeugeAnzeige(leinwand) {
 
   // Nimmt die Ereignisse eines Zugs entgegen und verteilt sie auf die nächsten Augenblicke.
   function spiele(ereignisse, jetzt) {
+    rede = null; // der Satz des Kontrolleurs verschwindet mit der nächsten Eingabe
     const phasen = [[], [], []];
     for (const e of ereignisse) phasen[e.phase].push(e);
     let zeit = jetzt;
@@ -2383,6 +2496,8 @@ function erzeugeAnzeige(leinwand) {
     blitze = [];
     bild.gegner = [];
     bild.tuer = 0;
+    bild.spalt = 0;
+    rede = null;
     altesWagenbild = null;
     bild.wagenNr = -1;
     gleicheAb();
@@ -2499,7 +2614,20 @@ function erzeugeAnzeige(leinwand) {
     const fy = boden.y + (g.py + g.sy + 0.86) * s + oy;
     let neigung = 0;
     if (g.typ === 'draengler' && g.ansage && g.ansage.length) neigung = Math.sign(g.ansage[0].x - g.x) * 0.55;
+    // Der Kontrolleur hält dem, der in seiner Nähe ist, die Zange hin. Sie sinkt, je länger man ruhig steht.
+    let zeigt = null;
+    let heben = 0;
+    if (g.typ === 'kontrolleur') {
+      const p = bild.spieler;
+      const nah = Math.max(Math.abs(p.x - g.x), Math.abs(p.y - g.y)) === 1;
+      const ziel = g.ansage && g.ansage.length ? g.ansage[0] : nah ? p : null;
+      if (ziel) zeigt = { x: ziel.x - g.x, y: ziel.y - g.y };
+      heben = g.ansage ? 1 : nah ? 1 - ((g.ruhig || 0) / GEGNERWERTE.kontrolleur.geduld) * 0.85 : 0;
+    }
     maleFigur(stift, g.typ, cx, fy, s, {
+      zeigt,
+      heben,
+      winkt: g.winkt || 0,
       t,
       takt: g.id * 1.7,
       alpha,
@@ -2512,7 +2640,7 @@ function erzeugeAnzeige(leinwand) {
       ansagend: !!g.ansage,
     });
     if (alpha > 0.5) {
-      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : 0.86;
+      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : g.typ === 'kontrolleur' ? 0.94 : 0.86;
       malePunkte(stift, cx, fy - s * kopf, s, g.hp, GEGNERWERTE[g.typ].hp);
     }
   }
@@ -2555,7 +2683,8 @@ function erzeugeAnzeige(leinwand) {
     if (!hinweis || karte || bild.schwenk > 0.01) return;
     const p = bild.spieler;
     const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
-    const nachbar = bild.gegner.find((a) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
+    // den Kontrolleur schlägt das Spiel nicht vor
+    const nachbar = bild.gegner.find((a) => a.typ !== 'kontrolleur' && Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
     if (hinweis.wischen && bild.zug === 0) {
       const ort = schildAn(p, 0.42);
       maleSchild(TEXTE.hinweis[hinweis.wischen], ort.cx, ort.cy);
@@ -2580,7 +2709,7 @@ function erzeugeAnzeige(leinwand) {
     let zucken = 0;
     const seit = jetzt - wirkung.tuerZu;
     if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
-    maleTuer(stift, layout, bild.tuer, t, zucken, oy);
+    maleTuer(stift, layout, bild.tuer, t, zucken, oy, bild.spalt);
 
     const imWechsel = bild.schwenk > 0.01;
     if (!imWechsel) {
@@ -2618,7 +2747,24 @@ function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
+    if (rede && !karte && !imWechsel) maleRede(TEXTE.kontrolleur.satz, rede, oy);
     maleHinweis();
+  }
+
+  // Ein Schild über dem Kopf dessen, der spricht, mit einer Spitze zu ihm hin.
+  function maleRede(text, feld, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (feld.x + 0.5) * s;
+    const h = ZEILENHOEHE * 2 + 10;
+    const cy = boden.y + feld.y * s - s * 0.04 - h / 2 + oy;
+    maleSchild(text, cx, cy);
+    stift.fillStyle = 'rgba(13, 17, 25, 0.94)';
+    stift.beginPath();
+    stift.moveTo(cx - 6, cy + h / 2 - 1);
+    stift.lineTo(cx, cy + h / 2 + 7);
+    stift.lineTo(cx + 6, cy + h / 2 - 1);
+    stift.closePath();
+    stift.fill();
   }
 
   function zeichne(jetzt) {

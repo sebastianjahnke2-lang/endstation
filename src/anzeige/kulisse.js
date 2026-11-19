@@ -73,8 +73,11 @@ export function maleWagenbild(layout, plan, dichte) {
 }
 
 // Die Tür oben. offen läuft von 0 (zu) bis 1 (auf). (ox, oy) verschiebt den ganzen Wagen.
-export function maleTuer(stift, layout, offen, t, ox, oy) {
+// spalt: Wer gegen die geschlossene Tür läuft, drückt sie jedes Mal ein Stück auf.
+export function maleTuer(stift, layout, offen, t, ox, oy, spalt) {
   const { boden, rumpf, s, wandOben } = layout;
+  const gruen = offen;
+  offen = Math.max(offen, spalt || 0);
   const x = boden.x + TUERFELD.x * s + ox;
   const y = rumpf.y + oy;
   stift.fillStyle = FARBE.wandDunkel;
@@ -84,7 +87,7 @@ export function maleTuer(stift, layout, offen, t, ox, oy) {
     licht.addColorStop(0, '#fff1d6');
     licht.addColorStop(1, FARBE.warm);
     stift.fillStyle = licht;
-    stift.globalAlpha = offen;
+    stift.globalAlpha = Math.max(gruen, spalt ? 0.9 : 0); // durch den Spalt fällt schon Licht
     stift.fillRect(x + s * 0.1, y + 3, s * 0.8, wandOben - 3);
     stift.globalAlpha = 1;
   }
@@ -103,7 +106,7 @@ export function maleTuer(stift, layout, offen, t, ox, oy) {
   // Lampe neben der Tür: aus, solange zu, grün, wenn frei
   const lx = x + s * 1.14;
   const ly = y + wandOben * 0.55;
-  if (offen > 0.5) {
+  if (gruen > 0.5) {
     const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 0.3);
     schein.addColorStop(0, 'rgba(111, 220, 143, 0.55)');
     schein.addColorStop(1, 'rgba(111, 220, 143, 0)');
@@ -111,7 +114,7 @@ export function maleTuer(stift, layout, offen, t, ox, oy) {
     kreis(stift, lx, ly, s * 0.3);
     stift.fill();
   }
-  stift.fillStyle = offen > 0.5 ? FARBE.gruen : '#4b5672';
+  stift.fillStyle = gruen > 0.5 ? FARBE.gruen : '#4b5672';
   kreis(stift, lx, ly, s * 0.065);
   stift.fill();
 }

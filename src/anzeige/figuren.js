@@ -1,6 +1,7 @@
 // Figuren und Hindernisse. Niemand hat ein Gesicht. Jede Figur ist am Umriss erkennbar:
 // der Spieler am Schal, der Pendler an der Aktentasche, die Reisegruppe am Rucksack
-// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern.
+// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern, der Kontrolleur
+// an Mütze und Lochzange.
 
 import { FARBE, rundesRechteck, kreis } from './formen.js';
 
@@ -168,7 +169,69 @@ function maleDraengler(stift, cx, fy, s, o) {
   return k;
 }
 
-const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler };
+// Der Kontrolleur. o.zeigt: Richtung zum Spieler (x, y) oder null. o.heben: wie weit er die Zange
+// hinhält (0 bis 1), sie sinkt, je länger man ruhig steht. o.winkt: Hand an der Mütze beim Durchwinken.
+// Kleine Geste im Stand: Ab und zu klickt er mit der Zange.
+function maleKontrolleur(stift, cx, fy, s, o) {
+  const f = FARBE.kontrolleur;
+  const atem = o.ruhig ? 0 : Math.sin(o.t * 1.1 + o.takt) * 0.008;
+  const masse = { hoch: s * 0.76 * (1 + atem), schulter: s * 0.37, saum: s * 0.4, kopf: s * 0.12 };
+  const zeigt = o.zeigt && (o.heben || 0) > 0.01 ? o.zeigt : null;
+  const seite = zeigt ? (zeigt.x < 0 ? -1 : zeigt.x > 0 ? 1 : 0) : 0;
+  const k = maleKoerper(stift, cx, fy, masse, f, seite * 0.25 * (o.heben || 0));
+  // Mütze: Kuppe, rotes Band, Schirm zur Seite, auf die er sieht
+  const winkt = o.winkt || 0;
+  const my = k.kopfY - masse.kopf * 0.22 - winkt * s * 0.06;
+  stift.fillStyle = f.muetze;
+  stift.beginPath();
+  stift.arc(k.kopfX, my, masse.kopf * 1.08, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  stift.fillStyle = f.band;
+  rundesRechteck(stift, k.kopfX - masse.kopf * 1.1, my - masse.kopf * 0.12, masse.kopf * 2.2, masse.kopf * 0.32, masse.kopf * 0.1);
+  stift.fill();
+  stift.fillStyle = f.muetze;
+  const schirm = seite || 1;
+  rundesRechteck(stift, k.kopfX + (schirm > 0 ? masse.kopf * 0.55 : -masse.kopf * 1.75), my + masse.kopf * 0.12, masse.kopf * 1.2, masse.kopf * 0.26, masse.kopf * 0.1);
+  stift.fill();
+
+  // der Arm mit der Lochzange
+  const sx = cx + (seite || 1) * masse.schulter * 0.44 + k.schub;
+  const sy = k.schulterY + s * 0.07;
+  let hx;
+  let hy;
+  if (winkt > 0.01) {
+    // durchwinken: die Hand geht an die Mütze
+    hx = k.kopfX + masse.kopf * 0.9;
+    hy = my + s * 0.02 + (1 - winkt) * s * 0.2;
+  } else if (zeigt) {
+    const weit = Math.hypot(zeigt.x, zeigt.y) || 1;
+    const h = o.heben;
+    hx = sx + (zeigt.x / weit) * s * 0.3 * h;
+    hy = sy + s * 0.2 * (1 - h) + (zeigt.y / weit) * s * 0.22 * h;
+  } else {
+    hx = sx + s * 0.04;
+    hy = sy + s * 0.22;
+  }
+  linie(stift, [[sx, sy], [hx, hy]], f.arm, s * 0.07);
+  stift.fillStyle = f.kopf;
+  kreis(stift, hx, hy, s * 0.033);
+  stift.fill();
+  if (winkt <= 0.01) {
+    // die Zange: zwei Schenkel, im Stand klickt sie ab und zu
+    const klick = o.ruhig ? 0 : (o.t * 0.23 + o.takt * 0.31) % 1 > 0.92 ? 1 : 0;
+    const offen = 0.35 - klick * 0.3;
+    const r = zeigt ? Math.atan2(zeigt.y, zeigt.x) : Math.PI / 2;
+    for (const w of [-offen, offen]) {
+      const ex = hx + Math.cos(r + w) * s * 0.11;
+      const ey = hy + Math.sin(r + w) * s * 0.11;
+      linie(stift, [[hx, hy], [ex, ey]], f.zange, s * 0.022);
+    }
+  }
+  return k;
+}
+
+const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler, kontrolleur: maleKontrolleur };
 
 // Zeichnet eine Figur. (cx, fy) ist der Punkt zwischen den Füßen, s die Feldgröße.
 // o: t (Sekunden), takt (eigener Versatz), neigung, alpha, blitz, ruhig und was die Figur gerade tut.

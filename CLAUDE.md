@@ -14,11 +14,11 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: **freigegeben, noch nicht begonnen.** Der Auftraggeber hat am 18.11. „Weitermachen" gesagt. Es gibt dafür noch keinen Code und keinen Entwurf.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **teilweise gebaut.** Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test. Fahrkarte, Angebote, Stärken, Präsenz, Speisewagen, Begleiter und Halt sind nicht gebaut, weil sie seinen Vorgaben aus dem Prototyp-Auftrag widersprechen. Erst bauen, wenn er die Punkte unter „Offen" in `docs/ENTSCHEIDUNGEN.md` entschieden hat.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
-Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
+Stand der Zahlen (500 Fahrten je Bot, `npm run balance`, sechs Wagen): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 79 % ohne Fehler. Wagen 1 bis 3 schafft er immer. Der Ausweicher kommt auf 56 %, der Kämpfer auf 0 %.
 
 ## Wie wir arbeiten
 - Der Auftraggeber ist kein Entwickler und arbeitet am Handy. Claude baut, er testet und gibt Rückmeldung zum Gefühl. Antworten auf Deutsch, kurz, ohne Fachsprache.
@@ -89,9 +89,9 @@ src/
   kern/             reine Logik ohne DOM
     feld.js         Raster 5x8, Richtungen, Breitensuche
     zufall.js       Zufall mit Seed, Stand liegt im Zustand
-    wagen.js        die fünf Wagen: Plan, Gegner, Bauregel
+    wagen.js        die sechs Wagen: Plan, Gegner, Bauregel; der dritte ist der Mittelwagen
     lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
-    gegner.js       Verhalten von Pendler, Reisegruppe, Drängler
+    gegner.js       Verhalten von Pendler, Reisegruppe, Drängler, Kontrolleur
     spiel.js        erzeugeSpiel(seed) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
     anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
@@ -125,8 +125,8 @@ prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Haup
 ```
 
 So läuft ein Zug (`src/kern/spiel.js`):
-1. Phase 0: Der Spieler bewegt sich, schlägt oder wartet. Ungültiges kostet keinen Zug.
-2. Phase 1: Alle angekündigten Angriffe treffen ein. Höchstens ein Herz je Zug.
+1. Phase 0: Der Spieler bewegt sich, schlägt, wartet oder läuft gegen die geschlossene Tür (beim dritten Mal bricht sie auf, 1 Herz). Ungültiges kostet keinen Zug.
+2. Phase 1: Alle angekündigten Angriffe treffen ein. Höchstens ein Treffer je Zug, er kostet ein Herz, beim Kontrolleur zwei.
 3. Phase 2: Gegner bewegen sich oder kündigen an. Ein Gegner tut je Zug nur eines von beiden: Wer herantritt, überlässt dem Spieler den ersten Schlag.
 
 Feste Regeln der Architektur:
