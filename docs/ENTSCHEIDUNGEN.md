@@ -128,7 +128,11 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Lag der Tod hinter dem Speisewagen, beginnt die nächste Fahrt im Speisewagen, sonst vorn.** Abweichung vom Fahrplan („Nach einem Tod beginnt die nächste Fahrt im Speisewagen"): Wer in Wagen 1 bis 3 stirbt, würde sonst Wagen überspringen, die er nie geschafft hat. Er trifft den Begleiter dann, wenn er in den Speisewagen kommt.
 - **Wer neben ihn tritt, hört „Woran lag es?".** Darunter liegen drei Antworten auf dem Boden: die ehrliche (die Todesursache), eine andere Ursache und „Pech", in zufälliger Reihenfolge. Die Ursachen sind kleine Figuren, die Tür ist eine Tür, nur „Pech" ist ein Wort. Warum keine Wörter: Drei Schilder nebeneinander passen bei 360 Pixeln nicht. Draufgehen heißt antworten, wie beim Angebot.
 - **Die ehrliche Antwort gibt eine helle Lochung,** je Todesursache eine. Eine andere Antwort hat keine Folge. Er nennt nicht, was gelungen ist (Entscheidung vom 19.11.).
-- **Nicht gebaut: die letzte Szene gefahrlos wiederholen.**
+- **Wiederholung: Nach der Antwort liegt neben ihm ein Schild „Noch mal".** Egal, welche Antwort es war. Wer draufgeht, steht am Anfang des Wagens, in dem die letzte Fahrt endete: derselbe Plan, dieselben Gegner an denselben Plätzen. Die Gegner handeln ohne Zufall, wer dasselbe tut, sieht dasselbe. Der Wagen blendet über, statt hereinzufahren, und das Licht ist kühler, wie eine Erinnerung.
+- **Gefahrlos:** Treffer und Aufbrechen kosten kein Herz. Ein Treffer ist zu sehen und nimmt die Ruhe wie sonst, damit die Wiederholung dasselbe zeigt wie die echte Szene. Die Herzen sind dabei blass.
+- **Folgenlos:** Was in der Wiederholung geschieht, zählt nicht für die Reise: kein Angebot, keine Lochung, keine Stärke. Warum: Sonst wäre Sterben ein Weg zu Stärken ohne Gefahr, und der Rückblick am Halt soll nur zeigen, was auf der Fahrt geschah. Nur die Uhr läuft weiter.
+- **Zurück durch die Tür oder mit einem Schritt nach unten vom Startfeld.** Aufbrechen kostet hier nichts, man kommt also immer hinaus. Der Schritt nach unten ist für den, der aus Versehen auf das Schild getreten ist. Danach steht man wieder neben dem Begleiter, mit Herzen, Ruhe und allem anderen wie vorher. Das Schild ist fort: eine Wiederholung je Tod.
+- **Die Szene steht nicht im Speicher,** so wenig wie der Begleiter selbst. Wer die Seite neu lädt, trifft ihn nicht mehr.
 - **Was eine neue Fahrt mitnimmt, steht an einer Stelle:** `src/kern/reise.js`. Spiel und Prüfwerkzeuge nutzen sie beide, damit sie dieselbe Fahrt nachrechnen.
 
 ### Präsenz
