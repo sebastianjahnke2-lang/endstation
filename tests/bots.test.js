@@ -33,8 +33,8 @@ test('ohne Fehler spielt der ausgewogene Bot besser, und kein Zug ist ungültig'
 
 test('es wird von Kampfwagen zu Kampfwagen schwerer', () => {
   const b = werteAus('ausgewogener', FAHRTEN, UNACHTSAM);
-  // Der Autoritätswagen in der Mitte ist kein Kampfwagen und zählt hier nicht mit.
-  const treffer = b.jeWagen.filter((w) => !WAGENPLAENE[w.nr].autoritaet).map((w) => w.treffer);
+  // Autoritätswagen und Speisewagen sind keine Kampfwagen und zählen hier nicht mit.
+  const treffer = b.jeWagen.filter((w) => !WAGENPLAENE[w.nr].autoritaet && !WAGENPLAENE[w.nr].sicher).map((w) => w.treffer);
   for (let i = 1; i < treffer.length; i++) {
     assert.ok(treffer[i] >= treffer[i - 1], `Treffer je Wagen: ${treffer.map((t) => t.toFixed(2)).join(', ')}`);
   }

@@ -1,7 +1,7 @@
 // Die Wagen einer Fahrt. Zahlen sind Startwerte.
 // "art" ist die Kennung des Wagens, sein Name für die Anzeige steht in texte.js.
 //
-// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand. Alles außer "." ist ein Hindernis.
+// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand, T Tisch. Alles außer "." ist ein Hindernis.
 // Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
@@ -70,6 +70,30 @@ export const WAGENPLAENE = [
       { typ: 'kontrolleur', orte: [[1, 0]] },
       { typ: 'pendler', orte: [[0, 3], [1, 4]] },
       { typ: 'pendler', orte: [[4, 3], [3, 4]] },
+    ],
+  },
+  // Speisewagen: der sichere Ort nach dem Autoritätswagen. Keine Gegner, die Tür ist offen, nie passiert
+  // etwas. Beim Hineingehen heilt er zwei Herzen. Wer einen Gegnertyp verstanden hat, findet ihn hier als
+  // Fahrgast am Tisch. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  {
+    art: 'speisewagen',
+    sicher: true,
+    heilt: 2,
+    plan: [
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+    ],
+    gegner: [],
+    fahrgaeste: [
+      { typ: 'pendler', staerke: 'warten', x: 0, y: 1 },
+      { typ: 'gruppe', staerke: 'rueckhalt', x: 4, y: 3 },
+      { typ: 'draengler', staerke: 'sprint', x: 0, y: 7 },
     ],
   },
   {
@@ -150,5 +174,6 @@ export function baueWagen(nr, z) {
       gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
     }
   }
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner };
+  const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }

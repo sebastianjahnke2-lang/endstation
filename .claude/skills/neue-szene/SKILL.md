@@ -7,7 +7,7 @@ description: Einen Wagen, eine Autorität oder eine Szene ins Spiel bringen. Fü
 
 Gilt für jeden neuen Wagen (Kampfwagen, Autoritätswagen, Speisewagen, leerer Wagen, Spiegelwagen, Kraftprobe), jede neue Autorität und jeden neuen Gegnertyp.
 
-Stand 19.11.: Es gibt fünf Kampfwagen, den Mittelwagen als Autoritätswagen und vier Gegnertypen (Pendler, Reisegruppe, Drängler, Kontrolleur). Vorbild für alles Neue sind `src/kern/wagen.js` und `src/kern/gegner.js`.
+Stand 19.11.: Es gibt fünf Kampfwagen, den Mittelwagen als Autoritätswagen, den Speisewagen als sicheren Ort und vier Gegnertypen (Pendler, Reisegruppe, Drängler, Kontrolleur). Vorbild für alles Neue sind `src/kern/wagen.js` und `src/kern/gegner.js`.
 
 ## 1. Darf sie hinein?
 

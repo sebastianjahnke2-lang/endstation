@@ -102,6 +102,18 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Bei voller Ruhe zögert der nächste Gegner, der angreifen würde, einen Zug lang.** Er kündigt nicht an und weicht kurz zurück. Das gilt einmal je voller Ruhe: Erst ein Treffer und neue volle Ruhe bringen die Präsenz zurück. Warum: Gälte sie in jedem Zug, griffe bei voller Ruhe niemand mehr an. Die erste Fassung ließ den nächststehenden Gegner zögern. Bei gleichem Abstand traf das oft einen, der gar nicht angreifen wollte, und die Präsenz verpuffte.
 - **Zahlen mit Präsenz** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 50 %, ohne Fehler 86 %, Ausweicher 58 %, Kämpfer 0 %.
 
+### Speisewagen
+
+- **Vierter von jetzt sieben Wagen, direkt nach dem Mittelwagen,** wie im Fahrplan („der Safe Space nach dem Autoritätswagen").
+- **Keine Gegner, die Tür ist von Anfang an offen, nie passiert etwas.** Der Fuzz-Test prüft in jedem Zug, dass dort niemand ist und kein Herz verloren geht.
+- **Er heilt zwei Herzen beim Hineingehen,** höchstens bis fünf. Warum beim Hineingehen: Wer durchgehen will, soll nicht warten müssen. Reibung ist ein Fehler.
+- **Tische an beiden Wänden, dazwischen ein Gang drei Felder breit.** Mehr erlaubt die Bauregel nicht: Ein Tisch in der Mitte ließe Felder ohne Ausweg zur Seite zurück.
+- **Warmes Licht** über den Tischen und auf dem ganzen Boden.
+- **Fahrgäste sind die verstandenen Gegnertypen:** Wer die Stärke des Pendlers, der Reisegruppe oder des Dränglers hat, findet eine solche Figur auf einem Sitz. **Ohne Gesicht,** obwohl der Fahrplan Gesichter nennt. Das widerspricht den Vorgaben aus dem Prototyp-Auftrag und steht unter „Offen".
+- **Fenster wie in jedem Wagen,** mit vorbeiziehenden Lichtern. Kein „Blick nach draußen" mit Landschaft, das widerspricht ebenfalls dem Prototyp-Auftrag.
+- **Nicht gebaut: Gönnen und Begleiter.** Gönnen braucht einen späteren Besuch, in dem „jemand mehr am Tisch sitzt". Der Begleiter widerspricht dem Prototyp-Auftrag (kein Lob).
+- **Zahlen mit Speisewagen** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 55 %, ohne Fehler 86 %, Ausweicher 60 %, Kämpfer 0 %, ausgewogen mit Unachtsamkeit und allen Stärken 73 %. Das Heilen hilft wenig, weil die meisten mit fast vollen Herzen ankommen.
+
 ### Stärken aus Schatten
 
 - **Pendler verstanden, wer dreimal neben einem Pendler wartet** (waagerecht oder senkrecht daneben, nicht hintereinander nötig). Stärke: **Ruhe fürs Warten.** Wer neben einem Gegner wartet und in diesem Zug nicht getroffen wird, bekommt eine Ruhe.

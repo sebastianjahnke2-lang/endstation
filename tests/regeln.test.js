@@ -601,3 +601,43 @@ test('Sprint: Hindernisse halten ihn auf, steht dahinter ein Gegner, bleibt man 
   assert.deepEqual([zwei.zustand.spieler.x, zwei.zustand.spieler.y], [2, 6]);
   assert.equal(e[0].getroffen.length, 1);
 });
+
+// ---------------------------------------------------------------- Speisewagen (Etappe 2)
+
+test('Speisewagen: Er folgt auf den Mittelwagen, hat keine Gegner, die Tür ist offen, und er heilt zwei Herzen', () => {
+  const spiel = erzeugeSpiel(9, { startWagen: 2 });
+  const z = spiel.zustand;
+  z.gegner = [];
+  z.tuerOffen = true;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  z.spieler.herzen = 2;
+  const e = spiel.act('hoch');
+  assert.deepEqual(typen(e), ['wagenwechsel', 'geheilt']);
+  assert.equal(z.wagen.art, 'speisewagen');
+  assert.equal(z.spieler.herzen, 4);
+  assert.equal(e[1].plus, 2);
+  assert.equal(z.gegner.length, 0);
+  assert.equal(z.tuerOffen, true);
+});
+
+test('Speisewagen: Mehr als volle Herzen gibt es nicht', () => {
+  const spiel = erzeugeSpiel(9, { startWagen: 2 });
+  const z = spiel.zustand;
+  z.gegner = [];
+  z.tuerOffen = true;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  z.spieler.herzen = 4;
+  const e = spiel.act('hoch');
+  assert.equal(z.spieler.herzen, HERZEN_VOLL);
+  assert.equal(e[1].plus, 1);
+});
+
+test('Speisewagen: An den Tischen sitzt, wen der Spieler verstanden hat', () => {
+  const ohne = erzeugeSpiel(9, { startWagen: 3 }).zustand;
+  assert.deepEqual(ohne.wagen.fahrgaeste, []);
+  const mit = erzeugeSpiel(9, { startWagen: 3, staerken: { warten: true, sprint: true } }).zustand;
+  assert.deepEqual(mit.wagen.fahrgaeste.map((f) => f.typ).sort(), ['draengler', 'pendler']);
+  for (const f of mit.wagen.fahrgaeste) assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
+});

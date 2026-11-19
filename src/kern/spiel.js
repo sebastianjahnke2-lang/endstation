@@ -35,6 +35,10 @@ function richteWagenEin(z) {
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
   z.wagen.mitGruppe = z.gegner.some((g) => g.typ === 'gruppe');
+  z.wagen.sicher = wagen.sicher;
+  z.wagen.heilt = wagen.heilt;
+  // an den Tischen sitzt, wen der Spieler verstanden hat
+  z.wagen.fahrgaeste = wagen.fahrgaeste.filter((f) => z.staerken[f.staerke]).map((f) => ({ typ: f.typ, x: f.x, y: f.y }));
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -80,6 +84,11 @@ function wechsleWagen(z) {
     z.wagenNr += 1;
     richteWagenEin(z);
     ereignisse.push({ typ: 'wagenwechsel', phase: 0, nr: z.wagenNr });
+    if (z.wagen.heilt) {
+      const vorher = z.spieler.herzen;
+      z.spieler.herzen = Math.min(HERZEN_VOLL, vorher + z.wagen.heilt);
+      ereignisse.push({ typ: 'geheilt', phase: 0, herzen: z.spieler.herzen, plus: z.spieler.herzen - vorher });
+    }
   }
   if (gruppe) ereignisse.push(gruppe);
   return ereignisse;

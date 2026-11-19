@@ -364,6 +364,9 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ruhigGewartet') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'geheilt') {
+      bild.herzen = e.herzen;
+      if (e.plus > 0) wirkung.leuchten = jetzt + 160; // nach dem Hereinschieben des Wagens
     } else if (e.typ === 'rueckhalt' || e.typ === 'verstanden') {
       // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
       if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
@@ -675,6 +678,29 @@ export function erzeugeAnzeige(leinwand) {
     const seit = jetzt - wirkung.tuerZu;
     if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
     maleTuer(stift, layout, bild.tuer, t, zucken, oy, bild.spalt);
+
+    // Speisewagen: warmes Licht über den Tischen, Fahrgäste an ihren Plätzen
+    if (z.wagen.sicher) {
+      stift.fillStyle = 'rgba(255, 190, 120, 0.13)';
+      stift.fillRect(boden.x, boden.y + oy, boden.b, boden.h);
+      for (let y = 0; y < z.wagen.plan.length; y++) {
+        for (const x of [0, z.wagen.plan[y].length - 1]) {
+          if (z.wagen.plan[y][x] !== 'T') continue;
+          const lx = boden.x + (x + 0.5) * s;
+          const ly = boden.y + (y + 0.4) * s + oy;
+          const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 1.5);
+          schein.addColorStop(0, 'rgba(255, 210, 150, 0.34)');
+          schein.addColorStop(1, 'rgba(255, 210, 150, 0)');
+          stift.fillStyle = schein;
+          stift.fillRect(lx - s * 1.5, ly - s * 1.5, s * 3, s * 3);
+        }
+      }
+      for (const f of z.wagen.fahrgaeste) {
+        const cx = boden.x + (f.x + 0.5) * s;
+        const fy = boden.y + (f.y + 0.8) * s + oy;
+        maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false });
+      }
+    }
 
     const imWechsel = bild.schwenk > 0.01;
     if (!imWechsel) {

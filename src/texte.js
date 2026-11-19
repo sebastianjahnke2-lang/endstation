@@ -9,6 +9,7 @@ export const TEXTE = {
     sitzwagen: 'Sitzwagen',
     fahrradabteil: 'Fahrradabteil',
     mittelwagen: 'Mittelwagen',
+    speisewagen: 'Speisewagen',
     grossraumwagen: 'Großraumwagen',
     liegewagen: 'Liegewagen',
     gepaeckwagen: 'Gepäckwagen',

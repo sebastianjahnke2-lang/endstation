@@ -350,6 +350,32 @@ function maleKoffer(stift, x, y, s, gross) {
   stift.fillRect(kx + b * 0.42, ky + h * 0.42, b * 0.2, h * 0.14);
 }
 
+// Ein Tisch im Speisewagen: Tischtuch, eine Tasse, eine kleine Lampe
+function maleTisch(stift, x, y, s) {
+  stift.fillStyle = '#5a4636';
+  rundesRechteck(stift, x + s * 0.12, y + s * 0.16, s * 0.76, s * 0.68, s * 0.08);
+  stift.fill();
+  stift.fillStyle = '#efe4cf';
+  rundesRechteck(stift, x + s * 0.16, y + s * 0.2, s * 0.68, s * 0.6, s * 0.06);
+  stift.fill();
+  stift.fillStyle = '#d9cbb0';
+  stift.fillRect(x + s * 0.16, y + s * 0.47, s * 0.68, s * 0.05);
+  // Tasse mit Untertasse
+  stift.fillStyle = '#c9bca4';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.09);
+  stift.fill();
+  stift.fillStyle = '#ffffff';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.055);
+  stift.fill();
+  stift.fillStyle = '#6b4a33';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.035);
+  stift.fill();
+  // Tischlampe
+  stift.fillStyle = '#ffd9a0';
+  kreis(stift, x + s * 0.64, y + s * 0.34, s * 0.07);
+  stift.fill();
+}
+
 function maleWand(stift, x, y, s) {
   stift.fillStyle = FARBE.wand;
   stift.fillRect(x, y, s, s);
@@ -367,5 +393,6 @@ export function maleHindernis(stift, art, x, y, s, feldX, feldY) {
   if (art === 'S') maleSitz(stift, x, y, s);
   else if (art === 'F') maleFahrrad(stift, x, y, s);
   else if (art === 'K') maleKoffer(stift, x, y, s, (feldX + feldY) % 2 === 0);
+  else if (art === 'T') maleTisch(stift, x, y, s);
   else maleWand(stift, x, y, s);
 }

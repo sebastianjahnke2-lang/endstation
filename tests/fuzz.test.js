@@ -97,8 +97,16 @@ function eineFahrt(seed, waehle, optionen) {
     assert.equal(z.zug, alt.zug + 1, `${wo}: Zugzähler`);
     pruefeZustand(z, wo);
     if (typen.includes('wagenwechsel') || typen.includes('halt')) {
-      assert.equal(z.spieler.herzen, alt.herzen, `${wo}: Herzen beim Wagenwechsel`);
+      // nur der Speisewagen heilt beim Hineingehen
+      const heil = ereignisse.find((e) => e.typ === 'geheilt');
+      assert.equal(z.spieler.herzen, heil ? Math.min(HERZEN_VOLL, alt.herzen + z.wagen.heilt) : alt.herzen, `${wo}: Herzen beim Wagenwechsel`);
+      assert.equal(!!heil, z.status === 'faehrt' && z.wagen.heilt > 0, `${wo}: Heilen beim Wagenwechsel`);
       continue;
+    }
+    // Im sicheren Wagen passiert nie etwas Schlimmes.
+    if (z.wagen.sicher) {
+      assert.equal(z.gegner.length, 0, `${wo}: Gegner im sicheren Wagen`);
+      assert.ok(z.spieler.herzen >= alt.herzen, `${wo}: Herz verloren im sicheren Wagen`);
     }
 
     // kein Angriff ohne Ankündigung, höchstens ein Treffer je Zug. Er kostet ein Herz, beim Kontrolleur

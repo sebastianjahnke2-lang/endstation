@@ -201,7 +201,7 @@ function wuerfle(z, n) {
 // Die Wagen einer Fahrt. Zahlen sind Startwerte.
 // "art" ist die Kennung des Wagens, sein Name für die Anzeige steht in texte.js.
 //
-// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand. Alles außer "." ist ein Hindernis.
+// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand, T Tisch. Alles außer "." ist ein Hindernis.
 // Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
@@ -270,6 +270,30 @@ const WAGENPLAENE = [
       { typ: 'kontrolleur', orte: [[1, 0]] },
       { typ: 'pendler', orte: [[0, 3], [1, 4]] },
       { typ: 'pendler', orte: [[4, 3], [3, 4]] },
+    ],
+  },
+  // Speisewagen: der sichere Ort nach dem Autoritätswagen. Keine Gegner, die Tür ist offen, nie passiert
+  // etwas. Beim Hineingehen heilt er zwei Herzen. Wer einen Gegnertyp verstanden hat, findet ihn hier als
+  // Fahrgast am Tisch. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  {
+    art: 'speisewagen',
+    sicher: true,
+    heilt: 2,
+    plan: [
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+    ],
+    gegner: [],
+    fahrgaeste: [
+      { typ: 'pendler', staerke: 'warten', x: 0, y: 1 },
+      { typ: 'gruppe', staerke: 'rueckhalt', x: 4, y: 3 },
+      { typ: 'draengler', staerke: 'sprint', x: 0, y: 7 },
     ],
   },
   {
@@ -350,7 +374,8 @@ function baueWagen(nr, z) {
       gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
     }
   }
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner };
+  const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }
 
 // --- kern/gegner.js
@@ -699,6 +724,10 @@ function richteWagenEin(z) {
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
   z.wagen.mitGruppe = z.gegner.some((g) => g.typ === 'gruppe');
+  z.wagen.sicher = wagen.sicher;
+  z.wagen.heilt = wagen.heilt;
+  // an den Tischen sitzt, wen der Spieler verstanden hat
+  z.wagen.fahrgaeste = wagen.fahrgaeste.filter((f) => z.staerken[f.staerke]).map((f) => ({ typ: f.typ, x: f.x, y: f.y }));
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -744,6 +773,11 @@ function wechsleWagen(z) {
     z.wagenNr += 1;
     richteWagenEin(z);
     ereignisse.push({ typ: 'wagenwechsel', phase: 0, nr: z.wagenNr });
+    if (z.wagen.heilt) {
+      const vorher = z.spieler.herzen;
+      z.spieler.herzen = Math.min(HERZEN_VOLL, vorher + z.wagen.heilt);
+      ereignisse.push({ typ: 'geheilt', phase: 0, herzen: z.spieler.herzen, plus: z.spieler.herzen - vorher });
+    }
   }
   if (gruppe) ereignisse.push(gruppe);
   return ereignisse;
@@ -963,6 +997,7 @@ const TEXTE = {
     sitzwagen: 'Sitzwagen',
     fahrradabteil: 'Fahrradabteil',
     mittelwagen: 'Mittelwagen',
+    speisewagen: 'Speisewagen',
     grossraumwagen: 'Großraumwagen',
     liegewagen: 'Liegewagen',
     gepaeckwagen: 'Gepäckwagen',
@@ -1638,6 +1673,32 @@ function maleKoffer(stift, x, y, s, gross) {
   stift.fillRect(kx + b * 0.42, ky + h * 0.42, b * 0.2, h * 0.14);
 }
 
+// Ein Tisch im Speisewagen: Tischtuch, eine Tasse, eine kleine Lampe
+function maleTisch(stift, x, y, s) {
+  stift.fillStyle = '#5a4636';
+  rundesRechteck(stift, x + s * 0.12, y + s * 0.16, s * 0.76, s * 0.68, s * 0.08);
+  stift.fill();
+  stift.fillStyle = '#efe4cf';
+  rundesRechteck(stift, x + s * 0.16, y + s * 0.2, s * 0.68, s * 0.6, s * 0.06);
+  stift.fill();
+  stift.fillStyle = '#d9cbb0';
+  stift.fillRect(x + s * 0.16, y + s * 0.47, s * 0.68, s * 0.05);
+  // Tasse mit Untertasse
+  stift.fillStyle = '#c9bca4';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.09);
+  stift.fill();
+  stift.fillStyle = '#ffffff';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.055);
+  stift.fill();
+  stift.fillStyle = '#6b4a33';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.035);
+  stift.fill();
+  // Tischlampe
+  stift.fillStyle = '#ffd9a0';
+  kreis(stift, x + s * 0.64, y + s * 0.34, s * 0.07);
+  stift.fill();
+}
+
 function maleWand(stift, x, y, s) {
   stift.fillStyle = FARBE.wand;
   stift.fillRect(x, y, s, s);
@@ -1655,6 +1716,7 @@ function maleHindernis(stift, art, x, y, s, feldX, feldY) {
   if (art === 'S') maleSitz(stift, x, y, s);
   else if (art === 'F') maleFahrrad(stift, x, y, s);
   else if (art === 'K') maleKoffer(stift, x, y, s, (feldX + feldY) % 2 === 0);
+  else if (art === 'T') maleTisch(stift, x, y, s);
   else maleWand(stift, x, y, s);
 }
 
@@ -2589,6 +2651,9 @@ function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ruhigGewartet') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'geheilt') {
+      bild.herzen = e.herzen;
+      if (e.plus > 0) wirkung.leuchten = jetzt + 160; // nach dem Hereinschieben des Wagens
     } else if (e.typ === 'rueckhalt' || e.typ === 'verstanden') {
       // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
       if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
@@ -2900,6 +2965,29 @@ function erzeugeAnzeige(leinwand) {
     const seit = jetzt - wirkung.tuerZu;
     if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
     maleTuer(stift, layout, bild.tuer, t, zucken, oy, bild.spalt);
+
+    // Speisewagen: warmes Licht über den Tischen, Fahrgäste an ihren Plätzen
+    if (z.wagen.sicher) {
+      stift.fillStyle = 'rgba(255, 190, 120, 0.13)';
+      stift.fillRect(boden.x, boden.y + oy, boden.b, boden.h);
+      for (let y = 0; y < z.wagen.plan.length; y++) {
+        for (const x of [0, z.wagen.plan[y].length - 1]) {
+          if (z.wagen.plan[y][x] !== 'T') continue;
+          const lx = boden.x + (x + 0.5) * s;
+          const ly = boden.y + (y + 0.4) * s + oy;
+          const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 1.5);
+          schein.addColorStop(0, 'rgba(255, 210, 150, 0.34)');
+          schein.addColorStop(1, 'rgba(255, 210, 150, 0)');
+          stift.fillStyle = schein;
+          stift.fillRect(lx - s * 1.5, ly - s * 1.5, s * 3, s * 3);
+        }
+      }
+      for (const f of z.wagen.fahrgaeste) {
+        const cx = boden.x + (f.x + 0.5) * s;
+        const fy = boden.y + (f.y + 0.8) * s + oy;
+        maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false });
+      }
+    }
 
     const imWechsel = bild.schwenk > 0.01;
     if (!imWechsel) {
@@ -3313,6 +3401,17 @@ function erzeugeTon() {
       klang(1175, 1175, 0.16, 0.25, 'sine', 0.13);
     },
     wagenwechsel: () => hauch(320, 0.24, 0.5),
+    // Etappe 2
+    tuerStoss: () => {
+      klang(90, 60, 0.12, 0.6, 'triangle');
+      hauch(180, 0.08, 0.3);
+    },
+    kontrolle: () => klang(2600, 2400, 0.02, 0.12, 'square'), // die Zange klickt
+    sprint: () => hauch(1500, 0.12, 0.35),
+    geheilt: () => {
+      klang(523, 523, 0.3, 0.16, 'sine');
+      klang(659, 659, 0.36, 0.14, 'sine', 0.12);
+    },
     tod: () => klang(196, 98, 0.5, 0.4, 'sine', 0.1),
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);
