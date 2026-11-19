@@ -1,5 +1,7 @@
 // Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
 // Nach oben wegwischen beginnt die nächste Fahrt.
+// Arten: 'tod'; 'fehlt' (Halt, aber dem Schaffner fehlen helle Lochungen);
+// 'halt' (ausgestiegen: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
 
 import { FARBE, rundesRechteck, kreis, sanft } from './formen.js';
 import { maleFigur, maleSymbol } from './figuren.js';
@@ -12,15 +14,18 @@ export function kartenMasse(layout, art) {
   const b = Math.min(layout.breite - 32, 420);
   const x = Math.round((layout.breite - b) / 2);
   const polster = 6;
-  const raster = b >= 380 ? 3 : 2.5;
+  const raster = b >= 380 ? 3 : 2.2;
   const spalten = Math.floor((b - 20 - 2 * polster) / raster);
   const zeilen = 2 * ZEILENHOEHE + 4;
   const bildH = Math.max(150, Math.min(250, Math.round(layout.hoehe * 0.34)));
   const tafelH = Math.ceil(zeilen * raster + 2 * polster);
   const herzenH = art === 'halt' ? 40 : 0;
   const fahrkarteH = 62;
-  const h = 10 + bildH + 10 + tafelH + herzenH + fahrkarteH + 66;
+  const knoepfeH = art === 'halt' ? 58 : 0; // zwei Knöpfe übereinander statt der Winkel
+  const h = 10 + bildH + 10 + tafelH + herzenH + fahrkarteH + 66 + knoepfeH;
   const y = Math.round((layout.hoehe - h) / 2) - 4;
+  const knopfB = b - 36;
+  const unten = y + h - 10;
   return {
     x,
     y,
@@ -30,12 +35,13 @@ export function kartenMasse(layout, art) {
     tafel: { x: x + 10, y: y + 20 + bildH, b: b - 20, h: tafelH, raster, spalten, zeilen, polster },
     herzenY: y + 20 + bildH + tafelH + 22,
     fahrkarte: { x: x + 18, y: y + 20 + bildH + tafelH + herzenH + 10, b: b - 36, h: fahrkarteH - 14 },
-    weiter: { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
+    weiter: art === 'halt' ? { x: x + 18, y: unten - 52, b: knopfB, h: 52 } : { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
+    aussteigen: art === 'halt' ? { x: x + 18, y: unten - 52 - 58, b: knopfB, h: 52 } : null,
   };
 }
 
 function maleBahnsteig(stift, r, karte, t) {
-  const halt = karte.art === 'halt';
+  const halt = karte.art === 'halt' || karte.art === 'fehlt';
   stift.save();
   rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
   stift.clip();
@@ -152,6 +158,8 @@ function maleBahnsteig(stift, r, karte, t) {
   stift.fillRect(bx + bb * 0.2, boden - 21, 5, 7);
 
   maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
+  // am Halt steht der Schaffner am Zug: der Begleiter, jetzt mit Mütze
+  if (halt) maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben: karte.art === 'fehlt' ? 0.8 : 0 });
 
   if (halt) {
     // die Uhr am Bahnsteig zeigt die Ankunft
@@ -192,6 +200,20 @@ export function maleFahrkarteBild(stift, r, fahrkarte) {
   });
 }
 
+function maleKartenknopf(stift, k, text) {
+  stift.fillStyle = '#1c2437';
+  rundesRechteck(stift, k.x, k.y, k.b, k.h, 12);
+  stift.fill();
+  stift.strokeStyle = '#2f3a52';
+  stift.lineWidth = 1;
+  rundesRechteck(stift, k.x + 0.5, k.y + 0.5, k.b - 1, k.h - 1, 12);
+  stift.stroke();
+  const breit = Math.ceil(k.b / 2) - 4;
+  const feld = neuesPunktfeld(breit, ZEILENHOEHE);
+  schreibeMittig(feld, text, 0);
+  zeichnePunktfeld(stift, feld, k.x + (k.b - breit * 2) / 2, k.y + (k.h - ZEILENHOEHE * 2) / 2, 2, FARBE.bernstein, null);
+}
+
 function maleLoch(stift, x, y, r, hell) {
   stift.fillStyle = hell ? FARBE.warm : '#1a1f2b';
   kreis(stift, x, y, r);
@@ -228,8 +250,10 @@ export function maleKarte(stift, layout, karte, t) {
   rundesRechteck(stift, tf.x, tf.y, tf.b, tf.h, 5);
   stift.fill();
   const feld = neuesPunktfeld(tf.spalten, tf.zeilen);
-  schreibeMittig(feld, karte.zeilen[0] || '', 1);
-  schreibeMittig(feld, karte.zeilen[1] || '', ZEILENHOEHE + 3);
+  // im Rückblick zeigt die Anzeige nacheinander die Tatsachen der Fahrkarte
+  const zeilen = karte.rueckblickZeile || karte.zeilen;
+  schreibeMittig(feld, zeilen[0] || '', 1);
+  schreibeMittig(feld, zeilen[1] || '', ZEILENHOEHE + 3);
   zeichnePunktfeld(stift, feld, tf.x + tf.polster, tf.y + tf.polster, tf.raster, FARBE.bernstein, FARBE.bernsteinAus);
 
   if (karte.fahrkarte) maleFahrkarteBild(stift, m.fahrkarte, karte.fahrkarte);
@@ -240,6 +264,17 @@ export function maleKarte(stift, layout, karte, t) {
     maleHerzen(stift, layout.breite / 2 - breite / 2 - g * 0.1, m.herzenY, karte.herzen, karte.herzenVoll, 0, g);
   }
 
+  // am Halt nach dem Rückblick: zwei Knöpfe; nach „Aussteigen" bleibt das Bild, wegwischen beginnt neu
+  if (karte.art === 'halt' && karte.rueckblickZeile) {
+    stift.restore();
+    return;
+  }
+  if (karte.art === 'halt' && !karte.ausgestiegen) {
+    maleKartenknopf(stift, m.aussteigen, karte.knopftexte.aussteigen);
+    maleKartenknopf(stift, m.weiter, karte.knopftexte.nochEine);
+    stift.restore();
+    return;
+  }
   // zwei Winkel nach oben: wegwischen
   const cx = layout.breite / 2;
   const wandern = karte.ruhig ? 0 : Math.sin(t * 2.2) * 3;

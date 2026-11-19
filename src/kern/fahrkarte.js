@@ -13,6 +13,14 @@
 import { BREITE, HOEHE, STARTFELD, TUERFELD, abstand } from './feld.js';
 import { istHindernis, gegnerAuf } from './lage.js';
 import { wuerfle } from './zufall.js';
+import { WAGENPLAENE } from './wagen.js';
+
+const WAGENARTEN = WAGENPLAENE.map((w) => w.art);
+// der Ort einer Lochung, für den Rückblick am Halt
+function ort(l, roh) {
+  if (roh && WAGENARTEN.includes(roh.wagen)) l.wagen = roh.wagen;
+  return l;
+}
 
 // Reihenfolge wie auf der Karte. Die Worte stehen in texte.js unter "pruefung".
 //   aufregen     Nicht aufregen          kein Schlag
@@ -39,11 +47,11 @@ export function bereinigeFahrkarte(roh) {
   for (const l of roh.lochungen) {
     if (!l || typeof l !== 'object') continue;
     if (l.art === 'pruefung' && PRUEFUNGEN.includes(l.id) && !istGelocht(karte, l.id)) {
-      karte.lochungen.push({ art: 'pruefung', id: l.id, hell: true });
+      karte.lochungen.push(ort({ art: 'pruefung', id: l.id, hell: true }, l));
     } else if (l.art === 'tod' && TODESARTEN.includes(l.durch) && karte.lochungen.filter((x) => x.art === 'tod').length < SONDER_HOECHSTENS) {
-      karte.lochungen.push({ art: 'tod', durch: l.durch, hell: l.hell === true });
+      karte.lochungen.push(ort({ art: 'tod', durch: l.durch, hell: l.hell === true }, l));
     } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
-      karte.lochungen.push({ art: 'ehrlich', durch: l.durch, hell: true });
+      karte.lochungen.push(ort({ art: 'ehrlich', durch: l.durch, hell: true }, l));
     }
   }
   return karte;
@@ -116,7 +124,7 @@ function erfuellt(z, p) {
 export function werteWagenAus(z, ereignisse, phase) {
   const p = z.pruefung;
   if (p && erfuellt(z, p) && !istGelocht(z.fahrkarte, p.id)) {
-    z.fahrkarte.lochungen.push({ art: 'pruefung', id: p.id, hell: true });
+    z.fahrkarte.lochungen.push({ art: 'pruefung', id: p.id, hell: true, wagen: z.wagen.art });
     ereignisse.push({ typ: 'gelocht', phase, art: 'pruefung', id: p.id, hell: true });
   }
   z.pruefung = null;
@@ -135,6 +143,6 @@ export function lochungFuerTod(z, durch, ereignisse, phase) {
   const karte = z.fahrkarte;
   if (karte.lochungen.some((l) => l.art === 'tod' && l.durch === durch && !l.hell)) return;
   if (karte.lochungen.filter((l) => l.art === 'tod').length >= SONDER_HOECHSTENS) return;
-  karte.lochungen.push({ art: 'tod', durch, hell: false });
+  karte.lochungen.push({ art: 'tod', durch, hell: false, wagen: z.wagen.art });
   ereignisse.push({ typ: 'gelocht', phase, art: 'tod', durch, hell: false });
 }

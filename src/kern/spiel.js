@@ -16,7 +16,7 @@ import { RICHTUNG, STARTFELD, TUERFELD, imFeld } from './feld.js';
 import { istHindernis, gegnerAuf, istMarkiert, tuerFrei } from './lage.js';
 import { WAGENZAHL, baueWagen } from './wagen.js';
 import { wuerfle } from './zufall.js';
-import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod } from './fahrkarte.js';
+import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod, helleLochungen, HALT_VERLANGT } from './fahrkarte.js';
 import { ANTWORTARTEN, setzeBegleiter, sprichMitBegleiter } from './begleiter.js';
 import { neuerGegner, loeseAnsagenEin, planeGegner, schadenVon } from './gegner.js';
 
@@ -101,8 +101,11 @@ function wechsleWagen(z) {
   werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
+    // Halt: Der Schaffner verlangt drei helle Lochungen, egal welche.
     z.status = 'halt';
-    ereignisse.push({ typ: 'halt', phase: 0 });
+    const hell = helleLochungen(z.fahrkarte);
+    z.halt = { genug: hell >= HALT_VERLANGT, hell, fehlt: Math.max(0, HALT_VERLANGT - hell) };
+    ereignisse.push({ typ: 'halt', phase: 0, ...z.halt });
   } else {
     z.wagenNr += 1;
     richteWagenEin(z);
@@ -344,6 +347,7 @@ export function erzeugeSpiel(seed, optionen = {}) {
     begleiterDurch: ANTWORTARTEN.includes(optionen.begleiter) && optionen.begleiter !== 'pech' ? optionen.begleiter : null,
     begleiter: null, // { durch, x, y, antworten, gesprochen }, nur im Speisewagen
     todDurch: null,
+    halt: null, // { genug, hell, fehlt } am Ende der Fahrt
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);

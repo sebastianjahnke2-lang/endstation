@@ -400,6 +400,14 @@ function baueWagen(nr, z) {
 
 
 
+
+const WAGENARTEN = WAGENPLAENE.map((w) => w.art);
+// der Ort einer Lochung, für den Rückblick am Halt
+function ort(l, roh) {
+  if (roh && WAGENARTEN.includes(roh.wagen)) l.wagen = roh.wagen;
+  return l;
+}
+
 // Reihenfolge wie auf der Karte. Die Worte stehen in texte.js unter "pruefung".
 //   aufregen     Nicht aufregen          kein Schlag
 //   aussteigen   Erst aussteigen lassen  drei Züge hintereinander stillstehen
@@ -425,11 +433,11 @@ function bereinigeFahrkarte(roh) {
   for (const l of roh.lochungen) {
     if (!l || typeof l !== 'object') continue;
     if (l.art === 'pruefung' && PRUEFUNGEN.includes(l.id) && !istGelocht(karte, l.id)) {
-      karte.lochungen.push({ art: 'pruefung', id: l.id, hell: true });
+      karte.lochungen.push(ort({ art: 'pruefung', id: l.id, hell: true }, l));
     } else if (l.art === 'tod' && TODESARTEN.includes(l.durch) && karte.lochungen.filter((x) => x.art === 'tod').length < SONDER_HOECHSTENS) {
-      karte.lochungen.push({ art: 'tod', durch: l.durch, hell: l.hell === true });
+      karte.lochungen.push(ort({ art: 'tod', durch: l.durch, hell: l.hell === true }, l));
     } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
-      karte.lochungen.push({ art: 'ehrlich', durch: l.durch, hell: true });
+      karte.lochungen.push(ort({ art: 'ehrlich', durch: l.durch, hell: true }, l));
     }
   }
   return karte;
@@ -502,7 +510,7 @@ function erfuellt(z, p) {
 function werteWagenAus(z, ereignisse, phase) {
   const p = z.pruefung;
   if (p && erfuellt(z, p) && !istGelocht(z.fahrkarte, p.id)) {
-    z.fahrkarte.lochungen.push({ art: 'pruefung', id: p.id, hell: true });
+    z.fahrkarte.lochungen.push({ art: 'pruefung', id: p.id, hell: true, wagen: z.wagen.art });
     ereignisse.push({ typ: 'gelocht', phase, art: 'pruefung', id: p.id, hell: true });
   }
   z.pruefung = null;
@@ -521,7 +529,7 @@ function lochungFuerTod(z, durch, ereignisse, phase) {
   const karte = z.fahrkarte;
   if (karte.lochungen.some((l) => l.art === 'tod' && l.durch === durch && !l.hell)) return;
   if (karte.lochungen.filter((l) => l.art === 'tod').length >= SONDER_HOECHSTENS) return;
-  karte.lochungen.push({ art: 'tod', durch, hell: false });
+  karte.lochungen.push({ art: 'tod', durch, hell: false, wagen: z.wagen.art });
   ereignisse.push({ typ: 'gelocht', phase, art: 'tod', durch, hell: false });
 }
 
@@ -564,7 +572,7 @@ function sprichMitBegleiter(z, ereignisse) {
     ereignisse.push({ typ: 'antwort', phase: 0, id: a.id, ehrlich });
     const karte = z.fahrkarte;
     if (ehrlich && !karte.lochungen.some((l) => l.art === 'ehrlich' && l.durch === b.durch)) {
-      karte.lochungen.push({ art: 'ehrlich', durch: b.durch, hell: true });
+      karte.lochungen.push({ art: 'ehrlich', durch: b.durch, hell: true, wagen: z.wagen.art });
       ereignisse.push({ typ: 'gelocht', phase: 0, art: 'ehrlich', durch: b.durch, hell: true });
     }
     return;
@@ -1001,8 +1009,11 @@ function wechsleWagen(z) {
   werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
+    // Halt: Der Schaffner verlangt drei helle Lochungen, egal welche.
     z.status = 'halt';
-    ereignisse.push({ typ: 'halt', phase: 0 });
+    const hell = helleLochungen(z.fahrkarte);
+    z.halt = { genug: hell >= HALT_VERLANGT, hell, fehlt: Math.max(0, HALT_VERLANGT - hell) };
+    ereignisse.push({ typ: 'halt', phase: 0, ...z.halt });
   } else {
     z.wagenNr += 1;
     richteWagenEin(z);
@@ -1244,6 +1255,7 @@ function erzeugeSpiel(seed, optionen = {}) {
     begleiterDurch: ANTWORTARTEN.includes(optionen.begleiter) && optionen.begleiter !== 'pech' ? optionen.begleiter : null,
     begleiter: null, // { durch, x, y, antworten, gesprochen }, nur im Speisewagen
     todDurch: null,
+    halt: null, // { genug, hell, fehlt } am Ende der Fahrt
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);
@@ -1255,6 +1267,7 @@ function erzeugeSpiel(seed, optionen = {}) {
 // und für die Prüfwerkzeuge, damit beide dieselbe Fahrt beginnen.
 //
 // Eine Reise geht vom ersten Wagen bis zum Halt. Solange behält die Fahrkarte ihre Lochungen.
+// Am Halt verlangt der Schaffner drei helle Lochungen. Fehlen welche, geht es im Speisewagen weiter.
 // Nach einem Tod sitzt der Begleiter im Speisewagen. Lag der Tod hinter dem Speisewagen,
 // beginnt die nächste Fahrt dort, sonst vorn: Niemand überspringt einen Wagen.
 
@@ -1266,7 +1279,10 @@ const SPEISEWAGEN_NR = WAGENPLAENE.findIndex((w) => w.sicher);
 // stand: { staerken, mehrAmTisch, fahrkarte }, vorige: der Zustand der vorigen Fahrt oder null
 function optionenFuerFahrt(stand, vorige) {
   const optionen = { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch, fahrkarte: stand.fahrkarte };
-  if (vorige && vorige.status === 'halt') optionen.fahrkarte = neueFahrkarte(); // eine neue Reise
+  if (vorige && vorige.status === 'halt') {
+    if (vorige.halt && vorige.halt.genug === false) optionen.startWagen = SPEISEWAGEN_NR;
+    else optionen.fahrkarte = neueFahrkarte(); // ausgestiegen: eine neue Reise
+  }
   if (vorige && vorige.status === 'tot') {
     optionen.begleiter = vorige.todDurch;
     if (vorige.wagenNr > SPEISEWAGEN_NR) optionen.startWagen = SPEISEWAGEN_NR;
@@ -1326,6 +1342,29 @@ const TEXTE = {
     einWagen: 'Noch ein Wagen / bis zum Halt',
     mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
     halt: 'Halt / Ankunft {zeit} Uhr',
+    // am Halt, wenn dem Schaffner helle Lochungen fehlen; danach geht es im Speisewagen weiter
+    fehltEine: 'Noch eine helle / Lochung',
+    fehlt: 'Noch {n} helle / Lochungen',
+  },
+
+  // Knöpfe am Halt
+  knopf: {
+    aussteigen: 'Aussteigen',
+    nochEine: 'Noch eine Fahrt',
+  },
+
+  // Rückblick am Halt: je Lochung eine Tatsache mit Ort und Handlung, ohne Adjektiv.
+  // Erste Zeile die Handlung, zweite der Wagen. Prüfungen stehen mit ihren eigenen Worten.
+  rueckblick: {
+    tod: 'Ende durch {wer}',
+    ehrlich: 'Antwort: {wer}',
+  },
+  wer: {
+    pendler: 'Pendler',
+    gruppe: 'Reisegruppe',
+    draengler: 'Drängler',
+    kontrolleur: 'Kontrolleur',
+    tuer: 'die Tür',
   },
 
   zahlwort: ['null', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs'],
@@ -2440,6 +2479,8 @@ function maleTonknopf(stift, ton, an) {
 // --- anzeige/karte.js
 // Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
 // Nach oben wegwischen beginnt die nächste Fahrt.
+// Arten: 'tod'; 'fehlt' (Halt, aber dem Schaffner fehlen helle Lochungen);
+// 'halt' (ausgestiegen: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
 
 
 
@@ -2452,15 +2493,18 @@ function kartenMasse(layout, art) {
   const b = Math.min(layout.breite - 32, 420);
   const x = Math.round((layout.breite - b) / 2);
   const polster = 6;
-  const raster = b >= 380 ? 3 : 2.5;
+  const raster = b >= 380 ? 3 : 2.2;
   const spalten = Math.floor((b - 20 - 2 * polster) / raster);
   const zeilen = 2 * ZEILENHOEHE + 4;
   const bildH = Math.max(150, Math.min(250, Math.round(layout.hoehe * 0.34)));
   const tafelH = Math.ceil(zeilen * raster + 2 * polster);
   const herzenH = art === 'halt' ? 40 : 0;
   const fahrkarteH = 62;
-  const h = 10 + bildH + 10 + tafelH + herzenH + fahrkarteH + 66;
+  const knoepfeH = art === 'halt' ? 58 : 0; // zwei Knöpfe übereinander statt der Winkel
+  const h = 10 + bildH + 10 + tafelH + herzenH + fahrkarteH + 66 + knoepfeH;
   const y = Math.round((layout.hoehe - h) / 2) - 4;
+  const knopfB = b - 36;
+  const unten = y + h - 10;
   return {
     x,
     y,
@@ -2470,12 +2514,13 @@ function kartenMasse(layout, art) {
     tafel: { x: x + 10, y: y + 20 + bildH, b: b - 20, h: tafelH, raster, spalten, zeilen, polster },
     herzenY: y + 20 + bildH + tafelH + 22,
     fahrkarte: { x: x + 18, y: y + 20 + bildH + tafelH + herzenH + 10, b: b - 36, h: fahrkarteH - 14 },
-    weiter: { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
+    weiter: art === 'halt' ? { x: x + 18, y: unten - 52, b: knopfB, h: 52 } : { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
+    aussteigen: art === 'halt' ? { x: x + 18, y: unten - 52 - 58, b: knopfB, h: 52 } : null,
   };
 }
 
 function maleBahnsteig(stift, r, karte, t) {
-  const halt = karte.art === 'halt';
+  const halt = karte.art === 'halt' || karte.art === 'fehlt';
   stift.save();
   rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
   stift.clip();
@@ -2592,6 +2637,8 @@ function maleBahnsteig(stift, r, karte, t) {
   stift.fillRect(bx + bb * 0.2, boden - 21, 5, 7);
 
   maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
+  // am Halt steht der Schaffner am Zug: der Begleiter, jetzt mit Mütze
+  if (halt) maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben: karte.art === 'fehlt' ? 0.8 : 0 });
 
   if (halt) {
     // die Uhr am Bahnsteig zeigt die Ankunft
@@ -2632,6 +2679,20 @@ function maleFahrkarteBild(stift, r, fahrkarte) {
   });
 }
 
+function maleKartenknopf(stift, k, text) {
+  stift.fillStyle = '#1c2437';
+  rundesRechteck(stift, k.x, k.y, k.b, k.h, 12);
+  stift.fill();
+  stift.strokeStyle = '#2f3a52';
+  stift.lineWidth = 1;
+  rundesRechteck(stift, k.x + 0.5, k.y + 0.5, k.b - 1, k.h - 1, 12);
+  stift.stroke();
+  const breit = Math.ceil(k.b / 2) - 4;
+  const feld = neuesPunktfeld(breit, ZEILENHOEHE);
+  schreibeMittig(feld, text, 0);
+  zeichnePunktfeld(stift, feld, k.x + (k.b - breit * 2) / 2, k.y + (k.h - ZEILENHOEHE * 2) / 2, 2, FARBE.bernstein, null);
+}
+
 function maleLoch(stift, x, y, r, hell) {
   stift.fillStyle = hell ? FARBE.warm : '#1a1f2b';
   kreis(stift, x, y, r);
@@ -2668,8 +2729,10 @@ function maleKarte(stift, layout, karte, t) {
   rundesRechteck(stift, tf.x, tf.y, tf.b, tf.h, 5);
   stift.fill();
   const feld = neuesPunktfeld(tf.spalten, tf.zeilen);
-  schreibeMittig(feld, karte.zeilen[0] || '', 1);
-  schreibeMittig(feld, karte.zeilen[1] || '', ZEILENHOEHE + 3);
+  // im Rückblick zeigt die Anzeige nacheinander die Tatsachen der Fahrkarte
+  const zeilen = karte.rueckblickZeile || karte.zeilen;
+  schreibeMittig(feld, zeilen[0] || '', 1);
+  schreibeMittig(feld, zeilen[1] || '', ZEILENHOEHE + 3);
   zeichnePunktfeld(stift, feld, tf.x + tf.polster, tf.y + tf.polster, tf.raster, FARBE.bernstein, FARBE.bernsteinAus);
 
   if (karte.fahrkarte) maleFahrkarteBild(stift, m.fahrkarte, karte.fahrkarte);
@@ -2680,6 +2743,17 @@ function maleKarte(stift, layout, karte, t) {
     maleHerzen(stift, layout.breite / 2 - breite / 2 - g * 0.1, m.herzenY, karte.herzen, karte.herzenVoll, 0, g);
   }
 
+  // am Halt nach dem Rückblick: zwei Knöpfe; nach „Aussteigen" bleibt das Bild, wegwischen beginnt neu
+  if (karte.art === 'halt' && karte.rueckblickZeile) {
+    stift.restore();
+    return;
+  }
+  if (karte.art === 'halt' && !karte.ausgestiegen) {
+    maleKartenknopf(stift, m.aussteigen, karte.knopftexte.aussteigen);
+    maleKartenknopf(stift, m.weiter, karte.knopftexte.nochEine);
+    stift.restore();
+    return;
+  }
   // zwei Winkel nach oben: wegwischen
   const cx = layout.breite / 2;
   const wandern = karte.ruhig ? 0 : Math.sin(t * 2.2) * 3;
@@ -2721,6 +2795,7 @@ function maleKarte(stift, layout, karte, t) {
 const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
 const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
 const SPALT_JE_STOSS = 0.16; // so weit gibt die geschlossene Tür bei jedem Stoß nach
+const RUECKBLICK_TAKT = 1400; // so lange steht eine Tatsache im Rückblick am Halt
 
 function uhrzeit(zug) {
   const minuten = (ABFAHRT + zug) % (24 * 60);
@@ -2874,6 +2949,16 @@ function erzeugeAnzeige(leinwand) {
 
   // ---------------------------------------------------------------- Ereignisse
 
+  // Der Rückblick am Halt: je Lochung Handlung und Ort, ohne Adjektiv
+  function rueckblickZeilen(fahrkarte) {
+    return fahrkarte.lochungen.map((l) => {
+      const ort = TEXTE.wagen[l.wagen] || '';
+      if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
+      return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
+    });
+  }
+
   function zeigeKarte(art, zeilen, jetzt, pause) {
     karte = {
       art,
@@ -2965,7 +3050,14 @@ function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      if (e.genug) {
+        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+        karte.knopftexte = TEXTE.knopf;
+      } else {
+        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
+        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
+      }
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -3631,6 +3723,14 @@ function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
+      if (karte.rueckblick && !karte.rueckblickFertig) {
+        const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);
+        if (i >= karte.rueckblick.length) karte.rueckblickFertig = true;
+        karte.rueckblickZeile = i >= 0 && !karte.rueckblickFertig ? karte.rueckblick[i] : i < 0 ? karte.zeilen : null;
+      } else if (karte.rueckblick) {
+        karte.rueckblickZeile = null;
+      }
       if (karte.geht) {
         karte.weg = begrenze((jetzt - karte.geht) / 150, 0, 1);
         if (ruhig) karte.weg = 1;
@@ -3645,8 +3745,16 @@ function erzeugeAnzeige(leinwand) {
   // Was liegt an diesem Bildschirmpunkt?
   function wasLiegtBei(px, py) {
     if (karte && !karte.geht) {
-      const w = kartenMasse(layout, karte.art).weiter;
-      if (px >= w.x && px <= w.x + w.b && py >= w.y && py <= w.y + w.h) return { art: 'weiter' };
+      const m = kartenMasse(layout, karte.art);
+      const w = m.weiter;
+      const drin = (k) => k && px >= k.x && px <= k.x + k.b && py >= k.y && py <= k.y + k.h;
+      if (karte.art === 'halt' && karte.rueckblick && !karte.rueckblickFertig) return { art: 'ueberspringen' };
+      if (karte.art === 'halt' && !karte.ausgestiegen) {
+        if (drin(m.aussteigen)) return { art: 'aussteigen' };
+        if (drin(w)) return { art: 'weiter' };
+        return { art: 'karte' };
+      }
+      if (drin(w)) return { art: 'weiter' };
       return { art: 'karte' };
     }
     const nah = (ort, r) => Math.hypot(px - ort.x, py - ort.y) <= r;
@@ -3672,7 +3780,14 @@ function erzeugeAnzeige(leinwand) {
       tonAn = an;
     },
     zeigtKarte: () => karte !== null && !karte.geht,
-    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120,
+    // während des Rückblicks am Halt beginnt noch keine neue Fahrt
+    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120 && !(karte.rueckblick && !karte.rueckblickFertig),
+    ueberspringe: () => {
+      if (karte && karte.rueckblick) karte.rueckblickFertig = true;
+    },
+    steigeAus: () => {
+      if (karte && karte.art === 'halt') karte.ausgestiegen = true;
+    },
     tuerfeld: () => TUERFELD,
   };
 }
@@ -4053,6 +4168,10 @@ function tippe(x, y) {
   if (!ziel) return;
   if (ziel.art === 'weiter') {
     gibEin('hoch', 'tipp');
+  } else if (ziel.art === 'ueberspringen') {
+    anzeige.ueberspringe(); // der Rückblick am Halt lässt sich mit einem Tipp überspringen
+  } else if (ziel.art === 'aussteigen') {
+    anzeige.steigeAus(); // das Bild bleibt, nichts beginnt von selbst
   } else if (ziel.art === 'ton') {
     stand.ton = !stand.ton;
     ton.setze(stand.ton);

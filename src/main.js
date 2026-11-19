@@ -91,6 +91,10 @@ function tippe(x, y) {
   if (!ziel) return;
   if (ziel.art === 'weiter') {
     gibEin('hoch', 'tipp');
+  } else if (ziel.art === 'ueberspringen') {
+    anzeige.ueberspringe(); // der Rückblick am Halt lässt sich mit einem Tipp überspringen
+  } else if (ziel.art === 'aussteigen') {
+    anzeige.steigeAus(); // das Bild bleibt, nichts beginnt von selbst
   } else if (ziel.art === 'ton') {
     stand.ton = !stand.ton;
     ton.setze(stand.ton);

@@ -8,7 +8,7 @@ Gebaut wird immer nur die aktuelle Etappe. Alles danach ist Fahrplan, kein Auftr
 |---|---|---|
 | 0 | Wissen ins Repo | fertig |
 | 1 | Der Kern muss allein Spaß machen | **gebaut, wartet auf Rückmeldung** |
-| 2 | Fahrkarte, Autorität, Speisewagen | **teilweise gebaut** (19.11.): Kontrolleur, Aufbrechen, Präsenz, Stärken, Speisewagen, Gönnen, Fahrkarte, Angebote, Begleiter. Es fehlt der Halt |
+| 2 | Fahrkarte, Autorität, Speisewagen | **gebaut, wartet auf Rückmeldung** (19.11.). Abweichungen und Entscheidungen in `docs/ENTSCHEIDUNGEN.md` |
 | 3 | Regie und Spiegel | offen |
 | 4 | Das Surreale | offen |
 | 5 | Veröffentlichen | offen |

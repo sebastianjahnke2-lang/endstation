@@ -36,7 +36,7 @@ export function sprichMitBegleiter(z, ereignisse) {
     ereignisse.push({ typ: 'antwort', phase: 0, id: a.id, ehrlich });
     const karte = z.fahrkarte;
     if (ehrlich && !karte.lochungen.some((l) => l.art === 'ehrlich' && l.durch === b.durch)) {
-      karte.lochungen.push({ art: 'ehrlich', durch: b.durch, hell: true });
+      karte.lochungen.push({ art: 'ehrlich', durch: b.durch, hell: true, wagen: z.wagen.art });
       ereignisse.push({ typ: 'gelocht', phase: 0, art: 'ehrlich', durch: b.durch, hell: true });
     }
     return;

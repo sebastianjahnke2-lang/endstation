@@ -113,6 +113,15 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Die Fahrkarte gilt für die ganze Reise:** vom ersten Wagen bis zum Halt, über Tode hinweg. Nach dem Halt beginnt eine neue Reise mit frischer Karte. Sie steht im Speicher (`fahrkarte` in `src/speicher.js`).
 - **Zu sehen ist die Karte auf der Endkarte:** sechs Symbole, gelochte mit einem hellen Loch, rechts Platz für Sonder-Lochungen, hell oder dunkel.
 
+### Halt
+
+- **Der Schaffner steht am Zug auf dem Bahnsteig:** der Begleiter, jetzt mit Mütze. Er verlangt drei helle Lochungen, egal welche: erfüllte Prüfungen, aufgehellte dunkle, ehrliche Antworten.
+- **Reichen sie, zeigt die Anzeige den Rückblick:** je Lochung eine Tatsache, erste Zeile die Handlung, zweite der Wagen, etwa „Ohne Rempeln / Fahrradabteil", „Ende durch Drängler / Liegewagen", „Antwort: Drängler / Speisewagen". Ohne Adjektiv. Alle 1,4 Sekunden die nächste, ein Tipp überspringt alles.
+- **Danach das Schlussbild mit „Aussteigen" und „Noch eine Fahrt".** „Aussteigen" lässt das Bild stehen, nichts beginnt von selbst. Wer danach nach oben wischt, beginnt eine neue Reise. „Noch eine Fahrt" beginnt sie sofort. Beides mit frischer Fahrkarte.
+- **Reichen sie nicht, steht dort die wahre Zeile, was fehlt** („Noch eine helle Lochung"), und der Schaffner hält die Zange hin. Wer wegwischt, fährt ab dem Speisewagen weiter, mit derselben Karte. Der Fahrplan sagt nicht, was dann geschieht. So bleibt es eine Fahrt mit Ende, und man bekommt eine neue Gelegenheit, ohne von vorn zu beginnen.
+- **Zahlen:** Wer die Angebote nicht sucht, kommt im Mittel mit einer hellen Lochung am Halt an (ausgewogener Bot ohne Fehler, 400 Fahrten), nur 5 % haben schon drei. Der Fahrplan sagt: „Ein bis zwei davon passieren fast von allein."
+- **Die Anzeige der Karte am Halt ist dichter gesetzt** (Punktabstand 2,2 statt 2,5 bei schmalen Handys), damit „Erst aussteigen lassen" und „Ende durch Reisegruppe" in eine Zeile passen. Der Ton-Test prüft jede Rückblick-Zeile bei 360 Pixeln.
+
 ### Begleiter
 
 - **Nach einem Tod sitzt er im Speisewagen,** in derselben Uniform wie der Kontrolleur, die Mütze abgesetzt, ohne Gesicht. Am Halt wird er der Schaffner sein.

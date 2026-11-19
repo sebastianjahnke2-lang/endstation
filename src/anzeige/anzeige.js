@@ -19,6 +19,7 @@ import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } f
 const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
 const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
 const SPALT_JE_STOSS = 0.16; // so weit gibt die geschlossene Tür bei jedem Stoß nach
+const RUECKBLICK_TAKT = 1400; // so lange steht eine Tatsache im Rückblick am Halt
 
 export function uhrzeit(zug) {
   const minuten = (ABFAHRT + zug) % (24 * 60);
@@ -172,6 +173,16 @@ export function erzeugeAnzeige(leinwand) {
 
   // ---------------------------------------------------------------- Ereignisse
 
+  // Der Rückblick am Halt: je Lochung Handlung und Ort, ohne Adjektiv
+  function rueckblickZeilen(fahrkarte) {
+    return fahrkarte.lochungen.map((l) => {
+      const ort = TEXTE.wagen[l.wagen] || '';
+      if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
+      return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
+    });
+  }
+
   function zeigeKarte(art, zeilen, jetzt, pause) {
     karte = {
       art,
@@ -263,7 +274,14 @@ export function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      if (e.genug) {
+        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+        karte.knopftexte = TEXTE.knopf;
+      } else {
+        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
+        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
+      }
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -929,6 +947,14 @@ export function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
+      if (karte.rueckblick && !karte.rueckblickFertig) {
+        const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);
+        if (i >= karte.rueckblick.length) karte.rueckblickFertig = true;
+        karte.rueckblickZeile = i >= 0 && !karte.rueckblickFertig ? karte.rueckblick[i] : i < 0 ? karte.zeilen : null;
+      } else if (karte.rueckblick) {
+        karte.rueckblickZeile = null;
+      }
       if (karte.geht) {
         karte.weg = begrenze((jetzt - karte.geht) / 150, 0, 1);
         if (ruhig) karte.weg = 1;
@@ -943,8 +969,16 @@ export function erzeugeAnzeige(leinwand) {
   // Was liegt an diesem Bildschirmpunkt?
   function wasLiegtBei(px, py) {
     if (karte && !karte.geht) {
-      const w = kartenMasse(layout, karte.art).weiter;
-      if (px >= w.x && px <= w.x + w.b && py >= w.y && py <= w.y + w.h) return { art: 'weiter' };
+      const m = kartenMasse(layout, karte.art);
+      const w = m.weiter;
+      const drin = (k) => k && px >= k.x && px <= k.x + k.b && py >= k.y && py <= k.y + k.h;
+      if (karte.art === 'halt' && karte.rueckblick && !karte.rueckblickFertig) return { art: 'ueberspringen' };
+      if (karte.art === 'halt' && !karte.ausgestiegen) {
+        if (drin(m.aussteigen)) return { art: 'aussteigen' };
+        if (drin(w)) return { art: 'weiter' };
+        return { art: 'karte' };
+      }
+      if (drin(w)) return { art: 'weiter' };
       return { art: 'karte' };
     }
     const nah = (ort, r) => Math.hypot(px - ort.x, py - ort.y) <= r;
@@ -970,7 +1004,14 @@ export function erzeugeAnzeige(leinwand) {
       tonAn = an;
     },
     zeigtKarte: () => karte !== null && !karte.geht,
-    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120,
+    // während des Rückblicks am Halt beginnt noch keine neue Fahrt
+    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120 && !(karte.rueckblick && !karte.rueckblickFertig),
+    ueberspringe: () => {
+      if (karte && karte.rueckblick) karte.rueckblickFertig = true;
+    },
+    steigeAus: () => {
+      if (karte && karte.art === 'halt') karte.ausgestiegen = true;
+    },
     tuerfeld: () => TUERFELD,
   };
 }

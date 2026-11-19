@@ -49,6 +49,29 @@ export const TEXTE = {
     einWagen: 'Noch ein Wagen / bis zum Halt',
     mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
     halt: 'Halt / Ankunft {zeit} Uhr',
+    // am Halt, wenn dem Schaffner helle Lochungen fehlen; danach geht es im Speisewagen weiter
+    fehltEine: 'Noch eine helle / Lochung',
+    fehlt: 'Noch {n} helle / Lochungen',
+  },
+
+  // Knöpfe am Halt
+  knopf: {
+    aussteigen: 'Aussteigen',
+    nochEine: 'Noch eine Fahrt',
+  },
+
+  // Rückblick am Halt: je Lochung eine Tatsache mit Ort und Handlung, ohne Adjektiv.
+  // Erste Zeile die Handlung, zweite der Wagen. Prüfungen stehen mit ihren eigenen Worten.
+  rueckblick: {
+    tod: 'Ende durch {wer}',
+    ehrlich: 'Antwort: {wer}',
+  },
+  wer: {
+    pendler: 'Pendler',
+    gruppe: 'Reisegruppe',
+    draengler: 'Drängler',
+    kontrolleur: 'Kontrolleur',
+    tuer: 'die Tür',
   },
 
   zahlwort: ['null', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs'],

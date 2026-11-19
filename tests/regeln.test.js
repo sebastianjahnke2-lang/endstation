@@ -759,7 +759,7 @@ test('Fahrkarte: Ohne Rempeln und Pünktlich ergeben eine helle Lochung beim Ver
     const e = verlasse(spiel);
     const l = e.find((x) => x.typ === 'gelocht');
     assert.ok(l && l.hell && l.id === id, id);
-    assert.deepEqual(spiel.zustand.fahrkarte.lochungen, [{ art: 'pruefung', id, hell: true }]);
+    assert.deepEqual(spiel.zustand.fahrkarte.lochungen, [{ art: 'pruefung', id, hell: true, wagen: 'sitzwagen' }]);
   }
 });
 
@@ -818,7 +818,7 @@ test('Fahrkarte: Ein Tod hinterlässt eine dunkle Lochung, je Ursache nur eine',
     spiel.zustand.fahrkarte = karte;
     spiel.act('warten');
   }
-  assert.deepEqual(karte.lochungen, [{ art: 'tod', durch: 'pendler', hell: false }]);
+  assert.deepEqual(karte.lochungen, [{ art: 'tod', durch: 'pendler', hell: false, wagen: 'sitzwagen' }]);
 });
 
 test('Fahrkarte: Die dunkle Lochung wird hell, wenn man einen Wagen mit dieser Ursache ohne ihren Treffer verlässt', () => {
@@ -894,8 +894,47 @@ test('Reise: Nach einem Tod hinter dem Speisewagen beginnt die nächste Fahrt do
   const vorn = optionenFuerFahrt(stand, { status: 'tot', wagenNr: 1, todDurch: 'pendler' });
   assert.equal(vorn.startWagen, undefined);
   assert.equal(vorn.begleiter, 'pendler');
-  const neu = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1 });
-  assert.deepEqual(neu.fahrkarte, { lochungen: [] }, 'nach dem Halt beginnt eine neue Reise');
+  const neu = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { genug: true } });
+  assert.deepEqual(neu.fahrkarte, { lochungen: [] }, 'nach dem Aussteigen beginnt eine neue Reise');
   assert.equal(neu.begleiter, undefined);
+  const weiter = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { genug: false } });
+  assert.equal(weiter.fahrkarte, stand.fahrkarte, 'fehlen Lochungen, bleibt die Karte');
+  assert.equal(weiter.startWagen, SPEISEWAGEN_NR, 'und es geht im Speisewagen weiter');
   assert.deepEqual(optionenFuerFahrt(stand, null).staerken, { warten: true });
+});
+
+// ---------------------------------------------------------------- Halt (Etappe 2)
+
+function amHalt(lochungen) {
+  const spiel = erzeugeSpiel(5, { startWagen: WAGENZAHL - 1, fahrkarte: { lochungen } });
+  const z = spiel.zustand;
+  z.gegner = [];
+  z.tuerOffen = true;
+  z.pruefung = null;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  return { spiel, z, e: spiel.act('hoch') };
+}
+
+test('Halt: Der Schaffner verlangt drei helle Lochungen, egal welche', () => {
+  const genug = amHalt([{ art: 'pruefung', id: 'ruhe' }, { art: 'ehrlich', durch: 'pendler' }, { art: 'tod', durch: 'gruppe', hell: true }]);
+  assert.equal(genug.z.status, 'halt');
+  assert.deepEqual(genug.z.halt, { genug: true, hell: 3, fehlt: 0 });
+  assert.equal(genug.e.find((x) => x.typ === 'halt').genug, true);
+  // der Kontrolleur ist nicht im letzten Wagen: seine dunkle Lochung bleibt dunkel
+  const knapp = amHalt([{ art: 'pruefung', id: 'ruhe' }, { art: 'tod', durch: 'kontrolleur', hell: false }]);
+  assert.deepEqual(knapp.z.halt, { genug: false, hell: 1, fehlt: 2 }, 'dunkle Lochungen zählen nicht');
+});
+
+test('Halt: Jede Lochung kennt ihren Ort, für den Rückblick', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  spiel.zustand.angebot = { id: 'rempeln', x: 2, y: 6 };
+  spiel.act('hoch');
+  const z = spiel.zustand;
+  z.tuerOffen = true;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  spiel.act('hoch');
+  assert.equal(z.fahrkarte.lochungen[0].wagen, 'sitzwagen');
+  assert.deepEqual(erzeugeSpiel(1, { fahrkarte: { lochungen: [{ art: 'pruefung', id: 'ruhe', wagen: 'mondwagen' }] } }).zustand.fahrkarte.lochungen[0], { art: 'pruefung', id: 'ruhe', hell: true });
 });
