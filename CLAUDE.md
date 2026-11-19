@@ -14,11 +14,11 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: **teilweise gebaut.** Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test. Fahrkarte, Angebote, Stärken, Präsenz, Speisewagen, Begleiter und Halt sind nicht gebaut, weil sie seinen Vorgaben aus dem Prototyp-Auftrag widersprechen. Erst bauen, wenn er die Punkte unter „Offen" in `docs/ENTSCHEIDUNGEN.md` entschieden hat.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **teilweise gebaut.** Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz ist gebaut, Stärken und Speisewagen folgen. Fahrkarte, Angebote, Stärken, Präsenz, Speisewagen, Begleiter und Halt sind nicht gebaut, weil sie seinen Vorgaben aus dem Prototyp-Auftrag widersprechen. Erst bauen, wenn er die Punkte unter „Offen" in `docs/ENTSCHEIDUNGEN.md` entschieden hat.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
-Stand der Zahlen (500 Fahrten je Bot, `npm run balance`, sechs Wagen): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 79 % ohne Fehler. Wagen 1 bis 3 schafft er immer. Der Ausweicher kommt auf 56 %, der Kämpfer auf 0 %.
+Stand der Zahlen (500 Fahrten je Bot, `npm run balance`, sechs Wagen): Der ausgewogene Bot erreicht den Halt in 50 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 86 % ohne Fehler. Wagen 1 bis 3 schafft er immer. Der Ausweicher kommt auf 58 %, der Kämpfer auf 0 %.
 
 ## Wie wir arbeiten
 - Der Auftraggeber ist kein Entwickler und arbeitet am Handy. Claude baut, er testet und gibt Rückmeldung zum Gefühl. Antworten auf Deutsch, kurz, ohne Fachsprache.

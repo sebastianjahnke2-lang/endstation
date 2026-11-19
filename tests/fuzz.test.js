@@ -25,6 +25,7 @@ function pruefeZustand(z, wo) {
   assert.ok(imFeld(s.x, s.y) && !istHindernis(z, s.x, s.y), `${wo}: Spieler steht falsch (${s.x},${s.y})`);
   assert.ok(s.herzen >= 0 && s.herzen <= HERZEN_VOLL, `${wo}: Herzen ${s.herzen}`);
   assert.ok(s.ruhe >= 0 && s.ruhe <= RUHE_VOLL, `${wo}: Ruhe ${s.ruhe}`);
+  assert.ok(!s.praesenz || s.ruhe === RUHE_VOLL, `${wo}: Präsenz ohne volle Ruhe`);
   assert.ok(z.gegner.length <= 6, `${wo}: ${z.gegner.length} Gegner gleichzeitig`);
   assert.equal(z.status === 'tot', s.herzen === 0, `${wo}: Status ${z.status} bei ${s.herzen} Herzen`);
 

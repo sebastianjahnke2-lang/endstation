@@ -128,6 +128,7 @@ function fuehreAus(z, aktion) {
     s.herzen = Math.max(0, s.herzen - schaden);
     s.ruhe = 0;
     z.zaehler.treffer += 1;
+    s.praesenz = false;
     ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ, schaden });
     if (s.herzen <= 0) {
       stirb(z, ereignisse, 1, treffer.typ);
@@ -135,7 +136,10 @@ function fuehreAus(z, aktion) {
     }
   } else if (startRot && bewegt && !zielRot) {
     z.zaehler.ausgewichen += 1;
-    if (s.ruhe < RUHE_VOLL) s.ruhe += 1;
+    if (s.ruhe < RUHE_VOLL) {
+      s.ruhe += 1;
+      if (s.ruhe === RUHE_VOLL) s.praesenz = true; // Präsenz: einmal je voller Ruhe
+    }
     ereignisse.push({ typ: 'ausgewichen', phase: 1, ruhe: s.ruhe });
   }
 
@@ -152,7 +156,7 @@ export function erzeugeSpiel(seed, optionen = {}) {
     status: 'faehrt', // 'faehrt' | 'tot' | 'halt'
     wagenNr: optionen.startWagen || 0,
     wagen: null,
-    spieler: { x: STARTFELD.x, y: STARTFELD.y, herzen: HERZEN_VOLL, ruhe: 0 },
+    spieler: { x: STARTFELD.x, y: STARTFELD.y, herzen: HERZEN_VOLL, ruhe: 0, praesenz: false },
     gegner: [],
     tuerOffen: false,
     zug: 0,

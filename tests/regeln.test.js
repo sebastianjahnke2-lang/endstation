@@ -434,3 +434,48 @@ test('Kontrolleur: Treffen er und ein Pendler im selben Zug, zählt nur ein Tref
   assert.equal(e.filter((x) => x.typ === 'treffer').length, 1);
   assert.equal(spiel.zustand.spieler.herzen, HERZEN_VOLL - 2);
 });
+
+// ---------------------------------------------------------------- Präsenz (Etappe 2)
+
+// Spieler auf 2,7 mit zwei Ruhe, ein Pendler hat sein Feld angekündigt: Ausweichen bringt volle Ruhe.
+function vorVollerRuhe(weitere = []) {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6, mit: { ansage: [{ x: 2, y: 7 }] } }, ...weitere], ruhe: 2 });
+  return spiel;
+}
+
+test('Präsenz: Wer volle Ruhe erreicht, vor dem zögert der nächste Gegner einmal, statt anzukündigen', () => {
+  const spiel = vorVollerRuhe();
+  const z = spiel.zustand;
+  let e = spiel.act('rechts'); // aus dem Rot nach 3,7: volle Ruhe
+  assert.equal(z.spieler.ruhe, RUHE_VOLL);
+  assert.equal(z.spieler.praesenz, true);
+  e = spiel.act('warten'); // der Pendler steht schräg und tritt heran
+  assert.ok(typen(e).includes('gegnerSchritt'));
+  e = spiel.act('warten'); // jetzt würde er ankündigen, aber er zögert
+  assert.ok(typen(e).includes('zoegert'), typen(e).join(','));
+  assert.equal(istMarkiert(z, 3, 7), false);
+  assert.equal(z.spieler.praesenz, false, 'einmal je voller Ruhe');
+  e = spiel.act('warten');
+  assert.ok(typen(e).includes('ansage'), 'danach kündigt er wieder an');
+});
+
+test('Präsenz: Es zögert nur der Gegner, der als Nächster angreifen würde', () => {
+  const spiel = vorVollerRuhe([{ typ: 'pendler', x: 4, y: 6 }]);
+  spiel.act('rechts'); // nach 3,7, volle Ruhe; der zweite Pendler tritt heran
+  let e = spiel.act('warten'); // der zweite würde ankündigen und zögert, der erste tritt heran
+  assert.deepEqual(e.filter((x) => x.typ === 'zoegert').map((x) => x.id), [2]);
+  assert.deepEqual(e.filter((x) => x.typ === 'ansage').map((x) => x.id), []);
+  e = spiel.act('warten'); // die Präsenz ist verbraucht, beide kündigen an
+  assert.deepEqual(e.filter((x) => x.typ === 'ansage').map((x) => x.id).sort(), [1, 2]);
+});
+
+test('Präsenz: Ein Treffer nimmt sie, erst neue volle Ruhe bringt sie zurück', () => {
+  const spiel = vorVollerRuhe();
+  const z = spiel.zustand;
+  spiel.act('rechts');
+  assert.equal(z.spieler.praesenz, true);
+  z.gegner[0].ansage = [{ x: 3, y: 7 }];
+  spiel.act('warten'); // getroffen
+  assert.equal(z.spieler.ruhe, 0);
+  assert.equal(z.spieler.praesenz, false);
+});

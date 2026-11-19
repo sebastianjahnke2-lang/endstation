@@ -116,10 +116,19 @@ export function loeseAnsagenEin(z, ereignisse) {
   return { treffer, dran };
 }
 
-function sagAn(g, felder, ereignisse) {
-  if (!felder.length) return;
+// Gibt zurück, ob wirklich angekündigt wurde.
+// Präsenz: Wer volle Ruhe erreicht hat, vor dem zögert der nächste Gegner, der angreifen würde,
+// einen Zug lang. Einmal je voller Ruhe.
+function sagAn(z, g, felder, ereignisse) {
+  if (!felder.length) return false;
+  if (z.spieler.praesenz) {
+    z.spieler.praesenz = false;
+    ereignisse.push({ typ: 'zoegert', phase: 2, id: g.id });
+    return false;
+  }
   g.ansage = felder.map(kopie);
   ereignisse.push({ typ: 'ansage', phase: 2, id: g.id, gegner: g.typ, felder: felder.map(kopie) });
+  return true;
 }
 
 function geheEinenSchritt(z, g, schritt, ereignisse) {
@@ -145,7 +154,7 @@ function planePendler(z, g, ereignisse) {
     return;
   }
   if (abstand(g, z.spieler) === 1) {
-    sagAn(g, [z.spieler], ereignisse);
+    sagAn(z, g, [z.spieler], ereignisse);
     return;
   }
   if (geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse) && g.langsam) g.pause = 1;
@@ -163,7 +172,7 @@ function planeVordersten(z, g, ereignisse) {
     felder.push(kopie(schritt));
     hier = schritt;
   }
-  sagAn(g, felder, ereignisse);
+  sagAn(z, g, felder, ereignisse);
 }
 
 // Freie Sicht in gerader Linie vom Drängler zum Spieler? Gibt die Richtung zurück.
@@ -192,7 +201,7 @@ function planeDraengler(z, g, ereignisse) {
     for (let x = g.x + r.x, y = g.y + r.y; imFeld(x, y) && !istHindernis(z, x, y); x += r.x, y += r.y) {
       felder.push({ x, y });
     }
-    sagAn(g, felder, ereignisse);
+    sagAn(z, g, felder, ereignisse);
     return;
   }
   // Sonst zum nächsten Feld gehen, von dem aus die Linie frei ist.
@@ -236,8 +245,7 @@ export function inSeinerNaehe(g, f) {
 
 function pruefe(z, g, ereignisse) {
   g.ruhig = 0;
-  sagAn(g, [z.spieler], ereignisse);
-  ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
+  if (sagAn(z, g, [z.spieler], ereignisse)) ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
 }
 
 // tat: was der Spieler in diesem Zug getan hat, { art: 'warten' | 'schritt' | 'schlag' | 'stoss', von, id }

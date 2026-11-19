@@ -321,6 +321,18 @@ export function erzeugeAnzeige(leinwand) {
       bild.herzen = e.herzen;
       wirkung.treffer = jetzt;
       if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'zoegert') {
+      // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
+      const g = findeGegner(e.id);
+      if (g) {
+        const p = bild.spieler;
+        const dx = Math.sign(g.x - p.x);
+        const dy = Math.sign(g.y - p.y);
+        bewege(jetzt, 150, (q) => {
+          g.sx = dx * hinUndHer(q) * 0.14;
+          g.sy = dy * hinUndHer(q) * 0.14;
+        });
+      }
     } else if (e.typ === 'kontrolle') {
       const g = findeGegner(e.id);
       if (g) rede = { x: g.x, y: g.y };

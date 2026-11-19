@@ -472,10 +472,19 @@ function loeseAnsagenEin(z, ereignisse) {
   return { treffer, dran };
 }
 
-function sagAn(g, felder, ereignisse) {
-  if (!felder.length) return;
+// Gibt zurück, ob wirklich angekündigt wurde.
+// Präsenz: Wer volle Ruhe erreicht hat, vor dem zögert der nächste Gegner, der angreifen würde,
+// einen Zug lang. Einmal je voller Ruhe.
+function sagAn(z, g, felder, ereignisse) {
+  if (!felder.length) return false;
+  if (z.spieler.praesenz) {
+    z.spieler.praesenz = false;
+    ereignisse.push({ typ: 'zoegert', phase: 2, id: g.id });
+    return false;
+  }
   g.ansage = felder.map(kopie);
   ereignisse.push({ typ: 'ansage', phase: 2, id: g.id, gegner: g.typ, felder: felder.map(kopie) });
+  return true;
 }
 
 function geheEinenSchritt(z, g, schritt, ereignisse) {
@@ -501,7 +510,7 @@ function planePendler(z, g, ereignisse) {
     return;
   }
   if (abstand(g, z.spieler) === 1) {
-    sagAn(g, [z.spieler], ereignisse);
+    sagAn(z, g, [z.spieler], ereignisse);
     return;
   }
   if (geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse) && g.langsam) g.pause = 1;
@@ -519,7 +528,7 @@ function planeVordersten(z, g, ereignisse) {
     felder.push(kopie(schritt));
     hier = schritt;
   }
-  sagAn(g, felder, ereignisse);
+  sagAn(z, g, felder, ereignisse);
 }
 
 // Freie Sicht in gerader Linie vom Drängler zum Spieler? Gibt die Richtung zurück.
@@ -548,7 +557,7 @@ function planeDraengler(z, g, ereignisse) {
     for (let x = g.x + r.x, y = g.y + r.y; imFeld(x, y) && !istHindernis(z, x, y); x += r.x, y += r.y) {
       felder.push({ x, y });
     }
-    sagAn(g, felder, ereignisse);
+    sagAn(z, g, felder, ereignisse);
     return;
   }
   // Sonst zum nächsten Feld gehen, von dem aus die Linie frei ist.
@@ -592,8 +601,7 @@ function inSeinerNaehe(g, f) {
 
 function pruefe(z, g, ereignisse) {
   g.ruhig = 0;
-  sagAn(g, [z.spieler], ereignisse);
-  ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
+  if (sagAn(z, g, [z.spieler], ereignisse)) ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
 }
 
 // tat: was der Spieler in diesem Zug getan hat, { art: 'warten' | 'schritt' | 'schlag' | 'stoss', von, id }
@@ -784,6 +792,7 @@ function fuehreAus(z, aktion) {
     s.herzen = Math.max(0, s.herzen - schaden);
     s.ruhe = 0;
     z.zaehler.treffer += 1;
+    s.praesenz = false;
     ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ, schaden });
     if (s.herzen <= 0) {
       stirb(z, ereignisse, 1, treffer.typ);
@@ -791,7 +800,10 @@ function fuehreAus(z, aktion) {
     }
   } else if (startRot && bewegt && !zielRot) {
     z.zaehler.ausgewichen += 1;
-    if (s.ruhe < RUHE_VOLL) s.ruhe += 1;
+    if (s.ruhe < RUHE_VOLL) {
+      s.ruhe += 1;
+      if (s.ruhe === RUHE_VOLL) s.praesenz = true; // Präsenz: einmal je voller Ruhe
+    }
     ereignisse.push({ typ: 'ausgewichen', phase: 1, ruhe: s.ruhe });
   }
 
@@ -808,7 +820,7 @@ function erzeugeSpiel(seed, optionen = {}) {
     status: 'faehrt', // 'faehrt' | 'tot' | 'halt'
     wagenNr: optionen.startWagen || 0,
     wagen: null,
-    spieler: { x: STARTFELD.x, y: STARTFELD.y, herzen: HERZEN_VOLL, ruhe: 0 },
+    spieler: { x: STARTFELD.x, y: STARTFELD.y, herzen: HERZEN_VOLL, ruhe: 0, praesenz: false },
     gegner: [],
     tuerOffen: false,
     zug: 0,
@@ -2415,6 +2427,18 @@ function erzeugeAnzeige(leinwand) {
       bild.herzen = e.herzen;
       wirkung.treffer = jetzt;
       if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'zoegert') {
+      // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
+      const g = findeGegner(e.id);
+      if (g) {
+        const p = bild.spieler;
+        const dx = Math.sign(g.x - p.x);
+        const dy = Math.sign(g.y - p.y);
+        bewege(jetzt, 150, (q) => {
+          g.sx = dx * hinUndHer(q) * 0.14;
+          g.sy = dy * hinUndHer(q) * 0.14;
+        });
+      }
     } else if (e.typ === 'kontrolle') {
       const g = findeGegner(e.id);
       if (g) rede = { x: g.x, y: g.y };
