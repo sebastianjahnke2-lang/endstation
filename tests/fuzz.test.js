@@ -63,6 +63,17 @@ function pruefeZustand(z, wo) {
     assert.ok(ausweg, `${wo}: Aus dem Muster von ${g.typ} führt bei ${s.x},${s.y} kein Schritt hinaus`);
   }
 
+  // Fahrkarte: jede Prüfung höchstens einmal gelocht, je Todesursache höchstens eine dunkle Lochung
+  const ids = z.fahrkarte.lochungen.filter((l) => l.art === 'pruefung').map((l) => l.id);
+  assert.equal(new Set(ids).size, ids.length, `${wo}: doppelte Lochung`);
+  const dunkel = z.fahrkarte.lochungen.filter((l) => l.art === 'tod' && !l.hell).map((l) => l.durch);
+  assert.equal(new Set(dunkel).size, dunkel.length, `${wo}: doppelte dunkle Lochung`);
+  if (z.angebot) {
+    assert.ok(!istHindernis(z, z.angebot.x, z.angebot.y), `${wo}: Angebot im Hindernis`);
+    assert.ok(!ids.includes(z.angebot.id), `${wo}: Angebot schon gelocht`);
+    assert.ok(!z.wagen.sicher, `${wo}: Angebot im sicheren Wagen`);
+  }
+
   // Tür immer erreichbar, alle freien Felder verbunden
   const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y));
   for (let y = 0; y < HOEHE; y++) {

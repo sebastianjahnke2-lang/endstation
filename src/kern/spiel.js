@@ -4,6 +4,7 @@
 //   const ereignisse = spiel.act('hoch');   // 'hoch' | 'rechts' | 'runter' | 'links' | 'warten'
 //                                           // 'sprint-hoch' usw., wer den Drängler verstanden hat
 //   erzeugeSpiel(seed, { staerken: { sprint, rueckhalt, warten } })   Stärken aus früheren Fahrten
+//   erzeugeSpiel(seed, { fahrkarte })    die Fahrkarte mit ihren Lochungen, siehe fahrkarte.js
 //
 // act() ändert spiel.zustand und gibt zurück, was dabei passiert ist.
 // Jedes Ereignis trägt eine Phase: 0 Spieler, 1 Angriffe treffen ein, 2 Gegner bewegen sich.
@@ -13,6 +14,7 @@ import { RICHTUNG, STARTFELD, TUERFELD, imFeld } from './feld.js';
 import { istHindernis, gegnerAuf, istMarkiert, tuerFrei } from './lage.js';
 import { WAGENZAHL, baueWagen } from './wagen.js';
 import { wuerfle } from './zufall.js';
+import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod } from './fahrkarte.js';
 import { neuerGegner, loeseAnsagenEin, planeGegner, schadenVon } from './gegner.js';
 
 export const HERZEN_VOLL = 5;
@@ -49,6 +51,9 @@ function richteWagenEin(z) {
   const mehr = Math.min(z.mehrAmTisch, wagen.mehrPlaetze.length);
   for (let i = 0; i < mehr; i++) z.wagen.fahrgaeste.push({ typ: MEHR_TYPEN[i % MEHR_TYPEN.length], x: wagen.mehrPlaetze[i].x, y: wagen.mehrPlaetze[i].y });
   z.wagen.gegoennt = null;
+  z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))]; // für das Aufhellen dunkler Lochungen
+  z.getroffenVon = [];
+  stelleAngebot(z);
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -66,6 +71,7 @@ function oeffneTuer(z, ereignisse, phase) {
 function stirb(z, ereignisse, phase, durch) {
   z.status = 'tot';
   ereignisse.push({ typ: 'tod', phase, wagenNr: z.wagenNr, durch, uebrig: z.gegner.length });
+  lochungFuerTod(z, durch, ereignisse, phase);
 }
 
 // Eine Stärke kommt hinzu. Gibt das Ereignis zurück oder null, wenn sie schon da war.
@@ -86,6 +92,8 @@ function wechsleWagen(z) {
   z.zaehler.wagen += 1;
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
   const gruppe = z.wagen.mitGruppe && z.spieler.herzen === 1 ? verstehe(z, 'rueckhalt', 'gruppe', 0) : null;
+  const karte = [];
+  werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
     z.status = 'halt';
@@ -101,7 +109,7 @@ function wechsleWagen(z) {
     }
   }
   if (gruppe) ereignisse.push(gruppe);
-  return ereignisse;
+  return ereignisse.concat(karte);
 }
 
 // Sprint: bis zu zwei Felder geradeaus. Gegner auf dem Weg nehmen Schaden, der Spieler landet auf
@@ -144,6 +152,7 @@ function sprinte(z, richtung, ereignisse) {
   oeffneTuer(z, ereignisse, 0);
   const kontrolleur = getroffen.find((t) => t.gegner === 'kontrolleur');
   const tat = kontrolleur ? { art: 'schlag', id: kontrolleur.id } : nach ? { art: 'schritt', von } : { art: 'stoss' };
+  tat.sprintTreffer = getroffen.length > 0;
   return { bewegt: nach !== null, tat };
 }
 
@@ -169,6 +178,7 @@ function fuehreAus(z, aktion) {
     bewegt = ergebnis.bewegt;
     tat = ergebnis.tat;
     zielRot = bewegt && istMarkiert(z, s.x, s.y);
+    if (bewegt) nimmAn(z, ereignisse);
   } else if (aktion === 'warten') {
     ereignisse.push({ typ: 'warten', phase: 0 });
     z.zaehler.gewartet += 1;
@@ -238,6 +248,7 @@ function fuehreAus(z, aktion) {
       s.y = y;
       bewegt = true;
       z.zaehler.schritte += 1;
+      nimmAn(z, ereignisse); // auf das leuchtende Symbol treten heißt: die Prüfung annehmen
     }
   }
   z.zug += 1;
@@ -258,6 +269,7 @@ function fuehreAus(z, aktion) {
     s.ruhe = 0;
     z.zaehler.treffer += 1;
     s.praesenz = false;
+    if (!z.getroffenVon.includes(treffer.typ)) z.getroffenVon.push(treffer.typ);
     ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ, schaden });
     if (haelt) ereignisse.push({ typ: 'rueckhalt', phase: 1, herzen: s.herzen });
     if (s.herzen <= 0) {
@@ -278,6 +290,8 @@ function fuehreAus(z, aktion) {
     erhoeheRuhe(s);
     ereignisse.push({ typ: 'ruhigGewartet', phase: 1, ruhe: s.ruhe });
   }
+
+  beobachte(z, tat, !!treffer, zielRot);
 
   // Phase 2: Gegner bewegen sich oder kündigen an
   planeGegner(z, dran, ereignisse, tat);
@@ -314,6 +328,10 @@ export function erzeugeSpiel(seed, optionen = {}) {
     mehrAmTisch: Math.max(0, Math.min(MEHR_AM_TISCH_HOECHSTENS, Math.floor(optionen.mehrAmTisch) || 0)),
     verstehen: { pendler: 0, draengler: 0 }, // Zähler dieser Fahrt
     rueckhaltGenutzt: false,
+    fahrkarte: bereinigeFahrkarte(optionen.fahrkarte),
+    kartenzufall: { zufall: (seed ^ 0x9e3779b9) >>> 0 }, // eigener Zufall für die Angebote
+    angebot: null, // { id, x, y }: das leuchtende Symbol im Wagen
+    pruefung: null, // die angenommene Prüfung, bis zum Verlassen des Wagens
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);

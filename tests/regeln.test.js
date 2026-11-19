@@ -24,7 +24,9 @@ function szene({ spieler = [2, 7], gegner = [], plan = LEER, herzen, ruhe }) {
     return neu;
   });
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
+  z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))];
   z.tuerOffen = z.gegner.length === 0;
+  z.angebot = null; // Szenen ohne leuchtendes Symbol, es sei denn, ein Test legt eines hin
   return spiel;
 }
 
@@ -256,7 +258,8 @@ test('der Tod beendet die Fahrt', () => {
   const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6 }], herzen: 1 });
   spiel.act('warten');
   const e = spiel.act('warten');
-  assert.deepEqual(typen(e), ['warten', 'hieb', 'treffer', 'tod']);
+  assert.deepEqual(typen(e), ['warten', 'hieb', 'treffer', 'tod', 'gelocht']);
+  assert.equal(e[4].hell, false, 'ein Tod hinterlässt eine dunkle Lochung');
   assert.equal(spiel.zustand.status, 'tot');
   assert.deepEqual(spiel.act('links'), [], 'danach nimmt das Spiel nichts mehr an');
 });
@@ -303,7 +306,7 @@ test('Aufbrechen: Die Stöße müssen nicht hintereinander kommen, und mit dem l
   spiel.act('hoch');
   spiel.act('hoch');
   const e = spiel.act('hoch');
-  assert.deepEqual(typen(e), ['tuerStoss', 'aufgebrochen', 'tuerAuf', 'tod']);
+  assert.deepEqual(typen(e), ['tuerStoss', 'aufgebrochen', 'tuerAuf', 'tod', 'gelocht']);
   assert.equal(e[3].durch, 'tuer');
   assert.equal(spiel.zustand.status, 'tot');
 });
@@ -690,4 +693,145 @@ test('Gönnen: Meistens kommt nichts zurück, manchmal sitzt später jemand mehr
   assert.equal(spaeter.wagen.fahrgaeste.length, 2);
   for (const f of spaeter.wagen.fahrgaeste) assert.notEqual(spaeter.wagen.plan[f.y][f.x], '.');
   assert.equal(erzeugeSpiel(1, { mehrAmTisch: 'viele' }).zustand.mehrAmTisch, 0);
+});
+
+// ---------------------------------------------------------------- Fahrkarte (Etappe 2)
+
+// Ein leerer Wagen mit einem stillen Pendler weit weg und einem Angebot auf 2,5.
+function mitAngebot(id, weitere = {}) {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }], ...weitere });
+  spiel.zustand.angebot = { id, x: 2, y: 5 };
+  return spiel;
+}
+
+function verlasse(spiel) {
+  const z = spiel.zustand;
+  z.tuerOffen = true;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  return spiel.act('hoch');
+}
+
+test('Fahrkarte: In jedem Wagen außer dem Speisewagen liegt ein Angebot auf einem freien Feld', () => {
+  for (let nr = 0; nr < WAGENZAHL; nr++) {
+    for (let seed = 1; seed <= 20; seed++) {
+      const z = erzeugeSpiel(seed, { startWagen: nr }).zustand;
+      if (z.wagen.sicher) {
+        assert.equal(z.angebot, null);
+        continue;
+      }
+      const a = z.angebot;
+      assert.ok(a, `Wagen ${nr + 1}`);
+      assert.equal(z.wagen.plan[a.y][a.x], '.');
+      assert.ok(!z.gegner.some((g) => g.x === a.x && g.y === a.y));
+    }
+  }
+});
+
+test('Fahrkarte: Angeboten wird nur, was noch nicht gelocht ist', () => {
+  const alle = ['aufregen', 'aussteigen', 'rempeln', 'draengeln', 'puenktlich'];
+  const z = erzeugeSpiel(4, { fahrkarte: { lochungen: alle.map((id) => ({ art: 'pruefung', id })) } }).zustand;
+  assert.equal(z.angebot.id, 'ruhe');
+  const voll = erzeugeSpiel(4, { fahrkarte: { lochungen: [...alle, 'ruhe'].map((id) => ({ art: 'pruefung', id })) } }).zustand;
+  assert.equal(voll.angebot, null);
+});
+
+test('Fahrkarte: Drauftreten nimmt an, vorbeigehen kostet nichts', () => {
+  const spiel = mitAngebot('rempeln');
+  const z = spiel.zustand;
+  spiel.act('hoch');
+  const e = spiel.act('hoch');
+  assert.ok(typen(e).includes('angenommen'));
+  assert.equal(z.angebot, null);
+  assert.equal(z.pruefung.id, 'rempeln');
+  const vorbei = mitAngebot('rempeln');
+  vorbei.act('links');
+  const v = verlasse(vorbei);
+  assert.ok(!typen(v).includes('gelocht'));
+  assert.equal(vorbei.zustand.fahrkarte.lochungen.length, 0);
+});
+
+test('Fahrkarte: Ohne Rempeln und Pünktlich ergeben eine helle Lochung beim Verlassen des Wagens', () => {
+  for (const id of ['rempeln', 'puenktlich', 'aufregen', 'draengeln']) {
+    const spiel = mitAngebot(id);
+    spiel.act('hoch');
+    spiel.act('hoch');
+    const e = verlasse(spiel);
+    const l = e.find((x) => x.typ === 'gelocht');
+    assert.ok(l && l.hell && l.id === id, id);
+    assert.deepEqual(spiel.zustand.fahrkarte.lochungen, [{ art: 'pruefung', id, hell: true }]);
+  }
+});
+
+test('Fahrkarte: Nicht aufregen gilt nicht mehr nach einem Schlag, Ohne Rempeln nicht nach einem Treffer', () => {
+  const schlag = mitAngebot('aufregen');
+  schlag.act('hoch');
+  schlag.act('hoch');
+  schlag.zustand.gegner[0].x = 2;
+  schlag.zustand.gegner[0].y = 4;
+  schlag.act('hoch'); // ein Schlag
+  assert.ok(!typen(verlasse(schlag)).includes('gelocht'));
+  const treffer = mitAngebot('rempeln');
+  treffer.act('hoch');
+  treffer.act('hoch');
+  treffer.zustand.gegner[0].ansage = [{ x: 2, y: 5 }];
+  treffer.act('warten'); // getroffen
+  assert.ok(!typen(verlasse(treffer)).includes('gelocht'));
+});
+
+test('Fahrkarte: Erst aussteigen lassen braucht drei Züge Stillstand hintereinander', () => {
+  const spiel = mitAngebot('aussteigen');
+  spiel.act('hoch');
+  spiel.act('hoch');
+  spiel.act('warten');
+  spiel.act('warten');
+  spiel.act('links');
+  spiel.act('warten');
+  assert.ok(!typen(verlasse(spiel)).includes('gelocht'), 'zweimal, dann eine Bewegung, reicht nicht');
+  const ruhig = mitAngebot('aussteigen');
+  ruhig.act('hoch');
+  ruhig.act('hoch');
+  for (let i = 0; i < 3; i++) ruhig.act('warten');
+  assert.ok(typen(verlasse(ruhig)).includes('gelocht'));
+});
+
+test('Fahrkarte: Pünktlich heißt höchstens zwölf Züge nach dem Annehmen, Ruhe bewahren heißt volle Ruhe', () => {
+  const spaet = mitAngebot('puenktlich');
+  spaet.act('hoch');
+  spaet.act('hoch');
+  for (let i = 0; i < 13; i++) spaet.act('warten');
+  assert.ok(!typen(verlasse(spaet)).includes('gelocht'));
+  const ruhe = mitAngebot('ruhe');
+  ruhe.act('hoch');
+  ruhe.act('hoch');
+  assert.ok(!typen(verlasse(ruhe)).includes('gelocht'), 'ohne volle Ruhe nicht');
+  const voll = mitAngebot('ruhe', { ruhe: 3 });
+  voll.act('hoch');
+  voll.act('hoch');
+  assert.ok(typen(verlasse(voll)).includes('gelocht'));
+});
+
+test('Fahrkarte: Ein Tod hinterlässt eine dunkle Lochung, je Ursache nur eine', () => {
+  const karte = { lochungen: [] };
+  for (let i = 0; i < 2; i++) {
+    const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6, mit: { ansage: [{ x: 2, y: 7 }] } }], herzen: 1 });
+    spiel.zustand.fahrkarte = karte;
+    spiel.act('warten');
+  }
+  assert.deepEqual(karte.lochungen, [{ art: 'tod', durch: 'pendler', hell: false }]);
+});
+
+test('Fahrkarte: Die dunkle Lochung wird hell, wenn man einen Wagen mit dieser Ursache ohne ihren Treffer verlässt', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  const z = spiel.zustand;
+  z.fahrkarte = { lochungen: [{ art: 'tod', durch: 'pendler', hell: false }, { art: 'tod', durch: 'draengler', hell: false }] };
+  const e = verlasse(spiel);
+  assert.deepEqual(e.filter((x) => x.typ === 'aufgehellt').map((x) => x.durch), ['pendler']);
+  assert.deepEqual(z.fahrkarte.lochungen.map((l) => l.hell), [true, false], 'ohne Drängler im Wagen bleibt seine dunkel');
+});
+
+test('Fahrkarte: Sie kommt aus früheren Fahrten mit, Unsinn fällt weg', () => {
+  const z = erzeugeSpiel(1, { fahrkarte: { lochungen: [{ art: 'pruefung', id: 'rempeln' }, { art: 'pruefung', id: 'rempeln' }, { art: 'tod', durch: 'pendler' }, { art: 'tod', durch: 'drache' }, 7, null] } }).zustand;
+  assert.deepEqual(z.fahrkarte.lochungen, [{ art: 'pruefung', id: 'rempeln', hell: true }, { art: 'tod', durch: 'pendler', hell: false }]);
+  assert.deepEqual(erzeugeSpiel(1, { fahrkarte: 'alt' }).zustand.fahrkarte, { lochungen: [] });
 });
