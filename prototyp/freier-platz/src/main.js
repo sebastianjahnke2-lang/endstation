@@ -19,8 +19,9 @@ const stand = ladePlatzStand(); // immer vollständig, auch wenn der Speicher le
 
 let fahrt = null;
 let gesperrtBis = 0;
-let tippSchluckenBis = 0;
+let loslassenSchlucken = false; // das Loslassen nach dem langen Druck schließt das Protokoll nicht gleich wieder
 let druck = null; // der Finger, der gerade auf der Zuganzeige liegt
+let letzteTaste = null; // nur die Eingabetaste beginnt nach der Tür eine neue Fahrt, gehalten nicht
 let protokollBeginnt = true; // die erste Eingabe einer Fahrt beginnt ein neues Protokoll
 
 function beginneFahrt() {
@@ -37,8 +38,9 @@ function gibEin(handlung, quelle) {
     return;
   }
   if (fahrt.zustand.status !== 'faehrt') {
-    // Das Spiel startet nie von selbst die nächste Fahrt. Am Rechner geht es auch mit der Eingabetaste.
-    if (quelle === 'taste' && handlung === 'hoch' && buehne.endeBereit(jetzt)) beginneFahrt();
+    // Das Spiel startet nie von selbst die nächste Fahrt. Am Rechner geht es auch mit der Eingabetaste,
+    // aber nicht mit Pfeil hoch oder W und nicht mit einer gehaltenen Taste.
+    if (quelle === 'taste' && letzteTaste === 'Enter' && buehne.endeBereit(jetzt)) beginneFahrt();
     return;
   }
   if (jetzt < gesperrtBis) return;
@@ -60,7 +62,10 @@ function gibEin(handlung, quelle) {
 
 function tippe(x, y) {
   const jetzt = performance.now();
-  if (jetzt < tippSchluckenBis) return;
+  if (loslassenSchlucken) {
+    loslassenSchlucken = false;
+    return;
+  }
   const ziel = buehne.wasLiegtBei(x, y);
   if (!ziel) return;
   if (ziel.art === 'protokoll') {
@@ -90,7 +95,7 @@ function tippe(x, y) {
 // Langes Drücken auf die Zuganzeige zeigt dem Auftraggeber das Protokoll der letzten Fahrt.
 function oeffneProtokoll() {
   druck = null;
-  tippSchluckenBis = performance.now() + 700; // das Loslassen danach schließt es nicht gleich wieder
+  loslassenSchlucken = true; // egal wie lange der Finger noch liegt: Erst der nächste Tipp schließt es
   buehne.zeigeProtokoll(protokollZeilen(stand.protokoll, stand.karten, buehne.protokollBreite()));
 }
 
@@ -101,6 +106,7 @@ function beendeDruck() {
 
 leinwand.addEventListener('pointerdown', (e) => {
   beendeDruck();
+  loslassenSchlucken = false; // ein neuer Finger: Das alte Loslassen ist vorbei
   const kasten = leinwand.getBoundingClientRect();
   if (buehne.zeigtProtokoll() || !buehne.aufAnzeige(e.clientX - kasten.left, e.clientY - kasten.top)) return;
   druck = { id: e.pointerId, x: e.clientX, y: e.clientY, wecker: window.setTimeout(oeffneProtokoll, LANGER_DRUCK) };
@@ -128,6 +134,10 @@ buehne.setzeTon(stand.ton);
 buehne.melder.klang = (name) => klang.spiele(name);
 buehne.passeAn();
 beginneFahrt();
+// Vor der Eingabe angemeldet, damit gibEin() weiß, welche Taste es war.
+window.addEventListener('keydown', (e) => {
+  letzteTaste = e.repeat ? null : e.code;
+});
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
 verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => klang.wecke(), karteOffen: () => buehne.zeigtEnde() });
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => buehne.passeAn());

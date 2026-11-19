@@ -52,6 +52,8 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 - **Antippen ohne Wirkung kostet keine Runde:** der Schaffner, wenn er nicht wartet, der wache Fahrgast, der schon Geweckte, die eigene Figur. Die Figur lehnt sich kurz hin, mehr nicht.
 - **Die Zange tippt auf jeden Schatten einmal,** auch in Reihe 2, wenn sie sich dort zum ersten Mal hebt. Auf die Tasche zeigt sie nur.
 - **Betritt der Schaffner ein Gangfeld, auf dem schon ein Schatten liegt, macht er auch dabei den großen Schritt.**
+- **Eingaben ohne Wirkung zählen nicht als Handlung.** Wer nach dem Anstoßen gegen eine Lehne wischt oder zu weit tippt und danach wieder gegen den Schaffner wischt, drängt vorbei. Warum: Abschnitt 5 kennt vier Handlungen (gehen, benutzen, anstoßen, warten). Eine unmögliche Eingabe ist keine davon und kostet keine Runde. Ein Test hält es fest.
+- **Der geweckte Fahrgast wird gelocht, nicht gegrüßt.** Regel 2 kommt vor Regel 3: Wer wach in der Reihe sitzt, wird gelocht. Gegrüßt wird nur, wer schläft.
 - **Reihe 2 gilt im Protokoll als frei,** sobald am Ende einer Runde auf dem Fensterplatz neben dem Schlafenden kein Schatten mehr liegt.
 
 ### Anzeige und Bedienung
@@ -64,7 +66,13 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 - **Die Uhrzeit nach der Tür** erscheint nur, wenn es keine Tatsache gibt. Sie folgt dem Hauptspiel: Abfahrt 23:41, jede Runde eine Minute.
 - **Die Lochung ist eine schmale, schräg gesetzte Sichel.** Die erste Fassung war breiter und sah aus wie ein Mond.
 - **Tippen auf die Fahrkarte** drückt sie kurz ein, sonst nichts. Tippen auf die eigene Figur wartet nicht: Dafür gibt es hier den Knopf.
-- **Am Rechner** gehen Pfeiltasten oder WASD, die Leertaste wartet, nach der Tür beginnt die Eingabetaste eine neue Fahrt.
+- **Am Rechner** gehen Pfeiltasten oder WASD, die Leertaste wartet, nach der Tür beginnt die Eingabetaste eine neue Fahrt. Nur sie, nicht Pfeil hoch oder W, und nicht, wenn sie gehalten wird. Warum: Wer Pfeil hoch bis zur Tür gedrückt hielt, saß sonst nach einer Sekunde in der nächsten Fahrt. Das Spiel startet nie von selbst die nächste.
+- **Wiederholt der Schaffner den Satz, geht die Blase kurz weg und nach 0,11 Sekunden neu auf.** Warum: Sonst änderte sich beim Tipp auf ihn kein Punkt im Bild, obwohl eine Runde verging. Gerade diesen Tipp erwartet der Spieltest.
+- **Steht die eigene Figur direkt über dem Schaffner im Gang, steht die Blase über ihr,** und die Spitze reicht neben ihr herunter bis zu seinem Kopf. Vorher verdeckte die Blase die eigene Figur.
+- **Ein Tipp auf das Feld des Schaffners trifft ihn, solange er näher an seinem Kopf liegt als am Kopf der Lampe.** Vorher schwenkte ein Tipp knapp neben seinen Kopf die Lampe und löste das Rätsel aus Versehen.
+- **Beim Anstoßen wendet er sich kurz zum Spieler hin,** auch wenn der Schirm seiner Mütze schon dorthin zeigt. Sonst war am Schaffner nichts zu sehen, und das Anstoßen sah aus wie „geht nicht".
+- **Nach einer Größenänderung richtet sich die Zange neu aus,** etwa wenn die Leisten von Safari kommen und gehen. Vorher zeigte sie bis zur nächsten Eingabe auf die alte Stelle.
+- **Unter 600 Pixeln Höhe werden die Felder kleiner als 48 Pixel** (bei 375×548 sind es 47). Der Auftrag verlangt 360×600, darunter wird nur verkleinert.
 - **Reduzierte Bewegung:** Das Bild ruckt beim Schienenstoß nicht, der Schlafende atmet nicht sichtbar. Lampen und Schatten bewegen sich weiter, weil sie die Auskunft tragen.
 - **Töne:** Schritt, Tasche, Klick der Lampe, Knips, Ta-tack. Kein Ton bei Eingaben, die nicht gehen.
 - **Der Satz bleibt stehen, wenn eine schnelle Eingabe sein Erscheinen abgekürzt hat,** und verschwindet erst mit der Eingabe danach. Sonst sähe ihn nie, wer schnell tippt.
@@ -72,6 +80,7 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 ### Speicher und Protokoll
 
 - **Eigener Schlüssel `endstation.freier-platz.1`.** Der Stand des Hauptspiels wird weder gelesen noch geschrieben.
+- **Das Protokoll bleibt nach dem langen Druck offen, egal wie lange der Finger noch liegt.** Erst der nächste Tipp oder Wisch schließt es. Vorher verschwand es beim Loslassen, wenn man länger als etwa 1,3 Sekunden gedrückt hatte.
 - **Das Protokoll wird nach jeder Eingabe gesichert,** nicht erst an der Tür. Warum: Gibt eine Testperson auf, bleibt die abgebrochene Fahrt lesbar.
 - **Eingaben ohne Wirkung stehen als Punkt in der Folge.** Warum: Der Spieltest fragt, ob jemand „wahllos überall" tippt.
 - **Die aufgehobenen Karten sind nur im Protokoll zu sehen,** als Zeile aus `+` und `-`. Im Spiel gibt es keine Sammlung.
@@ -81,6 +90,7 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 
 - Kein echtes iPhone und keine WebKit-Engine, nur Chromium mit iPhone-Profil.
 - Der Ton wurde nicht angehört.
+- Unabhängige Prüfung am 19.11.: Regeln und Anzeige sind vollständig geprüft. Die Regeln wurden dabei über alle 40.501 erreichbaren Zustände mit einem eigenen Modell verglichen, ohne Abweichung. Die Funde zur Anzeige sind behoben, sechs fehlende Tests sind nachgetragen. Die Prüfer für Speicher, Tests und Ton sind am Nutzungslimit ausgefallen. Speicher und Sprachmittel für Safari ab iOS 13 habe ich danach selbst geprüft, ohne Befund. Ton und Haltung sind nicht noch einmal unabhängig geprüft.
 - Ob jemand die Regel errät und ob es komisch ist, zeigt nur der Spieltest.
 
 ## Etappe 1

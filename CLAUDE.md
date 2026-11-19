@@ -16,7 +16,7 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **freigegeben, noch nicht begonnen.** Der Auftraggeber hat am 18.11. „Weitermachen" gesagt. Es gibt dafür noch keinen Code und keinen Entwurf.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
-- Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, wartet auf den Spieltest.** Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
+- Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
 Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
 
@@ -26,7 +26,7 @@ Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot er
 - Nach jeder Etappe stoppen und kurz sagen: was neu ist, was er antippen muss, um es zu übernehmen und im Browser zu spielen, und worauf er beim Testen achten soll.
 - Detailfragen selbst entscheiden und in `docs/ENTSCHEIDUNGEN.md` notieren. Nur fragen, wenn eine Entscheidung den Charakter des Spiels ändert.
 - Alle Zahlen sind Startwerte. Texte im Spiel sind Deutsch.
-- Sparsam mit seinem Nutzungslimit umgehen: Am 18.11. hat eine Entwurfsrunde mit sechs Agenten das Limit aufgebraucht und nichts geliefert. In kleinen Schritten arbeiten, nach jedem Schritt mit grünen Tests committen und pushen. Große Läufe mit mehreren Agenten vorher ankündigen.
+- Sparsam mit seinem Nutzungslimit umgehen: Am 18.11. hat eine Entwurfsrunde mit sechs Agenten das Limit aufgebraucht und nichts geliefert. In kleinen Schritten arbeiten, nach jedem Schritt mit grünen Tests committen und pushen. Große Läufe mit mehreren Agenten vorher ankündigen. Am 19.11. ist es wieder passiert: Eine Prüfrunde mit sieben Agenten hat das Limit aufgebraucht, drei Prüfer fielen aus. Mehrere Agenten deshalb nur, wenn er vorher ausdrücklich zustimmt.
 
 ## Nicht tun
 - Keine Frameworks, Bibliotheken, Analyse-Skripte oder Netzwerkzugriffe.

@@ -428,3 +428,65 @@ test('runde() lässt den alten Zustand unberührt', () => {
   runde(z, 'rechts');
   assert.equal(JSON.stringify(z), vorher);
 });
+
+// Nachgetragen nach der Prüfung vom 19.11.: Regeln, die vorher kein Test festhielt.
+
+test('der Satz fällt in jeder Reihe neu: erst wegen der Tasche in Reihe 5, später beim Schlafenden in Reihe 2', () => {
+  const { listen } = spiele(['warten', 'warten', 'warten', 'warten', feld(0, 5), lampe('A'), 'warten', 'warten', 'warten', 'warten']);
+  const saetze = listen.flat().filter((e) => e.typ === 'wartet' && e.satz).map((e) => e.reihe);
+  assert.deepEqual(saetze, [5, 2]);
+});
+
+test('„Der Schaffner wartet" steht nach der Tür nur, wenn er wirklich wartet, nicht wenn er grüßt', () => {
+  const { z, letzte } = spiele([feld(0, 5), 'rechts', 'hoch', 'hoch', lampe('B'), 'hoch', 'hoch', 'hoch']);
+  assert.equal(z.status, 'ende');
+  assert.equal(z.schaffner.weg, false);
+  assert.ok(typen(letzte).includes('gruesst'));
+  assert.deepEqual(z.tatsachen, []);
+});
+
+test('endet der Wagen in einer Runde mit Schienenstoß, kommt erst der Stoß, dann der Abschluss', () => {
+  const { z, letzte } = spiele(['rechts', 'hoch', 'hoch', 'hoch', 'hoch', 'hoch']);
+  assert.equal(z.runde % 3, 0);
+  const t = typen(letzte);
+  assert.ok(t.indexOf('stoss') >= 0 && t.indexOf('stoss') < t.indexOf('ende'), t.join(','));
+});
+
+test('sitzen zwei Wache in seiner Reihe, locht er von links nach rechts', () => {
+  const start = lage((l) => {
+    l.tasche = false;
+    l.spieler.x = 1;
+    l.spieler.y = 2;
+    l.spieler.tasche = true;
+    l.schlaefer.wach = true;
+    l.lampen.B = 'gang';
+    l.schaffner.y = 2;
+    l.schaffner.tat = 'geht';
+    l.wacher.gelocht = true;
+  });
+  const { listen } = spiele(['warten', 'warten'], start);
+  assert.deepEqual(listen.map((l) => finde(l, 'locht').wen), ['spieler', 'schlaefer']);
+});
+
+test('neben der unteren Tür ist Wand: Von dort geht es nicht zur Seite', () => {
+  const start = lage((l) => {
+    l.tasche = false;
+    l.spieler.tasche = true;
+    l.spieler.x = 2;
+    l.spieler.y = 7;
+    l.schaffner.y = 3;
+    l.schaffner.tat = 'geht';
+  });
+  for (const richtung of ['links', 'rechts']) {
+    const { zustand, ereignisse } = runde(start, richtung);
+    assert.equal(zustand, start);
+    assert.deepEqual(typen(ereignisse), ['gehtNicht']);
+  }
+});
+
+test('Eingaben ohne Wirkung zählen nicht als Handlung: Wer danach wieder gegen ihn wischt, drängt vorbei', () => {
+  const { listen } = spiele(['warten', 'warten', 'warten', 'warten', 'rechts', 'hoch', feld(1, 5), feld(4, 1), 'rechts']);
+  assert.equal(listen[4][0].typ, 'anstoss');
+  assert.deepEqual(listen.slice(5, 8).map((l) => typen(l)), [['gehtNicht'], ['nichts'], ['zuWeit']]);
+  assert.equal(listen[8][0].typ, 'draengt');
+});

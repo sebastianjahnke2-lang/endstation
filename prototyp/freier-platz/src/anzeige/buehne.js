@@ -9,7 +9,7 @@ import { lichtrichtung } from '../kern/licht.js';
 import { PLATZTEXTE, tatsachenZeilen } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, hinUndHer } from '../../../../src/anzeige/formen.js';
 import { neuesPunktfeld, schreibe, schreibeMittig, zeichnePunktfeld, textBreite, ZEILENHOEHE } from '../../../../src/anzeige/matrix.js';
-import { berechneMasse, feldAn, feldMitte, lampenGelenk, lampeAn, endeMasse, protokollMasse, imKasten, LAMPENARM, ENDZEILEN } from './masse.js';
+import { berechneMasse, feldAn, feldMitte, lampenGelenk, lampenKopf, lampeAn, endeMasse, protokollMasse, imKasten, LAMPENARM, ENDZEILEN } from './masse.js';
 import { maleAbteil, malePunkttafel } from './abteilbild.js';
 import { maleTasche, maleReisenden, maleSchlaefer, maleWachen, maleSchaffner, maleWurfschatten, maleLichtkeil, maleLampe, maleFahrkarte, maleSchnipsel, maleTonschalter } from './gestalten.js';
 
@@ -36,9 +36,10 @@ const DAUER = {
   anstoss: 260,
   draengt: 300,
   weckt: 1100,
-  satz: 150,
+  satz: 200,
   warten: 60,
 };
+const SATZ_PAUSE = 110; // so lange ist die Blase weg, wenn er den Satz wiederholt
 
 function dauerVon(e, danach) {
   if (e.typ === 'wartet') return e.neu ? 300 : e.folgt ? 420 : 0;
@@ -75,6 +76,8 @@ export function erzeugeBuehne(leinwand) {
   let blase = null; // der Satz des Schaffners
   let ende = null; // das Bild nach der Tür
   let protokoll = null; // Zeilen des Testprotokolls, solange es offen ist
+  let schaffnerKopf = null; // wo sein Kopf zuletzt gemalt wurde, für Tipps und die Sprechblase
+  let spielerKopf = null;
   const wirkung = { stoss: -1e9, warten: -1e9, karte: -1e9, neueFahrt: -1e9 };
   const melder = { klang: null };
 
@@ -92,6 +95,8 @@ export function erzeugeBuehne(leinwand) {
     tafelbild = malePunkttafel(masse.tafel, [{ text: PLATZTEXTE.spiel.anzeige, spalte: 2, zeile: 1 }], dichte, true);
     knopfbild = null;
     if (ende) ende.tafelbild = null;
+    // Die Zange zielt auf Bildpunkte: Nach einer Größenänderung neu ausrichten, wenn gerade nichts abläuft.
+    if (z && !wartend.length) gleicheAb();
   }
 
   function lampenwert(name) {
@@ -157,6 +162,7 @@ export function erzeugeBuehne(leinwand) {
   }
 
   function zeigeEnde(tatsachen, lochung, runde, jetzt) {
+    blase = null; // hinter dem Abschlussbild bleibt nichts stehen
     const zeilen = tatsachenZeilen(tatsachen);
     ende = { zeilen: zeilen.length ? zeilen : [platzUhrzeit(runde)], lochung, start: jetzt, tafelbild: null, knopfbild: null };
   }
@@ -175,7 +181,7 @@ export function erzeugeBuehne(leinwand) {
   // Was dann zu sehen sein muss, stellt gleicheAb() aus dem Zustand her. Nur der Satz bliebe sonst ungesehen.
   function wendeAn(e, jetzt, sofort) {
     if (sofort) {
-      if (e.typ === 'satz' || (e.typ === 'wartet' && e.satz)) zeigeBlase();
+      if ((e.typ === 'satz' || (e.typ === 'wartet' && e.satz)) && !ende) zeigeBlase();
       return;
     }
     const s = bild.spieler;
@@ -287,7 +293,11 @@ export function erzeugeBuehne(leinwand) {
       }
       if (e.satz) zeigeBlase();
     } else if (e.typ === 'satz') {
-      zeigeBlase();
+      // Er wiederholt den Satz: Die Blase geht kurz weg und neu auf, sonst sähe der Tipp aus wie nichts.
+      blase = null;
+      bewege(jetzt + SATZ_PAUSE, 0, () => {
+        if (!ende) zeigeBlase();
+      });
     } else if (e.typ === 'locht') {
       // Die Zange geht zum Fahrschein, schließt, ein Schnipsel fällt.
       const gast = feldMitte(masse, e.x, e.y);
@@ -352,9 +362,15 @@ export function erzeugeBuehne(leinwand) {
         s.sx = r.x * hinUndHer(p) * 0.2;
         s.sy = r.y * hinUndHer(p) * 0.2;
       });
-      // er dreht die Mütze zum Spieler, sonst nichts
+      // er dreht die Mütze zum Spieler, sonst nichts. Zeigt der Schirm schon dorthin, sieht man ihn
+      // trotzdem: Er wendet sich kurz zum Spieler hin.
+      const zu = SCHRITTE[e.blick];
       bewege(jetzt + 90, 10, () => {
         k.blick = e.blick;
+      });
+      bewege(jetzt + 60, 240, (p) => {
+        k.sx = zu.x * hinUndHer(p) * 0.06;
+        k.sy = zu.y * hinUndHer(p) * 0.05;
       });
     } else if (e.typ === 'draengt') {
       const vonK = k.py;
@@ -548,15 +564,27 @@ export function erzeugeBuehne(leinwand) {
     const b = breit * raster + 18;
     const h = blase.zeilen.length * (ZEILENHOEHE + 1) * raster + 12;
     const x = begrenze(Math.round(anker.x - b / 2), 6, masse.breite - b - 6);
-    const y = Math.max(masse.tafel.y + masse.tafel.h + 4, Math.round(anker.y - h - 12));
+    const oben = masse.tafel.y + masse.tafel.h + 4;
+    let y = Math.max(oben, Math.round(anker.y - h - 12));
+    let fuss = anker.x; // wo die Spitze an der Blase ansetzt
+    let spitze = { x: anker.x, y: y + h + 8 };
+    // Steht die eigene Figur direkt über ihm im Gang, geht die Blase über sie hinweg,
+    // und die Spitze reicht neben ihr herunter bis zu seinem Kopf.
+    const p = bild.spieler;
+    if (spielerKopf && Math.round(p.px) === GANGSPALTE && Math.round(p.py) === Math.round(bild.schaffner.py) - 1) {
+      const seite = bild.schaffner.zeigt && bild.schaffner.zeigt.x > anker.x ? -1 : 1; // weg von der Zange
+      y = Math.max(oben, Math.round(spielerKopf.y - h - 8));
+      fuss = begrenze(anker.x + seite * masse.s * 0.38, x + 12, x + b - 12);
+      spitze = { x: anker.x + seite * masse.s * 0.12, y: anker.y - masse.s * 0.1 };
+    }
     stift.fillStyle = 'rgba(13, 17, 25, 0.96)';
     rundesRechteck(stift, x, y, b, h, 8);
     stift.fill();
     // die Spitze zeigt auf den, der spricht
     stift.beginPath();
-    stift.moveTo(anker.x - 7, y + h - 1);
-    stift.lineTo(anker.x, y + h + 8);
-    stift.lineTo(anker.x + 7, y + h - 1);
+    stift.moveTo(fuss - 7, y + h - 1);
+    stift.lineTo(spitze.x, spitze.y);
+    stift.lineTo(fuss + 7, y + h - 1);
     stift.closePath();
     stift.fill();
     stift.strokeStyle = FARBE.tafelRand;
@@ -589,6 +617,7 @@ export function erzeugeBuehne(leinwand) {
     if (k.da > 0.01) reihe.push({ y: k.py + k.sy + 0.002, wer: 'schaffner' });
     reihe.sort((a, b) => a.y - b.y);
     let anker = null;
+    schaffnerKopf = null;
     for (const eintrag of reihe) {
       if (eintrag.wer === 'schlaefer') {
         const atem = ruhig ? 0 : Math.sin(t * 1.1);
@@ -604,7 +633,8 @@ export function erzeugeBuehne(leinwand) {
       } else if (eintrag.wer === 'spieler') {
         // im Sitzen ist die Figur kleiner; beim Hinsetzen und Aufstehen geht das eine ins andere über
         const sitzt = istSitz(Math.round(p.px), Math.round(p.py));
-        maleReisenden(stift, boden.x + (p.px + p.sx + 0.5) * s, boden.y + (p.py + p.sy + (sitzt ? 0.86 : 0.9)) * s, s, { sitzt, traegt: p.traegt, arm: p.arm });
+        const gemalt = maleReisenden(stift, boden.x + (p.px + p.sx + 0.5) * s, boden.y + (p.py + p.sy + (sitzt ? 0.86 : 0.9)) * s, s, { sitzt, traegt: p.traegt, arm: p.arm });
+        spielerKopf = { x: gemalt.kopfX, y: gemalt.kopfY - gemalt.kopf };
       } else {
         stift.save();
         stift.globalAlpha = k.da;
@@ -625,6 +655,7 @@ export function erzeugeBuehne(leinwand) {
         }
         stift.restore();
         anker = { x: cx, y: gemalt.kopfY };
+        if (k.da > 0.5) schaffnerKopf = anker;
       }
     }
     for (const teil of schnipsel) maleSchnipsel(stift, teil.x, teil.y + teil.fall * s * 0.4, s, teil.staerke);
@@ -707,7 +738,6 @@ export function erzeugeBuehne(leinwand) {
     // Safari ändert die Höhe, wenn seine Leisten kommen und gehen, oft ohne verlässliches Signal.
     if (leinwand.clientWidth && (leinwand.clientWidth !== masse.breite || leinwand.clientHeight !== masse.hoehe)) {
       passeAn();
-      if (!wartend.length) gleicheAb();
     }
     const t = jetzt / 1000;
 
@@ -760,8 +790,14 @@ export function erzeugeBuehne(leinwand) {
     if (imKasten(masse.warten, px, py)) return { art: 'warten' };
     if (imKasten(masse.karte, px, py)) return { art: 'karte' };
     const lampe = lampeAn(masse, z.lampen, px, py);
-    if (lampe) return { art: 'lampe', name: lampe };
     const feld = feldAn(masse, px, py);
+    // Steht der Schaffner auf dem Feld unter dem Finger, bekommt die Lampe den Tipp nur,
+    // wenn er näher an ihrem Kopf liegt als an seinem.
+    if (lampe && feld && schaffnerKopf && !z.schaffner.weg && feld.x === GANGSPALTE && feld.y === z.schaffner.y) {
+      const kopf = lampenKopf(masse, lampe, z.lampen[lampe]);
+      if (Math.hypot(px - schaffnerKopf.x, py - schaffnerKopf.y) < Math.hypot(px - kopf.x, py - kopf.y)) return { art: 'feld', x: feld.x, y: feld.y };
+    }
+    if (lampe) return { art: 'lampe', name: lampe };
     if (feld) return { art: 'feld', x: feld.x, y: feld.y };
     return null;
   }
