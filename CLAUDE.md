@@ -11,6 +11,12 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 1. Diese Datei und `docs/FAHRPLAN.md` lesen.
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
 
+## Weiterarbeiten
+- Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
+- Nach jedem abgeschlossenen Teilschritt: `docs/STAND.md` aktualisieren, committen, pushen.
+- Bei „Weiter" ohne weitere Angabe: den nächsten Schritt aus `docs/STAND.md` ausführen.
+- Arbeitsaufträge liegen wörtlich in `docs/auftraege/`. Einen neuen Auftrag dort ablegen, bevor gebaut wird.
+
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.

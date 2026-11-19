@@ -4,7 +4,7 @@ Detailfragen, die Claude selbst entschieden hat. Neueste Etappe oben. Jede Zeile
 
 ## Offen
 
-Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/PROTOTYP-freier-platz.md`) und den vorhandenen Dokumenten. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/auftraege/freier-platz.md`) und den vorhandenen Dokumenten. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
 
 ### Entschieden am 19.11.
 
