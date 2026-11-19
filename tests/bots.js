@@ -5,11 +5,14 @@
 //   ausweicher    weicht immer aus, lässt alle kommen, schlägt nur ohne Risiko
 //   ausgewogener  weicht aus, bringt aber Angeschlagene zu Ende und nutzt Gelegenheiten
 //
+// Am Kontrolleur: Der Kämpfer schlägt ihn wie jeden. Ausweicher und Ausgewogener lassen ihn
+// in Ruhe, kümmern sich erst um die anderen und stellen sich dann ruhig in seine Nähe.
+//
 // Jeder Bot ist eine Funktion (zustand, merk) -> aktion. "merk" ist sein Gedächtnis für eine Fahrt.
 
 import { RICHTUNG, RICHTUNGSNAMEN, TUERFELD, imFeld, feldNr, abstand, entfernungen, naechsterSchritt } from '../src/kern/feld.js';
 import { istHindernis, gegnerAuf, istMarkiert, istVorderster } from '../src/kern/lage.js';
-import { richtungVon } from '../src/kern/gegner.js';
+import { richtungVon, inSeinerNaehe } from '../src/kern/gegner.js';
 import { erzeugeSpiel } from '../src/kern/spiel.js';
 import { WAGENZAHL } from '../src/kern/wagen.js';
 
@@ -25,6 +28,49 @@ function umgebung(z, von = z.spieler) {
     const gegner = drin ? gegnerAuf(z, x, y) : null;
     return { name, x, y, drin, gegner, frei: drin && !gegner, rot: drin && istMarkiert(z, x, y) };
   });
+}
+
+function kontrolleurIn(z) {
+  return z.gegner.find((g) => g.typ === 'kontrolleur') || null;
+}
+
+// Alle Gegner außer dem Kontrolleur: nur sie sind für Ausweicher und Ausgewogenen Ziele.
+function ohneKontrolleur(z) {
+  return { ...z, gegner: z.gegner.filter((g) => g.typ !== 'kontrolleur') };
+}
+
+// Nur noch der Kontrolleur steht zwischen Spieler und Tür: ruhig in seine Nähe stellen.
+// Hinein nur von außen, denn wer sich in seiner Nähe bewegt, wird geprüft.
+function amKontrolleur(z, k) {
+  const s = z.spieler;
+  const um = umgebung(z);
+  if (istMarkiert(z, s.x, s.y)) {
+    const frei = um.filter((n) => n.frei && !n.rot);
+    const draussen = frei.filter((n) => !inSeinerNaehe(k, n));
+    if (draussen.length) return draussen[0].name;
+    return frei.length ? frei[0].name : 'warten';
+  }
+  if (inSeinerNaehe(k, s)) return 'warten';
+  const hinein = um.find((n) => n.frei && inSeinerNaehe(k, n));
+  if (hinein) return hinein.name;
+  // zum nächsten Feld außerhalb seiner Nähe, von dem ein Schritt hineinführt
+  const begehbar = (x, y) => !istHindernis(z, x, y) && !gegnerAuf(z, x, y) && !inSeinerNaehe(k, { x, y });
+  const weit = entfernungen(s, begehbar);
+  let ziel = null;
+  let nah = Infinity;
+  for (let y = 0; y < z.wagen.plan.length; y++) {
+    for (let x = 0; x < z.wagen.plan[y].length; x++) {
+      const d = weit[feldNr(x, y)];
+      if (d <= 0 || d >= nah) continue;
+      if (umgebung(z, { x, y }).some((n) => n.frei && inSeinerNaehe(k, n))) {
+        nah = d;
+        ziel = { x, y };
+      }
+    }
+  }
+  if (!ziel) return 'warten';
+  const schritt = naechsterSchritt(s, entfernungen(ziel, begehbar), ziel);
+  return schritt ? schritt.richtung : 'warten';
 }
 
 function zurTuer(z) {
@@ -152,6 +198,8 @@ export function kaempfer(z) {
 
 export function ausweicher(z, merk) {
   if (z.tuerOffen) return zurTuer(z);
+  const k = kontrolleurIn(z);
+  if (k) return mitKontrolleur(z, merk, k, ausweicher);
   const s = z.spieler;
   const um = umgebung(z);
   const nebenan = um.filter((n) => n.gegner);
@@ -230,6 +278,8 @@ function wertungZiel(z, n) {
 
 export function ausgewogener(z, merk) {
   if (z.tuerOffen) return zurTuer(z);
+  const k = kontrolleurIn(z);
+  if (k) return mitKontrolleur(z, merk, k, ausgewogener);
   const s = z.spieler;
   const um = umgebung(z);
   const nebenan = um.filter((n) => n.gegner);
@@ -274,6 +324,28 @@ export function ausgewogener(z, merk) {
   }
   merk.geduld = 0;
   return schritt.richtung;
+}
+
+// Im Wagen des Kontrolleurs: Sind andere da, spielt der Bot wie immer, sieht den Kontrolleur aber
+// nur als Hindernis. Steht der Bot schon ruhig in seiner Nähe und ist nicht markiert, bleibt er stehen.
+function mitKontrolleur(z, merk, k, bot) {
+  const s = z.spieler;
+  const andere = z.gegner.filter((g) => g !== k);
+  if (!andere.length) return amKontrolleur(z, k);
+  if (inSeinerNaehe(k, s) && !istMarkiert(z, s.x, s.y) && k.ruhig > 0) return 'warten';
+  const ohne = ohneKontrolleur(z);
+  const aktion = bot(ohne, merk);
+  // nicht in ihn hineinlaufen: Das wäre ein Schlag
+  if (aktion !== 'warten' && RICHTUNG[aktion] && s.x + RICHTUNG[aktion].x === k.x && s.y + RICHTUNG[aktion].y === k.y) return 'warten';
+  // markiert und in seiner Nähe: lieber aus seiner Nähe hinaus ausweichen
+  if (istMarkiert(z, s.x, s.y) && inSeinerNaehe(k, s) && RICHTUNG[aktion]) {
+    const n = { x: s.x + RICHTUNG[aktion].x, y: s.y + RICHTUNG[aktion].y };
+    if (inSeinerNaehe(k, n)) {
+      const draussen = umgebung(z).find((m) => m.frei && !m.rot && !inSeinerNaehe(k, m));
+      if (draussen) return draussen.name;
+    }
+  }
+  return aktion;
 }
 
 export const BOTS = { kaempfer, ausweicher, ausgewogener };

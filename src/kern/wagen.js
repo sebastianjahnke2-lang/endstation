@@ -50,6 +50,28 @@ export const WAGENPLAENE = [
       { typ: 'pendler', orte: [[4, 2], [3, 3], [4, 4]] },
     ],
   },
+  // Autoritätswagen, fest in der Mitte der Fahrt. Der Kontrolleur steht neben der Tür,
+  // dazu zwei Pendler. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  // Die Tür gehört dem Kontrolleur: Sie geht auf, sobald er fort ist. Verhalten in gegner.js.
+  {
+    art: 'mittelwagen',
+    autoritaet: true,
+    plan: [
+      '.....',
+      '.....',
+      'S...S',
+      '..K..',
+      '.....',
+      'S...S',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'kontrolleur', orte: [[1, 0]] },
+      { typ: 'pendler', orte: [[0, 3], [1, 4]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 4]] },
+    ],
+  },
   {
     art: 'grossraumwagen',
     plan: [

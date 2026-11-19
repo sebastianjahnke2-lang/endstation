@@ -8,6 +8,7 @@ export const TEXTE = {
   wagen: {
     sitzwagen: 'Sitzwagen',
     fahrradabteil: 'Fahrradabteil',
+    mittelwagen: 'Mittelwagen',
     grossraumwagen: 'Großraumwagen',
     liegewagen: 'Liegewagen',
     gepaeckwagen: 'Gepäckwagen',
@@ -19,6 +20,11 @@ export const TEXTE = {
     tasten: 'Pfeiltasten',
     ausweichen: 'Ausweichen',
     anrempeln: 'Anrempeln',
+  },
+
+  // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft
+  kontrolleur: {
+    satz: 'Fahrkarte, bitte.',
   },
 
   // Endkarte: eine wahre Zeile, was gefehlt hat

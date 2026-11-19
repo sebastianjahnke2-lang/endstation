@@ -173,6 +173,13 @@ function istVorderster(z, g) {
   return true;
 }
 
+// Darf die Tür aufgehen? Wenn kein Gegner mehr steht. Im Wagen des Kontrolleurs gehört
+// die Tür ihm: Sie geht auf, sobald er fort ist, auch wenn andere noch dort sind.
+function tuerFrei(z) {
+  if (z.gegner.length === 0) return true;
+  return z.wagen.mitKontrolleur === true && !z.gegner.some((g) => g.typ === 'kontrolleur');
+}
+
 // --- kern/zufall.js
 // Zufall mit Seed. Der Stand liegt im Spielzustand, damit jede Fahrt
 // mit demselben Seed und denselben Eingaben gleich verläuft.
@@ -241,6 +248,28 @@ const WAGENPLAENE = [
       { typ: 'pendler', orte: [[3, 1], [4, 1], [3, 0]] },
       { typ: 'pendler', orte: [[1, 3], [2, 3], [1, 2]] },
       { typ: 'pendler', orte: [[4, 2], [3, 3], [4, 4]] },
+    ],
+  },
+  // Autoritätswagen, fest in der Mitte der Fahrt. Der Kontrolleur steht neben der Tür,
+  // dazu zwei Pendler. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  // Die Tür gehört dem Kontrolleur: Sie geht auf, sobald er fort ist. Verhalten in gegner.js.
+  {
+    art: 'mittelwagen',
+    autoritaet: true,
+    plan: [
+      '.....',
+      '.....',
+      'S...S',
+      '..K..',
+      '.....',
+      'S...S',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'kontrolleur', orte: [[1, 0]] },
+      { typ: 'pendler', orte: [[0, 3], [1, 4]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 4]] },
     ],
   },
   {
@@ -340,7 +369,13 @@ const GEGNERWERTE = {
   pendler: { hp: 2 },
   gruppe: { hp: 1, schritte: 2 },
   draengler: { hp: 3, erschoepfung: 1 },
+  kontrolleur: { hp: 5, schaden: 2, geduld: 3 },
 };
+
+// Wie viele Herzen ein Treffer dieser Figur kostet
+function schadenVon(g) {
+  return GEGNERWERTE[g.typ].schaden || 1;
+}
 
 function neuerGegner(id, vorgabe) {
   const g = { id, typ: vorgabe.typ, x: vorgabe.x, y: vorgabe.y, hp: GEGNERWERTE[vorgabe.typ].hp, ansage: null };
@@ -352,6 +387,9 @@ function neuerGegner(id, vorgabe) {
     g.rang = vorgabe.rang;
   } else if (g.typ === 'draengler') {
     g.erschoepft = 0;
+  } else if (g.typ === 'kontrolleur') {
+    g.ruhig = 0; // so viele Züge steht der Spieler schon ruhig in seiner Nähe
+    g.posten = { x: vorgabe.x, y: vorgabe.y };
   }
   return g;
 }
@@ -417,16 +455,18 @@ function loeseAnsagenEin(z, ereignisse) {
     if (!g.ansage) continue;
     dran.add(g.id);
     let trifft = false;
-    if (g.typ === 'pendler') {
+    if (g.typ === 'pendler' || g.typ === 'kontrolleur') {
       trifft = g.ansage.some((f) => spielerAuf(z, f.x, f.y));
       ereignisse.push({ typ: 'hieb', phase: 1, id: g.id, felder: g.ansage.map(kopie), trifft });
       if (g.langsam) g.pause = 1;
+      if (g.typ === 'kontrolleur') g.ruhig = 0;
     } else {
       trifft = stosseVor(z, g, ereignisse);
       if (g.typ === 'draengler') g.erschoepft = GEGNERWERTE.draengler.erschoepfung;
     }
     g.ansage = null;
-    if (trifft && !treffer) treffer = g;
+    // höchstens ein Treffer je Zug; treffen mehrere, zählt der schwerste
+    if (trifft && (!treffer || schadenVon(g) > schadenVon(treffer))) treffer = g;
   }
   rueckeAuf(z, ereignisse);
   return { treffer, dran };
@@ -533,10 +573,64 @@ function planeDraengler(z, g, ereignisse) {
   }
 }
 
+// Der Kontrolleur. Steckbrief:
+//   Name: steht auf keiner Anzeige, er sagt nur „Fahrkarte, bitte."
+//   Typ: Autoritätswagen, fest als dritter Wagen in der Mitte der Fahrt.
+//   Facette (nie im Spiel): Autorität. Taktik: Er kontrolliert die Optionen, denn die Tür gehört ihm.
+//   Auslöser, immer gleich:
+//     - Er geht nie von seinem Platz neben der Tür.
+//     - Seine Nähe sind die acht Felder um ihn herum.
+//     - Wer in seiner Nähe ist und sich bewegt, wird geprüft: Er sagt seinen Satz und kündigt
+//       das Feld des Spielers an. Ein Treffer kostet zwei Herzen.
+//     - Wer ihn schlägt, wird ebenso geprüft.
+//     - Wer in seine Nähe tritt, wird angesprochen, aber nicht geprüft.
+//     - Wer drei Züge ruhig in seiner Nähe steht, wird durchgewinkt: Er geht, die Tür ist offen.
+//   Wege: durchschauen (ruhig stehen), kämpfen (5 Schläge), die Tür aufbrechen (1 Herz).
+function inSeinerNaehe(g, f) {
+  return Math.max(Math.abs(g.x - f.x), Math.abs(g.y - f.y)) === 1;
+}
+
+function pruefe(z, g, ereignisse) {
+  g.ruhig = 0;
+  sagAn(g, [z.spieler], ereignisse);
+  ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
+}
+
+// tat: was der Spieler in diesem Zug getan hat, { art: 'warten' | 'schritt' | 'schlag' | 'stoss', von, id }
+function planeKontrolleur(z, g, ereignisse, tat) {
+  const s = z.spieler;
+  if (tat.art === 'schlag' && tat.id === g.id) {
+    pruefe(z, g, ereignisse);
+    return;
+  }
+  if (!inSeinerNaehe(g, s)) {
+    g.ruhig = 0;
+    return;
+  }
+  if (tat.art === 'warten') {
+    g.ruhig += 1;
+    if (g.ruhig >= GEGNERWERTE.kontrolleur.geduld) {
+      // durchgewinkt: Er geht, und mit ihm verschwindet alles, was er angekündigt hatte
+      z.gegner.splice(z.gegner.indexOf(g), 1);
+      ereignisse.push({ typ: 'durchgewinkt', phase: 2, id: g.id });
+    } else {
+      ereignisse.push({ typ: 'ruhig', phase: 2, id: g.id, ruhig: g.ruhig });
+    }
+    return;
+  }
+  const kamAusDerNaehe = tat.art === 'schritt' && inSeinerNaehe(g, tat.von);
+  g.ruhig = 0;
+  if (kamAusDerNaehe) {
+    pruefe(z, g, ereignisse);
+  } else if (tat.art === 'schritt') {
+    ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: false }); // er spricht den an, der herantritt
+  }
+}
+
 // Schritt 2: Bewegen oder ankündigen. Wer in diesem Zug angegriffen hat, setzt aus.
 // Ausnahme ist der Vorderste der Reisegruppe: Er läuft und kündigt in jedem Zug an.
-function planeGegner(z, dran, ereignisse) {
-  for (const g of z.gegner) {
+function planeGegner(z, dran, ereignisse, tat = { art: 'warten' }) {
+  for (const g of [...z.gegner]) {
     if (g.typ === 'gruppe') {
       if (istVorderster(z, g)) planeVordersten(z, g, ereignisse);
     } else if (dran.has(g.id)) {
@@ -545,6 +639,8 @@ function planeGegner(z, dran, ereignisse) {
       planePendler(z, g, ereignisse);
     } else if (g.typ === 'draengler') {
       planeDraengler(z, g, ereignisse);
+    } else if (g.typ === 'kontrolleur') {
+      planeKontrolleur(z, g, ereignisse, tat);
     }
   }
 }
@@ -575,21 +671,31 @@ function richtungVon(a, b) {
 const HERZEN_VOLL = 5;
 const RUHE_VOLL = 3;
 const SCHADEN_SPIELER = 1;
+const AUFBRECHEN_STOESSE = 3; // so oft gegen die geschlossene Tür laufen, dann gibt sie nach
+const AUFBRECHEN_KOSTET = 1; // Herzen
 
 function richteWagenEin(z) {
   const wagen = baueWagen(z.wagenNr, z);
   z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
+  z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
+  z.tuerStoesse = 0;
+  z.aufgebrochen = false;
   z.zuegeImWagen = 0;
 }
 
-function oeffneTuer(z, ereignisse) {
-  if (z.tuerOffen || z.gegner.length > 0) return;
+function oeffneTuer(z, ereignisse, phase) {
+  if (z.tuerOffen || !tuerFrei(z)) return;
   z.tuerOffen = true;
-  ereignisse.push({ typ: 'tuerAuf', phase: 0 });
+  ereignisse.push({ typ: 'tuerAuf', phase });
+}
+
+function stirb(z, ereignisse, phase, durch) {
+  z.status = 'tot';
+  ereignisse.push({ typ: 'tod', phase, wagenNr: z.wagenNr, durch, uebrig: z.gegner.length });
 }
 
 function wechsleWagen(z) {
@@ -612,6 +718,7 @@ function fuehreAus(z, aktion) {
   const startRot = istMarkiert(z, s.x, s.y);
   let zielRot = false;
   let bewegt = false;
+  let tat = { art: 'warten' }; // was der Spieler getan hat, für den Kontrolleur
 
   // Phase 0: der Spieler
   if (aktion === 'warten') {
@@ -622,13 +729,31 @@ function fuehreAus(z, aktion) {
     if (!r) return [];
     const x = s.x + r.x;
     const y = s.y + r.y;
-    if (aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y) {
-      if (!z.tuerOffen) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: true }];
-      return wechsleWagen(z);
-    }
-    if (!imFeld(x, y) || istHindernis(z, x, y)) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
-    const g = gegnerAuf(z, x, y);
-    if (g) {
+    const anDerTuer = aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y;
+    if (anDerTuer && z.tuerOffen) return wechsleWagen(z);
+    if (!anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+    const g = anDerTuer ? null : gegnerAuf(z, x, y);
+    if (anDerTuer) {
+      // Aufbrechen: Jede Tür gibt nach dreimal Dagegenlaufen nach und kostet ein Herz.
+      tat = { art: 'stoss' };
+      z.tuerStoesse += 1;
+      ereignisse.push({ typ: 'tuerStoss', phase: 0, n: z.tuerStoesse });
+      if (z.tuerStoesse >= AUFBRECHEN_STOESSE) {
+        z.tuerOffen = true;
+        z.aufgebrochen = true;
+        s.herzen = Math.max(0, s.herzen - AUFBRECHEN_KOSTET);
+        z.zaehler.aufgebrochen += 1;
+        ereignisse.push({ typ: 'aufgebrochen', phase: 0, herzen: s.herzen });
+        ereignisse.push({ typ: 'tuerAuf', phase: 0 });
+        if (s.herzen <= 0) {
+          z.zug += 1;
+          z.zuegeImWagen += 1;
+          stirb(z, ereignisse, 0, 'tuer');
+          return ereignisse;
+        }
+      }
+    } else if (g) {
+      tat = { art: 'schlag', id: g.id };
       g.hp -= SCHADEN_SPIELER;
       const besiegt = g.hp <= 0;
       ereignisse.push({ typ: 'schlag', phase: 0, id: g.id, gegner: g.typ, richtung: aktion, x, y, hp: Math.max(0, g.hp), besiegt });
@@ -636,9 +761,10 @@ function fuehreAus(z, aktion) {
       if (besiegt) {
         z.gegner.splice(z.gegner.indexOf(g), 1); // seine Ansage verfällt mit ihm
         z.zaehler.besiegt += 1;
-        oeffneTuer(z, ereignisse);
+        oeffneTuer(z, ereignisse, 0);
       }
     } else {
+      tat = { art: 'schritt', von: { x: s.x, y: s.y } };
       zielRot = istMarkiert(z, x, y);
       ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y } });
       s.x = x;
@@ -653,13 +779,14 @@ function fuehreAus(z, aktion) {
   // Phase 1: angekündigte Angriffe treffen ein
   const { treffer, dran } = loeseAnsagenEin(z, ereignisse);
   if (treffer) {
-    s.herzen -= 1; // höchstens ein Herz je Zug, egal wie viele treffen
+    // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei.
+    const schaden = schadenVon(treffer);
+    s.herzen = Math.max(0, s.herzen - schaden);
     s.ruhe = 0;
     z.zaehler.treffer += 1;
-    ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ });
+    ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ, schaden });
     if (s.herzen <= 0) {
-      z.status = 'tot';
-      ereignisse.push({ typ: 'tod', phase: 1, wagenNr: z.wagenNr, durch: treffer.typ, uebrig: z.gegner.length });
+      stirb(z, ereignisse, 1, treffer.typ);
       return ereignisse;
     }
   } else if (startRot && bewegt && !zielRot) {
@@ -669,7 +796,8 @@ function fuehreAus(z, aktion) {
   }
 
   // Phase 2: Gegner bewegen sich oder kündigen an
-  planeGegner(z, dran, ereignisse);
+  planeGegner(z, dran, ereignisse, tat);
+  oeffneTuer(z, ereignisse, 2); // der Kontrolleur kann gegangen sein
   return ereignisse;
 }
 
@@ -686,7 +814,7 @@ function erzeugeSpiel(seed, optionen = {}) {
     zug: 0,
     zuegeImWagen: 0,
     naechsteId: 1,
-    zaehler: { schritte: 0, schlaege: 0, gewartet: 0, ausgewichen: 0, treffer: 0, besiegt: 0, wagen: 0 },
+    zaehler: { schritte: 0, schlaege: 0, gewartet: 0, ausgewichen: 0, treffer: 0, besiegt: 0, wagen: 0, aufgebrochen: 0 },
   };
   richteWagenEin(z);
   return { zustand: z, act: (aktion) => fuehreAus(z, aktion) };
@@ -703,6 +831,7 @@ const TEXTE = {
   wagen: {
     sitzwagen: 'Sitzwagen',
     fahrradabteil: 'Fahrradabteil',
+    mittelwagen: 'Mittelwagen',
     grossraumwagen: 'Großraumwagen',
     liegewagen: 'Liegewagen',
     gepaeckwagen: 'Gepäckwagen',
@@ -714,6 +843,11 @@ const TEXTE = {
     tasten: 'Pfeiltasten',
     ausweichen: 'Ausweichen',
     anrempeln: 'Anrempeln',
+  },
+
+  // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft
+  kontrolleur: {
+    satz: 'Fahrkarte, bitte.',
   },
 
   // Endkarte: eine wahre Zeile, was gefehlt hat

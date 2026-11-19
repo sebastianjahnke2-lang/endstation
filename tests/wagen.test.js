@@ -34,8 +34,10 @@ function baueMitFolge(nr, folge) {
   return { plan, gegner, folge };
 }
 
-test('es gibt fünf Wagen', () => {
-  assert.equal(WAGENZAHL, 5);
+test('es gibt sechs Wagen, der Autoritätswagen steht in der Mitte', () => {
+  assert.equal(WAGENZAHL, 6);
+  const autoritaet = WAGENPLAENE.map((w, nr) => (w.autoritaet ? nr : -1)).filter((nr) => nr >= 0);
+  assert.deepEqual(autoritaet, [2]);
 });
 
 test('baueWagen und die Nachrechnung im Test stimmen überein', () => {

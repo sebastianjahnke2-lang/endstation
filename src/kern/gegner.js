@@ -13,7 +13,13 @@ export const GEGNERWERTE = {
   pendler: { hp: 2 },
   gruppe: { hp: 1, schritte: 2 },
   draengler: { hp: 3, erschoepfung: 1 },
+  kontrolleur: { hp: 5, schaden: 2, geduld: 3 },
 };
+
+// Wie viele Herzen ein Treffer dieser Figur kostet
+export function schadenVon(g) {
+  return GEGNERWERTE[g.typ].schaden || 1;
+}
 
 export function neuerGegner(id, vorgabe) {
   const g = { id, typ: vorgabe.typ, x: vorgabe.x, y: vorgabe.y, hp: GEGNERWERTE[vorgabe.typ].hp, ansage: null };
@@ -25,6 +31,9 @@ export function neuerGegner(id, vorgabe) {
     g.rang = vorgabe.rang;
   } else if (g.typ === 'draengler') {
     g.erschoepft = 0;
+  } else if (g.typ === 'kontrolleur') {
+    g.ruhig = 0; // so viele Züge steht der Spieler schon ruhig in seiner Nähe
+    g.posten = { x: vorgabe.x, y: vorgabe.y };
   }
   return g;
 }
@@ -90,16 +99,18 @@ export function loeseAnsagenEin(z, ereignisse) {
     if (!g.ansage) continue;
     dran.add(g.id);
     let trifft = false;
-    if (g.typ === 'pendler') {
+    if (g.typ === 'pendler' || g.typ === 'kontrolleur') {
       trifft = g.ansage.some((f) => spielerAuf(z, f.x, f.y));
       ereignisse.push({ typ: 'hieb', phase: 1, id: g.id, felder: g.ansage.map(kopie), trifft });
       if (g.langsam) g.pause = 1;
+      if (g.typ === 'kontrolleur') g.ruhig = 0;
     } else {
       trifft = stosseVor(z, g, ereignisse);
       if (g.typ === 'draengler') g.erschoepft = GEGNERWERTE.draengler.erschoepfung;
     }
     g.ansage = null;
-    if (trifft && !treffer) treffer = g;
+    // höchstens ein Treffer je Zug; treffen mehrere, zählt der schwerste
+    if (trifft && (!treffer || schadenVon(g) > schadenVon(treffer))) treffer = g;
   }
   rueckeAuf(z, ereignisse);
   return { treffer, dran };
@@ -206,10 +217,64 @@ function planeDraengler(z, g, ereignisse) {
   }
 }
 
+// Der Kontrolleur. Steckbrief:
+//   Name: steht auf keiner Anzeige, er sagt nur „Fahrkarte, bitte."
+//   Typ: Autoritätswagen, fest als dritter Wagen in der Mitte der Fahrt.
+//   Facette (nie im Spiel): Autorität. Taktik: Er kontrolliert die Optionen, denn die Tür gehört ihm.
+//   Auslöser, immer gleich:
+//     - Er geht nie von seinem Platz neben der Tür.
+//     - Seine Nähe sind die acht Felder um ihn herum.
+//     - Wer in seiner Nähe ist und sich bewegt, wird geprüft: Er sagt seinen Satz und kündigt
+//       das Feld des Spielers an. Ein Treffer kostet zwei Herzen.
+//     - Wer ihn schlägt, wird ebenso geprüft.
+//     - Wer in seine Nähe tritt, wird angesprochen, aber nicht geprüft.
+//     - Wer drei Züge ruhig in seiner Nähe steht, wird durchgewinkt: Er geht, die Tür ist offen.
+//   Wege: durchschauen (ruhig stehen), kämpfen (5 Schläge), die Tür aufbrechen (1 Herz).
+export function inSeinerNaehe(g, f) {
+  return Math.max(Math.abs(g.x - f.x), Math.abs(g.y - f.y)) === 1;
+}
+
+function pruefe(z, g, ereignisse) {
+  g.ruhig = 0;
+  sagAn(g, [z.spieler], ereignisse);
+  ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: true });
+}
+
+// tat: was der Spieler in diesem Zug getan hat, { art: 'warten' | 'schritt' | 'schlag' | 'stoss', von, id }
+function planeKontrolleur(z, g, ereignisse, tat) {
+  const s = z.spieler;
+  if (tat.art === 'schlag' && tat.id === g.id) {
+    pruefe(z, g, ereignisse);
+    return;
+  }
+  if (!inSeinerNaehe(g, s)) {
+    g.ruhig = 0;
+    return;
+  }
+  if (tat.art === 'warten') {
+    g.ruhig += 1;
+    if (g.ruhig >= GEGNERWERTE.kontrolleur.geduld) {
+      // durchgewinkt: Er geht, und mit ihm verschwindet alles, was er angekündigt hatte
+      z.gegner.splice(z.gegner.indexOf(g), 1);
+      ereignisse.push({ typ: 'durchgewinkt', phase: 2, id: g.id });
+    } else {
+      ereignisse.push({ typ: 'ruhig', phase: 2, id: g.id, ruhig: g.ruhig });
+    }
+    return;
+  }
+  const kamAusDerNaehe = tat.art === 'schritt' && inSeinerNaehe(g, tat.von);
+  g.ruhig = 0;
+  if (kamAusDerNaehe) {
+    pruefe(z, g, ereignisse);
+  } else if (tat.art === 'schritt') {
+    ereignisse.push({ typ: 'kontrolle', phase: 2, id: g.id, prueft: false }); // er spricht den an, der herantritt
+  }
+}
+
 // Schritt 2: Bewegen oder ankündigen. Wer in diesem Zug angegriffen hat, setzt aus.
 // Ausnahme ist der Vorderste der Reisegruppe: Er läuft und kündigt in jedem Zug an.
-export function planeGegner(z, dran, ereignisse) {
-  for (const g of z.gegner) {
+export function planeGegner(z, dran, ereignisse, tat = { art: 'warten' }) {
+  for (const g of [...z.gegner]) {
     if (g.typ === 'gruppe') {
       if (istVorderster(z, g)) planeVordersten(z, g, ereignisse);
     } else if (dran.has(g.id)) {
@@ -218,6 +283,8 @@ export function planeGegner(z, dran, ereignisse) {
       planePendler(z, g, ereignisse);
     } else if (g.typ === 'draengler') {
       planeDraengler(z, g, ereignisse);
+    } else if (g.typ === 'kontrolleur') {
+      planeKontrolleur(z, g, ereignisse, tat);
     }
   }
 }

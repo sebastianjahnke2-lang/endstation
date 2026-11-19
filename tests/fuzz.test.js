@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BREITE, HOEHE, TUERFELD, RICHTUNG, RICHTUNGSNAMEN, imFeld, feldNr, entfernungen } from '../src/kern/feld.js';
-import { istHindernis, istMarkiert } from '../src/kern/lage.js';
+import { istHindernis, istMarkiert, tuerFrei } from '../src/kern/lage.js';
 import { erzeugeSpiel, HERZEN_VOLL, RUHE_VOLL } from '../src/kern/spiel.js';
 import { GEGNERWERTE } from '../src/kern/gegner.js';
 import { WAGENZAHL } from '../src/kern/wagen.js';
@@ -34,6 +34,7 @@ function pruefeZustand(z, wo) {
     assert.ok(!belegt.has(feldNr(g.x, g.y)), `${wo}: ${g.typ} überlappt mit ${belegt.get(feldNr(g.x, g.y))} auf ${g.x},${g.y}`);
     belegt.set(feldNr(g.x, g.y), g.typ);
     assert.ok(g.hp >= 1 && g.hp <= GEGNERWERTE[g.typ].hp, `${wo}: ${g.typ} mit ${g.hp} HP`);
+    if (g.typ === 'kontrolleur') assert.deepEqual([g.x, g.y], [g.posten.x, g.posten.y], `${wo}: der Kontrolleur hat seinen Platz verlassen`);
     if (g.ansage) {
       assert.ok(g.ansage.length > 0, `${wo}: leere Ansage`);
       for (const f of g.ansage) {
@@ -68,8 +69,9 @@ function pruefeZustand(z, wo) {
       if (!istHindernis(z, x, y)) assert.ok(weit[feldNr(x, y)] >= 0, `${wo}: von ${x},${y} führt kein Weg zur Tür`);
     }
   }
-  assert.equal(z.tuerOffen, z.gegner.length === 0 || z.status === 'halt' ? z.tuerOffen : false, `${wo}: Tür offen trotz Gegnern`);
-  if (z.status === 'faehrt' && z.gegner.length === 0) assert.equal(z.tuerOffen, true, `${wo}: Tür zu ohne Gegner`);
+  // Die Tür ist offen, wenn kein Gegner mehr steht (im Wagen des Kontrolleurs: wenn er fort ist)
+  // oder wenn sie aufgebrochen wurde. Sonst ist sie zu.
+  if (z.status === 'faehrt') assert.equal(z.tuerOffen, tuerFrei(z) || z.aufgebrochen, `${wo}: Tür ${z.tuerOffen ? 'offen' : 'zu'}`);
 }
 
 function eineFahrt(seed, waehle, optionen) {
@@ -98,16 +100,20 @@ function eineFahrt(seed, waehle, optionen) {
       continue;
     }
 
-    // kein Angriff ohne Ankündigung, höchstens ein Herz je Zug
+    // kein Angriff ohne Ankündigung, höchstens ein Treffer je Zug. Er kostet ein Herz, beim Kontrolleur
+    // zwei. Aufbrechen kostet ein Herz.
     const verlust = alt.herzen - z.spieler.herzen;
-    assert.ok(verlust === 0 || verlust === 1, `${wo}: ${verlust} Herzen verloren`);
+    const treffer = ereignisse.filter((e) => e.typ === 'treffer');
+    assert.ok(treffer.length <= 1, `${wo}: ${treffer.length} Treffer in einem Zug`);
+    const schaden = treffer.length ? GEGNERWERTE[treffer[0].durch].schaden || 1 : 0;
+    const aufgebrochen = typen.includes('aufgebrochen') ? 1 : 0;
+    assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen), `${wo}: ${verlust} Herzen verloren`);
+    if (aufgebrochen) assert.equal(z.tuerOffen, true, `${wo}: aufgebrochen, Tür zu`);
     const standAufRot = rotVorher.includes(feldNr(z.spieler.x, z.spieler.y));
-    if (verlust === 1) {
+    if (treffer.length) {
       assert.ok(standAufRot, `${wo}: Treffer auf einem Feld, das nicht angekündigt war`);
       assert.equal(z.spieler.ruhe, 0, `${wo}: Ruhe nach Treffer`);
-      assert.ok(typen.includes('treffer'), `${wo}: Treffer ohne Ereignis`);
-    } else {
-      assert.ok(!typen.includes('treffer'), `${wo}: Ereignis Treffer ohne Verlust`);
+    } else if (z.status === 'faehrt') {
       const gewinn = z.spieler.ruhe - alt.ruhe;
       const ausgewichen = rotVorher.includes(feldNr(alt.x, alt.y)) && !standAufRot && (alt.x !== z.spieler.x || alt.y !== z.spieler.y);
       assert.equal(typen.includes('ausgewichen'), ausgewichen, `${wo}: Ausweichen falsch erkannt`);
