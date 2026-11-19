@@ -133,6 +133,9 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Folgenlos:** Was in der Wiederholung geschieht, zählt nicht für die Reise: kein Angebot, keine Lochung, keine Stärke. Warum: Sonst wäre Sterben ein Weg zu Stärken ohne Gefahr, und der Rückblick am Halt soll nur zeigen, was auf der Fahrt geschah. Nur die Uhr läuft weiter.
 - **Zurück durch die Tür oder mit einem Schritt nach unten vom Startfeld.** Aufbrechen kostet hier nichts, man kommt also immer hinaus. Der Schritt nach unten ist für den, der aus Versehen auf das Schild getreten ist. Danach steht man wieder neben dem Begleiter, mit Herzen, Ruhe und allem anderen wie vorher. Das Schild ist fort: eine Wiederholung je Tod.
 - **Die Szene steht nicht im Speicher,** so wenig wie der Begleiter selbst. Wer die Seite neu lädt, trifft ihn nicht mehr.
+- **Das Schild ist breiter als ein Feld.** Es liegt auf dem Feld neben ihm, schließt an seiner Seite mit dem Feld ab und reicht in den Gang, damit es ihn nicht verdeckt. Der Ton-Test prüft, dass es bei 360 Pixeln höchstens drei Felder breit ist.
+- **Ton-Check, Grenzfall:** „Noch mal" nennt kein Detail aus der Fahrt, wie „Pech" und die Knöpfe am Halt. Es ist ein Angebot, keine Aussage über den Spieler. Das Persönliche ist die Szene selbst: Die Zuganzeige nennt dann den Wagen, in dem die Fahrt endete. Der Name des Wagens auf dem Schild wäre persönlicher, passt aber bei 360 Pixeln nicht in den Gang („Großraumwagen") und sagt nicht, was geschieht.
+- **Zahlen:** Die Bots treffen den Begleiter nie, ihre Werte bleiben gleich (ausgewogen mit Unachtsamkeit 55 %, mit allen Stärken 73 %).
 - **Was eine neue Fahrt mitnimmt, steht an einer Stelle:** `src/kern/reise.js`. Spiel und Prüfwerkzeuge nutzen sie beide, damit sie dieselbe Fahrt nachrechnen.
 
 ### Präsenz
