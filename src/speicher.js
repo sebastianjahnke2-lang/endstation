@@ -4,8 +4,9 @@
 
 const SCHLUESSEL = 'endstation.1';
 
+// staerken: was der Spieler in früheren Fahrten verstanden hat (Stärken aus Schatten)
 export function leererStand() {
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true };
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false } };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -16,6 +17,9 @@ export function bereinigeStand(roh) {
     for (const name of Object.keys(stand.gelernt)) stand.gelernt[name] = roh.gelernt[name] === true;
   }
   if (typeof roh.ton === 'boolean') stand.ton = roh.ton;
+  if (roh.staerken && typeof roh.staerken === 'object') {
+    for (const name of Object.keys(stand.staerken)) stand.staerken[name] = roh.staerken[name] === true;
+  }
   return stand;
 }
 

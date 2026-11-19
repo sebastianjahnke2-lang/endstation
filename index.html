@@ -666,6 +666,8 @@ function richtungVon(a, b) {
 //
 //   const spiel = erzeugeSpiel(seed);
 //   const ereignisse = spiel.act('hoch');   // 'hoch' | 'rechts' | 'runter' | 'links' | 'warten'
+//                                           // 'sprint-hoch' usw., wer den Drängler verstanden hat
+//   erzeugeSpiel(seed, { staerken: { sprint, rueckhalt, warten } })   Stärken aus früheren Fahrten
 //
 // act() ändert spiel.zustand und gibt zurück, was dabei passiert ist.
 // Jedes Ereignis trägt eine Phase: 0 Spieler, 1 Angriffe treffen ein, 2 Gegner bewegen sich.
@@ -682,11 +684,21 @@ const SCHADEN_SPIELER = 1;
 const AUFBRECHEN_STOESSE = 3; // so oft gegen die geschlossene Tür laufen, dann gibt sie nach
 const AUFBRECHEN_KOSTET = 1; // Herzen
 
+// Stärken aus Schatten: Wer einen Gegnertyp versteht, bekommt dauerhaft dessen Stärke.
+//   Pendler: dreimal neben ihm warten              -> warten: Ruhe fürs Warten neben einem Gegner
+//   Drängler: dreimal ausweichen, ohne ihn zu schlagen -> sprint: für 1 Ruhe bis zu 2 Felder geradeaus
+//   Reisegruppe: einen Wagen mit ihr mit 1 Herz verlassen -> rueckhalt: einmal je Fahrt einen tödlichen Treffer überstehen
+const STAERKEN = ['warten', 'sprint', 'rueckhalt'];
+const VERSTEHEN_NACH = 3; // so oft neben dem Pendler warten oder dem Drängler ausweichen
+const SPRINT_WEITE = 2;
+const SPRINT_KOSTET = 1; // Ruhe
+
 function richteWagenEin(z) {
   const wagen = baueWagen(z.wagenNr, z);
   z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
+  z.wagen.mitGruppe = z.gegner.some((g) => g.typ === 'gruppe');
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -706,17 +718,78 @@ function stirb(z, ereignisse, phase, durch) {
   ereignisse.push({ typ: 'tod', phase, wagenNr: z.wagenNr, durch, uebrig: z.gegner.length });
 }
 
+// Eine Stärke kommt hinzu. Gibt das Ereignis zurück oder null, wenn sie schon da war.
+function verstehe(z, staerke, gegner, phase) {
+  if (z.staerken[staerke]) return null;
+  z.staerken[staerke] = true;
+  return { typ: 'verstanden', phase, staerke, gegner };
+}
+
+function nebenGegner(z, typ) {
+  const s = z.spieler;
+  return z.gegner.some((g) => (!typ || g.typ === typ) && Math.abs(g.x - s.x) + Math.abs(g.y - s.y) === 1);
+}
+
 function wechsleWagen(z) {
   z.zug += 1;
   z.zaehler.schritte += 1;
   z.zaehler.wagen += 1;
+  // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
+  const gruppe = z.wagen.mitGruppe && z.spieler.herzen === 1 ? verstehe(z, 'rueckhalt', 'gruppe', 0) : null;
+  const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
     z.status = 'halt';
-    return [{ typ: 'halt', phase: 0 }];
+    ereignisse.push({ typ: 'halt', phase: 0 });
+  } else {
+    z.wagenNr += 1;
+    richteWagenEin(z);
+    ereignisse.push({ typ: 'wagenwechsel', phase: 0, nr: z.wagenNr });
   }
-  z.wagenNr += 1;
-  richteWagenEin(z);
-  return [{ typ: 'wagenwechsel', phase: 0, nr: z.wagenNr }];
+  if (gruppe) ereignisse.push(gruppe);
+  return ereignisse;
+}
+
+// Sprint: bis zu zwei Felder geradeaus. Gegner auf dem Weg nehmen Schaden, der Spieler landet auf
+// dem weitesten freien Feld des Wegs. Gibt null zurück, wenn es nicht geht.
+function sprinte(z, richtung, ereignisse) {
+  const s = z.spieler;
+  const r = RICHTUNG[richtung];
+  const weg = [];
+  for (let i = 1; i <= SPRINT_WEITE; i++) {
+    const x = s.x + r.x * i;
+    const y = s.y + r.y * i;
+    if (!imFeld(x, y) || istHindernis(z, x, y)) break;
+    weg.push({ x, y });
+  }
+  if (!weg.length) return null;
+  const getroffen = [];
+  for (const f of weg) {
+    const g = gegnerAuf(z, f.x, f.y);
+    if (!g) continue;
+    g.hp -= SCHADEN_SPIELER;
+    const besiegt = g.hp <= 0;
+    getroffen.push({ id: g.id, gegner: g.typ, x: f.x, y: f.y, hp: Math.max(0, g.hp), besiegt });
+    z.zaehler.schlaege += 1;
+    if (besiegt) {
+      z.gegner.splice(z.gegner.indexOf(g), 1);
+      z.zaehler.besiegt += 1;
+    }
+  }
+  let nach = null;
+  for (const f of weg) if (!gegnerAuf(z, f.x, f.y)) nach = f;
+  const von = { x: s.x, y: s.y };
+  s.ruhe -= SPRINT_KOSTET;
+  s.praesenz = false;
+  ereignisse.push({ typ: 'sprint', phase: 0, richtung, von, nach, getroffen, ruhe: s.ruhe });
+  if (nach) {
+    s.x = nach.x;
+    s.y = nach.y;
+    z.zaehler.schritte += 1;
+  }
+  oeffneTuer(z, ereignisse, 0);
+  const kontrolleur = getroffen.find((t) => t.gegner === 'kontrolleur');
+  const tat = kontrolleur ? { art: 'schlag', id: kontrolleur.id } : nach ? { art: 'schritt', von } : { art: 'stoss' };
+  return { bewegt: nach !== null, tat };
 }
 
 function fuehreAus(z, aktion) {
@@ -727,11 +800,28 @@ function fuehreAus(z, aktion) {
   let zielRot = false;
   let bewegt = false;
   let tat = { art: 'warten' }; // was der Spieler getan hat, für den Kontrolleur
+  const neben = nebenGegner(z); // für die Ruhe fürs Warten
+  const draenglerRot = z.gegner.some((g) => g.typ === 'draengler' && g.ansage && g.ansage.some((f) => f.x === s.x && f.y === s.y));
+  const spaeter = []; // Stärken, die in diesem Zug verstanden werden: [staerke, gegner]
 
   // Phase 0: der Spieler
-  if (aktion === 'warten') {
+  if (typeof aktion === 'string' && aktion.startsWith('sprint-')) {
+    const richtung = aktion.slice(7);
+    if (!RICHTUNG[richtung] || !z.staerken.sprint) return [];
+    if (s.ruhe < SPRINT_KOSTET) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
+    const ergebnis = sprinte(z, richtung, ereignisse);
+    if (!ergebnis) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
+    bewegt = ergebnis.bewegt;
+    tat = ergebnis.tat;
+    zielRot = bewegt && istMarkiert(z, s.x, s.y);
+  } else if (aktion === 'warten') {
     ereignisse.push({ typ: 'warten', phase: 0 });
     z.zaehler.gewartet += 1;
+    // den Pendler versteht, wer dreimal neben ihm wartet
+    if (nebenGegner(z, 'pendler')) {
+      z.verstehen.pendler += 1;
+      if (z.verstehen.pendler >= VERSTEHEN_NACH) spaeter.push(['warten', 'pendler']);
+    }
   } else {
     const r = RICHTUNG[aktion];
     if (!r) return [];
@@ -762,6 +852,7 @@ function fuehreAus(z, aktion) {
       }
     } else if (g) {
       tat = { art: 'schlag', id: g.id };
+      if (g.typ === 'draengler') z.verstehen.draengler = 0; // verstehen heißt: ausweichen, ohne ihn zu schlagen
       g.hp -= SCHADEN_SPIELER;
       const besiegt = g.hp <= 0;
       ereignisse.push({ typ: 'schlag', phase: 0, id: g.id, gegner: g.typ, richtung: aktion, x, y, hp: Math.max(0, g.hp), besiegt });
@@ -790,27 +881,51 @@ function fuehreAus(z, aktion) {
     // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei.
     const schaden = schadenVon(treffer);
     s.herzen = Math.max(0, s.herzen - schaden);
+    // Rückhalt: einmal je Fahrt bleibt nach einem tödlichen Treffer ein Herz
+    const haelt = s.herzen <= 0 && z.staerken.rueckhalt && !z.rueckhaltGenutzt;
+    if (haelt) {
+      s.herzen = 1;
+      z.rueckhaltGenutzt = true;
+    }
     s.ruhe = 0;
     z.zaehler.treffer += 1;
     s.praesenz = false;
     ereignisse.push({ typ: 'treffer', phase: 1, herzen: s.herzen, durch: treffer.typ, schaden });
+    if (haelt) ereignisse.push({ typ: 'rueckhalt', phase: 1, herzen: s.herzen });
     if (s.herzen <= 0) {
       stirb(z, ereignisse, 1, treffer.typ);
       return ereignisse;
     }
   } else if (startRot && bewegt && !zielRot) {
     z.zaehler.ausgewichen += 1;
-    if (s.ruhe < RUHE_VOLL) {
-      s.ruhe += 1;
-      if (s.ruhe === RUHE_VOLL) s.praesenz = true; // Präsenz: einmal je voller Ruhe
-    }
+    erhoeheRuhe(s);
     ereignisse.push({ typ: 'ausgewichen', phase: 1, ruhe: s.ruhe });
+    // den Drängler versteht, wer dreimal seiner Linie ausweicht, ohne ihn zu schlagen
+    if (draenglerRot) {
+      z.verstehen.draengler += 1;
+      if (z.verstehen.draengler >= VERSTEHEN_NACH) spaeter.push(['sprint', 'draengler']);
+    }
+  } else if (aktion === 'warten' && neben && z.staerken.warten) {
+    // Ruhe fürs Warten: wer neben einem Gegner wartet und nicht getroffen wird
+    erhoeheRuhe(s);
+    ereignisse.push({ typ: 'ruhigGewartet', phase: 1, ruhe: s.ruhe });
   }
 
   // Phase 2: Gegner bewegen sich oder kündigen an
   planeGegner(z, dran, ereignisse, tat);
   oeffneTuer(z, ereignisse, 2); // der Kontrolleur kann gegangen sein
+  // neue Stärken gelten ab dem nächsten Zug
+  for (const [staerke, gegner] of spaeter) {
+    const e = verstehe(z, staerke, gegner, 2);
+    if (e) ereignisse.push(e);
+  }
   return ereignisse;
+}
+
+function erhoeheRuhe(s) {
+  if (s.ruhe >= RUHE_VOLL) return;
+  s.ruhe += 1;
+  if (s.ruhe === RUHE_VOLL) s.praesenz = true; // Präsenz: einmal je voller Ruhe
 }
 
 function erzeugeSpiel(seed, optionen = {}) {
@@ -827,7 +942,11 @@ function erzeugeSpiel(seed, optionen = {}) {
     zuegeImWagen: 0,
     naechsteId: 1,
     zaehler: { schritte: 0, schlaege: 0, gewartet: 0, ausgewichen: 0, treffer: 0, besiegt: 0, wagen: 0, aufgebrochen: 0 },
+    staerken: {},
+    verstehen: { pendler: 0, draengler: 0 }, // Zähler dieser Fahrt
+    rueckhaltGenutzt: false,
   };
+  for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);
   return { zustand: z, act: (aktion) => fuehreAus(z, aktion) };
 }
@@ -2168,7 +2287,7 @@ function erzeugeAnzeige(leinwand) {
   let karte = null;
   let hinweis = null;
   let tonAn = true;
-  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9 };
+  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9, leuchten: -1e9 };
   const melder = { takt: null };
 
   // ---------------------------------------------------------------- Aufbau
@@ -2427,6 +2546,53 @@ function erzeugeAnzeige(leinwand) {
       bild.herzen = e.herzen;
       wirkung.treffer = jetzt;
       if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'sprint') {
+      // zwei Felder in einem Zug, wer im Weg steht, wird getroffen
+      bild.zug += 1;
+      bild.ruhe = e.ruhe;
+      const r = RICHTUNG[e.richtung];
+      if (e.nach) {
+        s.x = e.nach.x;
+        s.y = e.nach.y;
+        bewege(jetzt, 110, (p) => {
+          const q = leicht(p);
+          s.px = e.von.x + (e.nach.x - e.von.x) * q;
+          s.py = e.von.y + (e.nach.y - e.von.y) * q;
+        });
+      } else {
+        bewege(jetzt, 115, (p) => {
+          s.sx = r.x * hinUndHer(p) * 0.34;
+          s.sy = r.y * hinUndHer(p) * 0.34;
+        });
+      }
+      for (const t of e.getroffen) {
+        const g = findeGegner(t.id);
+        if (!g) continue;
+        g.hp = t.hp;
+        if (t.besiegt) {
+          bild.gegner = bild.gegner.filter((x) => x !== g);
+          const geist = { g, alpha: 1 };
+          geister.push(geist);
+          bewege(jetzt, 140, (p) => {
+            geist.alpha = 1 - p;
+            g.blitz = 1 - p;
+            if (p >= 1) geister = geister.filter((x) => x !== geist);
+          }, true);
+        } else {
+          bewege(jetzt, 140, (p) => {
+            g.blitz = 1 - p;
+            g.sx = r.y * hinUndHer(p) * 0.14; // er wird zur Seite gedrängt
+            g.sy = r.x * hinUndHer(p) * 0.14;
+          }, true);
+        }
+      }
+    } else if (e.typ === 'ruhigGewartet') {
+      bild.ruhe = e.ruhe;
+      wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'rueckhalt' || e.typ === 'verstanden') {
+      // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
+      if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
+      wirkung.leuchten = jetzt;
     } else if (e.typ === 'zoegert') {
       // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
       const g = findeGegner(e.id);
@@ -2763,6 +2929,16 @@ function erzeugeAnzeige(leinwand) {
         stift.fillStyle = hof;
         stift.fillRect(cx - s * 0.7, fy - s * 0.4, s * 1.4, s * 0.8);
       }
+      const seitLeuchten = jetzt - wirkung.leuchten;
+      if (seitLeuchten >= 0 && seitLeuchten < 700) {
+        const q = seitLeuchten / 700;
+        const ring = stift.createRadialGradient(cx, fy - s * 0.35, s * (0.2 + q * 0.3), cx, fy - s * 0.35, s * (0.45 + q * 0.4));
+        ring.addColorStop(0, 'rgba(255, 217, 160, 0)');
+        ring.addColorStop(0.5, `rgba(255, 217, 160, ${0.5 * (1 - q)})`);
+        ring.addColorStop(1, 'rgba(255, 217, 160, 0)');
+        stift.fillStyle = ring;
+        stift.fillRect(cx - s, fy - s * 1.35, s * 2, s * 2);
+      }
       const tot = karte && karte.art === 'tod';
       maleFigur(stift, 'spieler', cx, fy, s, { t, takt: 0, ruhig, blitz: p.blitz, fluss: klar > 0.5, alpha: tot ? 0.45 : 1 });
       const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
@@ -2996,8 +3172,9 @@ function verbindeEingabe(flaeche, melde) {
 
 const SCHLUESSEL = 'endstation.1';
 
+// staerken: was der Spieler in früheren Fahrten verstanden hat (Stärken aus Schatten)
 function leererStand() {
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true };
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false } };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -3008,6 +3185,9 @@ function bereinigeStand(roh) {
     for (const name of Object.keys(stand.gelernt)) stand.gelernt[name] = roh.gelernt[name] === true;
   }
   if (typeof roh.ton === 'boolean') stand.ton = roh.ton;
+  if (roh.staerken && typeof roh.staerken === 'object') {
+    for (const name of Object.keys(stand.staerken)) stand.staerken[name] = roh.staerken[name] === true;
+  }
   return stand;
 }
 
@@ -3204,20 +3384,21 @@ function starteFahrt(jetzt) {
   const fest = festerSeed();
   const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
   fahrten += 1;
-  spiel = erzeugeSpiel(seed);
+  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken } });
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
 function merke(ereignisse) {
   const g = stand.gelernt;
-  const vorher = JSON.stringify(g);
+  const vorher = JSON.stringify([g, stand.staerken]);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
     if (e.typ === 'schlag') g.anrempeln = true;
+    if (e.typ === 'verstanden') stand.staerken[e.staerke] = true; // dauerhaft, auch für die nächsten Fahrten
   }
-  if (JSON.stringify(g) !== vorher) {
+  if (JSON.stringify([g, stand.staerken]) !== vorher) {
     sichereStand(stand);
     zeigeHinweise();
   }
@@ -3261,6 +3442,8 @@ function tippe(x, y) {
     const dy = ziel.y - s.y;
     if (dx === 0 && dy === 0) gibEin('warten', 'tipp');
     else if (abstand(ziel, s) === 1) gibEin(dx === 1 ? 'rechts' : dx === -1 ? 'links' : dy === 1 ? 'runter' : 'hoch', 'tipp');
+    // zwei Felder weit in gerader Linie: Sprint, wer den Drängler verstanden hat. Sonst geschieht nichts.
+    else if (abstand(ziel, s) === 2 && (dx === 0 || dy === 0)) gibEin(`sprint-${dx > 0 ? 'rechts' : dx < 0 ? 'links' : dy > 0 ? 'runter' : 'hoch'}`, 'tipp');
   }
 }
 

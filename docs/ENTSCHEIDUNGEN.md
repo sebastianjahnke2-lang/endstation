@@ -102,6 +102,18 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Bei voller Ruhe zögert der nächste Gegner, der angreifen würde, einen Zug lang.** Er kündigt nicht an und weicht kurz zurück. Das gilt einmal je voller Ruhe: Erst ein Treffer und neue volle Ruhe bringen die Präsenz zurück. Warum: Gälte sie in jedem Zug, griffe bei voller Ruhe niemand mehr an. Die erste Fassung ließ den nächststehenden Gegner zögern. Bei gleichem Abstand traf das oft einen, der gar nicht angreifen wollte, und die Präsenz verpuffte.
 - **Zahlen mit Präsenz** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 50 %, ohne Fehler 86 %, Ausweicher 58 %, Kämpfer 0 %.
 
+### Stärken aus Schatten
+
+- **Pendler verstanden, wer dreimal neben einem Pendler wartet** (waagerecht oder senkrecht daneben, nicht hintereinander nötig). Stärke: **Ruhe fürs Warten.** Wer neben einem Gegner wartet und in diesem Zug nicht getroffen wird, bekommt eine Ruhe.
+- **Drängler verstanden, wer dreimal einer Drängler-Linie ausweicht, ohne zwischendurch einen Drängler zu schlagen.** Ein Schlag beginnt das Zählen von vorn. Stärke: **Sprint.**
+- **Reisegruppe verstanden, wer einen Wagen, in dem eine Reisegruppe war, mit genau einem Herz verlässt.** Stärke: **Rückhalt.** Einmal je Fahrt lässt ein tödlicher Treffer ein Herz übrig. Fürs Aufbrechen gilt er nicht, das ist kein Treffer.
+- **Eine neue Stärke gilt ab dem nächsten Zug.** Die erste Fassung ließ sie schon im selben Zug wirken, das fiel im Fuzz-Test auf.
+- **Die Stärken bleiben gespeichert** (`staerken` in `src/speicher.js`). Löscht Safari den Speicher, sind sie fort, wie alles andere auch.
+- **Kein Text und kein Symbol zeigt sie an.** Wer eine Stärke bekommt, sieht ein warmes Leuchten um die Figur. Dasselbe Leuchten zeigt, dass der Rückhalt gegriffen hat.
+- **Sprint mit einem Tipp auf ein Feld zwei weiter in gerader Linie.** Warum nicht wischen: Ein Wisch löst nach 18 Pixeln aus und ist da schon ein Schritt. Am Rechner gibt es keinen Sprint. Ohne die Stärke geschieht beim Tipp nichts, ohne Ruhe lehnt sich die Figur nur kurz hin. Gegner auf dem Weg nehmen einen Schaden. Man landet auf dem weitesten freien Feld des Wegs, ist keines frei, bleibt man stehen. Wer aus einem roten Feld heraussprintet, ist ausgewichen und bekommt die Ruhe zurück.
+- **Zahlen:** Die Bots verdienen die Stärken innerhalb einer Fahrt selten, ihre Werte bleiben gleich. Mit allen Stärken von Anfang an, wie nach einigen Fahrten, erreicht der ausgewogene Bot mit Unachtsamkeit den Halt in 69 % statt 50 % der Fahrten, der Ausweicher in 74 %. Die Bots sprinten nie.
+- **Für die Rückmeldung:** Merkt man ohne Hinweis, dass man sprinten kann? Bisher nur durch Ausprobieren.
+
 ### Kontrolleur: Regeln
 
 - **Mittelwagen als dritter von jetzt sechs Wagen.** Warum: Der Fahrplan setzt den Autoritätswagen in die Mitte der Fahrt. Darin steht der Kontrolleur neben der Tür, dazu zwei Pendler. Ohne sie wäre Stillstehen nie eine Entscheidung.

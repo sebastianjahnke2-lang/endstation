@@ -62,7 +62,7 @@ export function erzeugeAnzeige(leinwand) {
   let karte = null;
   let hinweis = null;
   let tonAn = true;
-  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9 };
+  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9, leuchten: -1e9 };
   const melder = { takt: null };
 
   // ---------------------------------------------------------------- Aufbau
@@ -321,6 +321,53 @@ export function erzeugeAnzeige(leinwand) {
       bild.herzen = e.herzen;
       wirkung.treffer = jetzt;
       if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'sprint') {
+      // zwei Felder in einem Zug, wer im Weg steht, wird getroffen
+      bild.zug += 1;
+      bild.ruhe = e.ruhe;
+      const r = RICHTUNG[e.richtung];
+      if (e.nach) {
+        s.x = e.nach.x;
+        s.y = e.nach.y;
+        bewege(jetzt, 110, (p) => {
+          const q = leicht(p);
+          s.px = e.von.x + (e.nach.x - e.von.x) * q;
+          s.py = e.von.y + (e.nach.y - e.von.y) * q;
+        });
+      } else {
+        bewege(jetzt, 115, (p) => {
+          s.sx = r.x * hinUndHer(p) * 0.34;
+          s.sy = r.y * hinUndHer(p) * 0.34;
+        });
+      }
+      for (const t of e.getroffen) {
+        const g = findeGegner(t.id);
+        if (!g) continue;
+        g.hp = t.hp;
+        if (t.besiegt) {
+          bild.gegner = bild.gegner.filter((x) => x !== g);
+          const geist = { g, alpha: 1 };
+          geister.push(geist);
+          bewege(jetzt, 140, (p) => {
+            geist.alpha = 1 - p;
+            g.blitz = 1 - p;
+            if (p >= 1) geister = geister.filter((x) => x !== geist);
+          }, true);
+        } else {
+          bewege(jetzt, 140, (p) => {
+            g.blitz = 1 - p;
+            g.sx = r.y * hinUndHer(p) * 0.14; // er wird zur Seite gedrängt
+            g.sy = r.x * hinUndHer(p) * 0.14;
+          }, true);
+        }
+      }
+    } else if (e.typ === 'ruhigGewartet') {
+      bild.ruhe = e.ruhe;
+      wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'rueckhalt' || e.typ === 'verstanden') {
+      // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
+      if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
+      wirkung.leuchten = jetzt;
     } else if (e.typ === 'zoegert') {
       // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
       const g = findeGegner(e.id);
@@ -656,6 +703,16 @@ export function erzeugeAnzeige(leinwand) {
         hof.addColorStop(1, 'rgba(255, 217, 160, 0)');
         stift.fillStyle = hof;
         stift.fillRect(cx - s * 0.7, fy - s * 0.4, s * 1.4, s * 0.8);
+      }
+      const seitLeuchten = jetzt - wirkung.leuchten;
+      if (seitLeuchten >= 0 && seitLeuchten < 700) {
+        const q = seitLeuchten / 700;
+        const ring = stift.createRadialGradient(cx, fy - s * 0.35, s * (0.2 + q * 0.3), cx, fy - s * 0.35, s * (0.45 + q * 0.4));
+        ring.addColorStop(0, 'rgba(255, 217, 160, 0)');
+        ring.addColorStop(0.5, `rgba(255, 217, 160, ${0.5 * (1 - q)})`);
+        ring.addColorStop(1, 'rgba(255, 217, 160, 0)');
+        stift.fillStyle = ring;
+        stift.fillRect(cx - s, fy - s * 1.35, s * 2, s * 2);
       }
       const tot = karte && karte.art === 'tod';
       maleFigur(stift, 'spieler', cx, fy, s, { t, takt: 0, ruhig, blitz: p.blitz, fluss: klar > 0.5, alpha: tot ? 0.45 : 1 });

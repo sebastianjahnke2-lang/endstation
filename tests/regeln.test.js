@@ -479,3 +479,125 @@ test('Präsenz: Ein Treffer nimmt sie, erst neue volle Ruhe bringt sie zurück',
   assert.equal(z.spieler.ruhe, 0);
   assert.equal(z.spieler.praesenz, false);
 });
+
+// ---------------------------------------------------------------- Stärken aus Schatten (Etappe 2)
+
+const STILL = { pause: 999 }; // ein Pendler, der nichts tut, für Szenen ohne Störung
+
+test('Stärken: Sie kommen aus früheren Fahrten mit, sonst gibt es keine', () => {
+  assert.deepEqual(erzeugeSpiel(1).zustand.staerken, { warten: false, sprint: false, rueckhalt: false });
+  assert.deepEqual(erzeugeSpiel(1, { staerken: { sprint: true, unsinn: true } }).zustand.staerken, { warten: false, sprint: true, rueckhalt: false });
+});
+
+test('Pendler verstehen: Wer dreimal neben ihm wartet, bekommt Ruhe fürs Warten, wirksam ab dem nächsten Zug', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6, mit: STILL }] });
+  const z = spiel.zustand;
+  spiel.act('warten');
+  spiel.act('warten');
+  const e = spiel.act('warten');
+  const v = e.filter((x) => x.typ === 'verstanden');
+  assert.deepEqual(v.map((x) => [x.staerke, x.gegner]), [['warten', 'pendler']]);
+  assert.ok(!typen(e).includes('ruhigGewartet'), 'nicht schon im selben Zug');
+  assert.equal(z.staerken.warten, true);
+  assert.ok(typen(spiel.act('warten')).includes('ruhigGewartet'));
+  assert.equal(z.spieler.ruhe, 1);
+});
+
+test('Ruhe fürs Warten: nur neben einem Gegner und nur, wenn man nicht getroffen wird', () => {
+  const spiel = szene({ spieler: [0, 7], gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  spiel.zustand.staerken.warten = true;
+  assert.ok(!typen(spiel.act('warten')).includes('ruhigGewartet'), 'allein im Wagen');
+  const neben = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6, mit: { ansage: [{ x: 2, y: 7 }] } }] });
+  neben.zustand.staerken.warten = true;
+  const e = neben.act('warten');
+  assert.ok(typen(e).includes('treffer'));
+  assert.ok(!typen(e).includes('ruhigGewartet'));
+});
+
+test('Drängler verstehen: Wer dreimal seiner Linie ausweicht, ohne ihn zu schlagen, bekommt den Sprint', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'draengler', x: 2, y: 0 }] });
+  const z = spiel.zustand;
+  const linie = (x) => [0, 1, 2, 3, 4, 5, 6, 7].filter((y) => y > 0).map((y) => ({ x, y }));
+  let e;
+  for (const [x, schritt] of [[2, 'rechts'], [3, 'links'], [2, 'rechts']]) {
+    const g = z.gegner[0];
+    g.x = x;
+    g.y = 0;
+    g.erschoepft = 0;
+    g.ansage = linie(x);
+    e = spiel.act(schritt);
+    assert.ok(typen(e).includes('ausgewichen'), typen(e).join(','));
+  }
+  assert.deepEqual(e.filter((x) => x.typ === 'verstanden').map((x) => x.staerke), ['sprint']);
+  assert.equal(z.staerken.sprint, true);
+});
+
+test('Drängler verstehen: Ein Schlag gegen ihn beginnt das Zählen von vorn', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'draengler', x: 2, y: 6 }] });
+  const z = spiel.zustand;
+  z.verstehen.draengler = 2;
+  spiel.act('hoch');
+  assert.equal(z.verstehen.draengler, 0);
+});
+
+test('Reisegruppe verstehen: Wer ihren Wagen mit einem Herz verlässt, bekommt Rückhalt', () => {
+  const spiel = szene({ spieler: [2, 0], herzen: 1 });
+  spiel.zustand.wagen.mitGruppe = true;
+  const e = spiel.act('hoch');
+  assert.deepEqual(typen(e), ['wagenwechsel', 'verstanden']);
+  assert.equal(e[1].staerke, 'rueckhalt');
+  const ohne = szene({ spieler: [2, 0], herzen: 2 });
+  ohne.zustand.wagen.mitGruppe = true;
+  assert.deepEqual(typen(ohne.act('hoch')), ['wagenwechsel'], 'mit zwei Herzen nicht');
+});
+
+test('Rückhalt: Einmal je Fahrt bleibt nach einem tödlichen Treffer ein Herz', () => {
+  const spiel = szene({ spieler: [2, 7], gegner: [{ typ: 'pendler', x: 2, y: 6, mit: { ansage: [{ x: 2, y: 7 }] } }], herzen: 1 });
+  const z = spiel.zustand;
+  z.staerken.rueckhalt = true;
+  let e = spiel.act('warten');
+  assert.ok(typen(e).includes('rueckhalt'));
+  assert.equal(z.spieler.herzen, 1);
+  assert.equal(z.status, 'faehrt');
+  z.gegner[0].ansage = [{ x: 2, y: 7 }];
+  e = spiel.act('warten');
+  assert.ok(typen(e).includes('tod'), 'beim zweiten Mal nicht mehr');
+});
+
+test('Sprint: zwei Felder geradeaus für eine Ruhe, nur mit der Stärke und mit Ruhe', () => {
+  const ohne = szene({ spieler: [2, 7], ruhe: 1, gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  assert.deepEqual(ohne.act('sprint-hoch'), [], 'ohne Stärke passiert nichts');
+  const spiel = szene({ spieler: [2, 7], ruhe: 0, gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  const z = spiel.zustand;
+  z.staerken.sprint = true;
+  assert.deepEqual(typen(spiel.act('sprint-hoch')), ['ungueltig'], 'ohne Ruhe nicht');
+  z.spieler.ruhe = 2;
+  const e = spiel.act('sprint-hoch');
+  assert.equal(e[0].typ, 'sprint');
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5]);
+  assert.equal(z.spieler.ruhe, 1);
+  assert.equal(z.zug, 1, 'ein Zug');
+});
+
+test('Sprint: Gegner auf dem Weg nehmen Schaden, der Spieler landet dahinter', () => {
+  const spiel = szene({ spieler: [2, 7], ruhe: 1, gegner: [{ typ: 'pendler', x: 2, y: 6 }] });
+  const z = spiel.zustand;
+  z.staerken.sprint = true;
+  const e = spiel.act('sprint-hoch');
+  assert.deepEqual(e[0].getroffen.map((t) => [t.id, t.hp]), [[1, 1]]);
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5]);
+  assert.equal(z.gegner[0].hp, 1);
+});
+
+test('Sprint: Hindernisse halten ihn auf, steht dahinter ein Gegner, bleibt man davor stehen', () => {
+  const plan = ['.....', '.....', '.....', '.....', '.....', '..S..', '.....', '.....'];
+  const spiel = szene({ spieler: [2, 7], ruhe: 1, plan, gegner: [{ typ: 'pendler', x: 4, y: 0, mit: STILL }] });
+  spiel.zustand.staerken.sprint = true;
+  spiel.act('sprint-hoch');
+  assert.deepEqual([spiel.zustand.spieler.x, spiel.zustand.spieler.y], [2, 6], 'der Sitz hält ihn nach einem Feld auf');
+  const zwei = szene({ spieler: [2, 7], ruhe: 1, gegner: [{ typ: 'pendler', x: 2, y: 5, mit: STILL }] });
+  zwei.zustand.staerken.sprint = true;
+  const e = zwei.act('sprint-hoch');
+  assert.deepEqual([zwei.zustand.spieler.x, zwei.zustand.spieler.y], [2, 6]);
+  assert.equal(e[0].getroffen.length, 1);
+});

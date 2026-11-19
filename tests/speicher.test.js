@@ -32,7 +32,7 @@ test('ganz ohne Fenster und Speicher gibt es einen vollständigen leeren Stand',
 
 test('leerer Speicher: alles steht auf Anfang', () => {
   mitFenster({ localStorage: speicherMit({}) }, () => {
-    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true });
+    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false } });
   });
 });
 
@@ -67,7 +67,7 @@ test('Unsinn im Speicher wird zu einem gültigen Stand', () => {
 test('ein gesicherter Stand kommt genauso zurück', () => {
   const speicher = speicherMit({});
   mitFenster({ localStorage: speicher }, () => {
-    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false };
+    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true } };
     assert.equal(sichereStand(stand), true);
     assert.deepEqual(ladeStand(), stand);
   });
@@ -75,5 +75,13 @@ test('ein gesicherter Stand kommt genauso zurück', () => {
 
 test('bereinigeStand übernimmt nur Bekanntes', () => {
   const stand = bereinigeStand({ gelernt: { wischen: true, ausweichen: 'ja', hacken: true }, ton: false, lochungen: 99 });
-  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false });
+  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false } });
+});
+
+test('Stärken: Anfangswert ist keine, Unsinn wird zu keiner, Bekanntes bleibt', () => {
+  assert.deepEqual(leererStand().staerken, { warten: false, sprint: false, rueckhalt: false });
+  assert.deepEqual(bereinigeStand({ staerken: 'alle' }).staerken, { warten: false, sprint: false, rueckhalt: false });
+  assert.deepEqual(bereinigeStand({ staerken: { sprint: true, warten: 1, fliegen: true } }).staerken, { warten: false, sprint: true, rueckhalt: false });
+  // ein alter Stand aus Etappe 1 ohne Stärken
+  assert.deepEqual(bereinigeStand({ gelernt: { wischen: true }, ton: true }).staerken, { warten: false, sprint: false, rueckhalt: false });
 });

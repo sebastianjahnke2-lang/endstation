@@ -83,7 +83,7 @@ function eineFahrt(seed, waehle, optionen) {
     const aktion = waehle(z);
     const wo = `Seed ${seed}, Eingabe ${i} (${aktion}), Wagen ${z.wagenNr + 1}`;
     const vorher = JSON.stringify(z);
-    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug };
+    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug, rueckhalt: z.rueckhaltGenutzt, warten: z.staerken.warten };
     const rotVorher = [];
     for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (!istHindernis(z, x, y) && istMarkiert(z, x, y)) rotVorher.push(feldNr(x, y));
 
@@ -108,17 +108,26 @@ function eineFahrt(seed, waehle, optionen) {
     assert.ok(treffer.length <= 1, `${wo}: ${treffer.length} Treffer in einem Zug`);
     const schaden = treffer.length ? GEGNERWERTE[treffer[0].durch].schaden || 1 : 0;
     const aufgebrochen = typen.includes('aufgebrochen') ? 1 : 0;
-    assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen), `${wo}: ${verlust} Herzen verloren`);
+    if (typen.includes('rueckhalt')) {
+      // Rückhalt: Der tödliche Treffer lässt ein Herz übrig, einmal je Fahrt
+      assert.ok(alt.herzen <= schaden + aufgebrochen && z.spieler.herzen === 1 && alt.rueckhalt === false, `${wo}: Rückhalt falsch`);
+    } else {
+      assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen), `${wo}: ${verlust} Herzen verloren`);
+    }
     if (aufgebrochen) assert.equal(z.tuerOffen, true, `${wo}: aufgebrochen, Tür zu`);
     const standAufRot = rotVorher.includes(feldNr(z.spieler.x, z.spieler.y));
     if (treffer.length) {
       assert.ok(standAufRot, `${wo}: Treffer auf einem Feld, das nicht angekündigt war`);
       assert.equal(z.spieler.ruhe, 0, `${wo}: Ruhe nach Treffer`);
     } else if (z.status === 'faehrt') {
-      const gewinn = z.spieler.ruhe - alt.ruhe;
       const ausgewichen = rotVorher.includes(feldNr(alt.x, alt.y)) && !standAufRot && (alt.x !== z.spieler.x || alt.y !== z.spieler.y);
       assert.equal(typen.includes('ausgewichen'), ausgewichen, `${wo}: Ausweichen falsch erkannt`);
-      assert.equal(gewinn, ausgewichen && alt.ruhe < RUHE_VOLL ? 1 : 0, `${wo}: Ruhe von ${alt.ruhe} auf ${z.spieler.ruhe}`);
+      const ruhigGewartet = typen.includes('ruhigGewartet');
+      if (ruhigGewartet) assert.ok(aktion === 'warten' && alt.warten, `${wo}: Ruhe fürs Warten ohne Stärke`);
+      const kosten = typen.includes('sprint') ? 1 : 0; // ein Sprint kostet eine Ruhe
+      const basis = alt.ruhe - kosten;
+      const erwartet = basis + ((ausgewichen || ruhigGewartet) && basis < RUHE_VOLL ? 1 : 0);
+      assert.equal(z.spieler.ruhe, erwartet, `${wo}: Ruhe von ${alt.ruhe} auf ${z.spieler.ruhe}`);
     }
     // Ereignisse stehen in der Reihenfolge ihrer Phasen
     const phasen = ereignisse.map((e) => e.phase);
@@ -139,6 +148,17 @@ test('Fuzz: jeder Wagen als Start, mit reinem Zufall', () => {
     for (let seed = 1; seed <= 150; seed++) {
       const zufall = zufallsquelle(seed * 104729 + wagen);
       eineFahrt(seed, () => AKTIONEN[Math.floor(zufall() * AKTIONEN.length)], { startWagen: wagen });
+    }
+  }
+});
+
+test('Fuzz: mit allen Stärken und Sprints, reiner Zufall', () => {
+  const MIT_SPRINT = [...AKTIONEN, ...RICHTUNGSNAMEN.map((r) => `sprint-${r}`)];
+  const staerken = { warten: true, sprint: true, rueckhalt: true };
+  for (let wagen = 0; wagen < WAGENZAHL; wagen++) {
+    for (let seed = 1; seed <= 120; seed++) {
+      const zufall = zufallsquelle(seed * 7177 + wagen * 13);
+      eineFahrt(seed, () => MIT_SPRINT[Math.floor(zufall() * MIT_SPRINT.length)], { startWagen: wagen, staerken });
     }
   }
 });
