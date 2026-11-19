@@ -292,6 +292,8 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'probe' || e.typ === 'probeEnde') {
       // Die Wiederholung fährt nicht herein, sie blendet über wie eine Erinnerung. Zurück ebenso.
       merkeStandbild();
+      for (const l of laeufer) if (!l.bleibt) l.schritt(1); // der Schritt auf das Schild ist vorbei
+      laeufer = laeufer.filter((l) => l.bleibt);
       altesWagenbild = null;
       baueBilder();
       gleicheAb();
@@ -792,7 +794,7 @@ export function erzeugeAnzeige(leinwand) {
       }
       const b = bild.begleiter;
       if (b) {
-        if (b.wiederholen) maleNochmal(b.wiederholen, oy);
+        if (b.wiederholen) maleNochmal(b.wiederholen, b, oy);
         maleFigur(stift, 'begleiter', boden.x + (b.x + 0.5) * s, boden.y + (b.y + 0.8) * s + oy, s * 0.82, { t, takt: 5, ruhig });
         if (b.antworten) for (const a of b.antworten) maleAntwort(a, t, oy);
       }
@@ -877,8 +879,9 @@ export function erzeugeAnzeige(leinwand) {
     }
   }
 
-  // „Noch mal": ein Schild auf leuchtendem Boden neben dem Begleiter
-  function maleNochmal(f, oy) {
+  // „Noch mal": ein Schild auf leuchtendem Boden neben dem Begleiter. Es ist breiter als ein Feld und
+  // schließt deshalb an seiner Seite mit dem Feld ab, damit es ihn nicht verdeckt.
+  function maleNochmal(f, b, oy) {
     const { boden, s } = layout;
     const cx = boden.x + (f.x + 0.5) * s;
     const cy = boden.y + (f.y + 0.5) * s + oy;
@@ -887,7 +890,9 @@ export function erzeugeAnzeige(leinwand) {
     schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
     stift.fillStyle = schein;
     stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
-    maleSchild(TEXTE.begleiter.nochmal, cx, cy);
+    const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
+    const seite = Math.sign(b.x - f.x);
+    maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
