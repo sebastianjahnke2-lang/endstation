@@ -3,6 +3,7 @@
 
 import { abstand } from './kern/feld.js';
 import { erzeugeSpiel } from './kern/spiel.js';
+import { optionenFuerFahrt } from './kern/reise.js';
 import { erzeugeAnzeige } from './anzeige/anzeige.js';
 import { verbindeEingabe } from './eingabe.js';
 import { ladeStand, sichereStand } from './speicher.js';
@@ -38,20 +39,29 @@ function starteFahrt(jetzt) {
   const fest = festerSeed();
   const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
   fahrten += 1;
-  spiel = erzeugeSpiel(seed);
+  // Was die neue Fahrt mitnimmt: Stärken, Fahrkarte, nach einem Tod den Begleiter (siehe kern/reise.js)
+  const optionen = optionenFuerFahrt(stand, spiel ? spiel.zustand : null);
+  if (optionen.fahrkarte !== stand.fahrkarte) {
+    stand.fahrkarte = optionen.fahrkarte; // nach dem Halt beginnt eine neue Reise
+    sichereStand(stand);
+  }
+  spiel = erzeugeSpiel(seed, optionen);
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
 function merke(ereignisse) {
   const g = stand.gelernt;
-  const vorher = JSON.stringify(g);
+  const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
     if (e.typ === 'schlag') g.anrempeln = true;
+    if (e.typ === 'verstanden') stand.staerken[e.staerke] = true; // dauerhaft, auch für die nächsten Fahrten
+    if (e.typ === 'gegoennt') stand.mehrAmTisch = e.mehrAmTisch; // zeigt sich erst bei einer späteren Fahrt
+    if (e.typ === 'gelocht' || e.typ === 'aufgehellt') stand.fahrkarte = JSON.parse(JSON.stringify(spiel.zustand.fahrkarte));
   }
-  if (JSON.stringify(g) !== vorher) {
+  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher) {
     sichereStand(stand);
     zeigeHinweise();
   }
@@ -81,6 +91,10 @@ function tippe(x, y) {
   if (!ziel) return;
   if (ziel.art === 'weiter') {
     gibEin('hoch', 'tipp');
+  } else if (ziel.art === 'ueberspringen') {
+    anzeige.ueberspringe(); // der Rückblick am Halt lässt sich mit einem Tipp überspringen
+  } else if (ziel.art === 'aussteigen') {
+    anzeige.steigeAus(); // das Bild bleibt, nichts beginnt von selbst
   } else if (ziel.art === 'ton') {
     stand.ton = !stand.ton;
     ton.setze(stand.ton);
@@ -95,6 +109,8 @@ function tippe(x, y) {
     const dy = ziel.y - s.y;
     if (dx === 0 && dy === 0) gibEin('warten', 'tipp');
     else if (abstand(ziel, s) === 1) gibEin(dx === 1 ? 'rechts' : dx === -1 ? 'links' : dy === 1 ? 'runter' : 'hoch', 'tipp');
+    // zwei Felder weit in gerader Linie: Sprint, wer den Drängler verstanden hat. Sonst geschieht nichts.
+    else if (abstand(ziel, s) === 2 && (dx === 0 || dy === 0)) gibEin(`sprint-${dx > 0 ? 'rechts' : dx < 0 ? 'links' : dy > 0 ? 'runter' : 'hoch'}`, 'tipp');
   }
 }
 

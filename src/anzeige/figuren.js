@@ -1,6 +1,8 @@
-// Figuren und Hindernisse. Niemand hat ein Gesicht. Jede Figur ist am Umriss erkennbar:
+// Figuren und Hindernisse. Niemand hat ein Gesicht, nur verstandene Fahrgäste im Speisewagen.
+// Jede Figur ist am Umriss erkennbar:
 // der Spieler am Schal, der Pendler an der Aktentasche, die Reisegruppe am Rucksack
-// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern.
+// und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern, der Kontrolleur
+// an Mütze und Lochzange.
 
 import { FARBE, rundesRechteck, kreis } from './formen.js';
 
@@ -168,7 +170,75 @@ function maleDraengler(stift, cx, fy, s, o) {
   return k;
 }
 
-const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler };
+// Der Kontrolleur. o.zeigt: Richtung zum Spieler (x, y) oder null. o.heben: wie weit er die Zange
+// hinhält (0 bis 1), sie sinkt, je länger man ruhig steht. o.winkt: Hand an der Mütze beim Durchwinken.
+// Kleine Geste im Stand: Ab und zu klickt er mit der Zange.
+function maleKontrolleur(stift, cx, fy, s, o) {
+  const f = FARBE.kontrolleur;
+  const atem = o.ruhig ? 0 : Math.sin(o.t * 1.1 + o.takt) * 0.008;
+  const masse = { hoch: s * 0.76 * (1 + atem), schulter: s * 0.37, saum: s * 0.4, kopf: s * 0.12 };
+  const zeigt = o.zeigt && (o.heben || 0) > 0.01 ? o.zeigt : null;
+  const seite = zeigt ? (zeigt.x < 0 ? -1 : zeigt.x > 0 ? 1 : 0) : 0;
+  const k = maleKoerper(stift, cx, fy, masse, f, seite * 0.25 * (o.heben || 0));
+  // Mütze: Kuppe, rotes Band, Schirm zur Seite, auf die er sieht. Der Begleiter hat sie abgesetzt.
+  const winkt = o.winkt || 0;
+  const my = k.kopfY - masse.kopf * 0.22 - winkt * s * 0.06;
+  if (o.ohneMuetze) return k;
+  stift.fillStyle = f.muetze;
+  stift.beginPath();
+  stift.arc(k.kopfX, my, masse.kopf * 1.08, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  stift.fillStyle = f.band;
+  rundesRechteck(stift, k.kopfX - masse.kopf * 1.1, my - masse.kopf * 0.12, masse.kopf * 2.2, masse.kopf * 0.32, masse.kopf * 0.1);
+  stift.fill();
+  stift.fillStyle = f.muetze;
+  const schirm = seite || 1;
+  rundesRechteck(stift, k.kopfX + (schirm > 0 ? masse.kopf * 0.55 : -masse.kopf * 1.75), my + masse.kopf * 0.12, masse.kopf * 1.2, masse.kopf * 0.26, masse.kopf * 0.1);
+  stift.fill();
+
+  // der Arm mit der Lochzange
+  const sx = cx + (seite || 1) * masse.schulter * 0.44 + k.schub;
+  const sy = k.schulterY + s * 0.07;
+  let hx;
+  let hy;
+  if (winkt > 0.01) {
+    // durchwinken: die Hand geht an die Mütze
+    hx = k.kopfX + masse.kopf * 0.9;
+    hy = my + s * 0.02 + (1 - winkt) * s * 0.2;
+  } else if (zeigt) {
+    const weit = Math.hypot(zeigt.x, zeigt.y) || 1;
+    const h = o.heben;
+    hx = sx + (zeigt.x / weit) * s * 0.3 * h;
+    hy = sy + s * 0.2 * (1 - h) + (zeigt.y / weit) * s * 0.22 * h;
+  } else {
+    hx = sx + s * 0.04;
+    hy = sy + s * 0.22;
+  }
+  linie(stift, [[sx, sy], [hx, hy]], f.arm, s * 0.07);
+  stift.fillStyle = f.kopf;
+  kreis(stift, hx, hy, s * 0.033);
+  stift.fill();
+  if (winkt <= 0.01) {
+    // die Zange: zwei Schenkel, im Stand klickt sie ab und zu
+    const klick = o.ruhig ? 0 : (o.t * 0.23 + o.takt * 0.31) % 1 > 0.92 ? 1 : 0;
+    const offen = 0.35 - klick * 0.3;
+    const r = zeigt ? Math.atan2(zeigt.y, zeigt.x) : Math.PI / 2;
+    for (const w of [-offen, offen]) {
+      const ex = hx + Math.cos(r + w) * s * 0.11;
+      const ey = hy + Math.sin(r + w) * s * 0.11;
+      linie(stift, [[hx, hy], [ex, ey]], f.zange, s * 0.022);
+    }
+  }
+  return k;
+}
+
+// Der Begleiter: dieselbe Uniform, die Mütze abgesetzt, im Speisewagen sitzend. Am Halt ist er der Schaffner.
+function maleBegleiter(stift, cx, fy, s, o) {
+  return maleKontrolleur(stift, cx, fy, s, { ...o, zeigt: null, heben: 0, ohneMuetze: true });
+}
+
+const MALER = { spieler: maleSpieler, pendler: malePendler, gruppe: maleGruppe, draengler: maleDraengler, kontrolleur: maleKontrolleur, begleiter: maleBegleiter };
 
 // Zeichnet eine Figur. (cx, fy) ist der Punkt zwischen den Füßen, s die Feldgröße.
 // o: t (Sekunden), takt (eigener Versatz), neigung, alpha, blitz, ruhig und was die Figur gerade tut.
@@ -179,6 +249,7 @@ export function maleFigur(stift, art, cx, fy, s, o) {
   stift.globalAlpha *= alpha;
   maleSchatten(stift, cx, fy, s * (art === 'draengler' ? 0.27 : art === 'gruppe' ? 0.19 : 0.22));
   const k = MALER[art](stift, cx, fy, s, o);
+  if (o.gesicht && k) maleGesicht(stift, k.kopfX, k.kopfY, s * 0.115);
   if (o.blitz > 0.01) {
     // kurzes Aufleuchten bei einem Treffer
     stift.globalCompositeOperation = 'lighter';
@@ -192,6 +263,68 @@ export function maleFigur(stift, art, cx, fy, s, o) {
   }
   stift.restore();
   return k;
+}
+
+// Die Symbole der sechs Prüfungen, schlicht wie Piktogramme im Zug. (cx, cy) Mitte, g Größe.
+export function maleSymbol(stift, id, cx, cy, g, farbe) {
+  stift.save();
+  stift.strokeStyle = farbe;
+  stift.fillStyle = farbe;
+  stift.lineWidth = Math.max(1.5, g * 0.11);
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  const h = g / 2;
+  if (id === 'aufregen') {
+    // eine ruhige Linie: ein flacher Puls
+    linie(stift, [[cx - h, cy], [cx - h * 0.3, cy], [cx - h * 0.15, cy - h * 0.25], [cx + h * 0.05, cy + h * 0.2], [cx + h * 0.2, cy], [cx + h, cy]], farbe, stift.lineWidth);
+  } else if (id === 'aussteigen') {
+    // eine Tür, ein Pfeil hinaus
+    stift.strokeRect(cx - h * 0.1, cy - h * 0.8, h * 0.9, h * 1.6);
+    linie(stift, [[cx + h * 0.3, cy], [cx - h, cy]], farbe, stift.lineWidth);
+    linie(stift, [[cx - h * 0.6, cy - h * 0.35], [cx - h, cy], [cx - h * 0.6, cy + h * 0.35]], farbe, stift.lineWidth);
+  } else if (id === 'rempeln') {
+    // zwei Figuren mit Abstand
+    for (const dx of [-0.5, 0.5]) {
+      kreis(stift, cx + dx * h, cy - h * 0.45, h * 0.22);
+      stift.fill();
+      linie(stift, [[cx + dx * h, cy - h * 0.15], [cx + dx * h, cy + h * 0.75]], farbe, stift.lineWidth * 1.4);
+    }
+  } else if (id === 'draengeln') {
+    // eine Schlange, einer hinter dem anderen
+    for (const dx of [-0.65, 0, 0.65]) {
+      kreis(stift, cx + dx * h, cy - h * 0.4, h * 0.17);
+      stift.fill();
+      linie(stift, [[cx + dx * h, cy - h * 0.15], [cx + dx * h, cy + h * 0.6]], farbe, stift.lineWidth * 1.2);
+    }
+  } else if (id === 'puenktlich') {
+    // eine Uhr
+    kreis(stift, cx, cy, h * 0.85);
+    stift.stroke();
+    linie(stift, [[cx, cy - h * 0.55], [cx, cy], [cx + h * 0.4, cy + h * 0.15]], farbe, stift.lineWidth);
+  } else if (id === 'ruhe') {
+    // drei Punkte wie die Ruhe oben
+    for (const dx of [-0.6, 0, 0.6]) {
+      kreis(stift, cx + dx * h, cy, h * 0.22);
+      stift.fill();
+    }
+  }
+  stift.restore();
+}
+
+// Ein schlichtes Gesicht: zwei Punkte, ein kurzer Mund. Nur für verstandene Fahrgäste.
+function maleGesicht(stift, x, y, r) {
+  stift.fillStyle = '#2a2f3a';
+  kreis(stift, x - r * 0.36, y + r * 0.04, r * 0.11);
+  stift.fill();
+  kreis(stift, x + r * 0.36, y + r * 0.04, r * 0.11);
+  stift.fill();
+  stift.strokeStyle = '#2a2f3a';
+  stift.lineWidth = Math.max(1, r * 0.1);
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(x - r * 0.24, y + r * 0.42);
+  stift.quadraticCurveTo(x, y + r * 0.52, x + r * 0.24, y + r * 0.42);
+  stift.stroke();
 }
 
 // HP als Punkte über dem Kopf
@@ -287,6 +420,32 @@ function maleKoffer(stift, x, y, s, gross) {
   stift.fillRect(kx + b * 0.42, ky + h * 0.42, b * 0.2, h * 0.14);
 }
 
+// Ein Tisch im Speisewagen: Tischtuch, eine Tasse, eine kleine Lampe
+function maleTisch(stift, x, y, s) {
+  stift.fillStyle = '#5a4636';
+  rundesRechteck(stift, x + s * 0.12, y + s * 0.16, s * 0.76, s * 0.68, s * 0.08);
+  stift.fill();
+  stift.fillStyle = '#efe4cf';
+  rundesRechteck(stift, x + s * 0.16, y + s * 0.2, s * 0.68, s * 0.6, s * 0.06);
+  stift.fill();
+  stift.fillStyle = '#d9cbb0';
+  stift.fillRect(x + s * 0.16, y + s * 0.47, s * 0.68, s * 0.05);
+  // Tasse mit Untertasse
+  stift.fillStyle = '#c9bca4';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.09);
+  stift.fill();
+  stift.fillStyle = '#ffffff';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.055);
+  stift.fill();
+  stift.fillStyle = '#6b4a33';
+  kreis(stift, x + s * 0.36, y + s * 0.62, s * 0.035);
+  stift.fill();
+  // Tischlampe
+  stift.fillStyle = '#ffd9a0';
+  kreis(stift, x + s * 0.64, y + s * 0.34, s * 0.07);
+  stift.fill();
+}
+
 function maleWand(stift, x, y, s) {
   stift.fillStyle = FARBE.wand;
   stift.fillRect(x, y, s, s);
@@ -304,5 +463,6 @@ export function maleHindernis(stift, art, x, y, s, feldX, feldY) {
   if (art === 'S') maleSitz(stift, x, y, s);
   else if (art === 'F') maleFahrrad(stift, x, y, s);
   else if (art === 'K') maleKoffer(stift, x, y, s, (feldX + feldY) % 2 === 0);
+  else if (art === 'T') maleTisch(stift, x, y, s);
   else maleWand(stift, x, y, s);
 }

@@ -39,7 +39,7 @@ Braucht ein Wort eine Ausnahme in der Wortliste des Tests, steht der Grund in `d
 - Kommt es aus dem Bahnalltag, oder ist es ein erfundenes Zeichen?
 - Tut es im Spiel etwas? Ein Symbol, das nur schmückt, fliegt raus.
 - Erkennt man es als Umriss, in Feldgröße bei 360×600?
-- Gegner haben kein Gesicht. Ein Gesicht bekommen nur verstandene Fahrgäste im Speisewagen (ab Etappe 2).
+- Gegner haben kein Gesicht. Ein Gesicht bekommen nur verstandene Fahrgäste im Speisewagen (gebaut, vom Auftraggeber am 19.11. bestätigt).
 - Keine Tiere.
 - Steht das Kleine, Menschliche neben dem Großen, Fremden im selben Bild?
 

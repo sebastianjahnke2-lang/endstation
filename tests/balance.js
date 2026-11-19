@@ -75,4 +75,6 @@ if (process.argv[1] && process.argv[1].endsWith('balance.js')) {
   for (const name of Object.keys(BOTS)) drucke(werteAus(name, fahrten));
   console.log('\nMit Unachtsamkeit (jeder zwölfte Zug zufällig):');
   drucke(werteAus('ausgewogener', fahrten, { fehlerquote: 1 / 12 }));
+  console.log('\nMit Unachtsamkeit und allen Stärken von Anfang an (wie nach einigen Fahrten; der Bot sprintet nie):');
+  drucke(werteAus('ausgewogener', fahrten, { fehlerquote: 1 / 12, staerken: { warten: true, sprint: true, rueckhalt: true } }));
 }

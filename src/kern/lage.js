@@ -35,3 +35,10 @@ export function istVorderster(z, g) {
   }
   return true;
 }
+
+// Darf die Tür aufgehen? Wenn kein Gegner mehr steht. Im Wagen des Kontrolleurs gehört
+// die Tür ihm: Sie geht auf, sobald er fort ist, auch wenn andere noch dort sind.
+export function tuerFrei(z) {
+  if (z.gegner.length === 0) return true;
+  return z.wagen.mitKontrolleur === true && !z.gegner.some((g) => g.typ === 'kontrolleur');
+}

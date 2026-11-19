@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BREITE, HOEHE, TUERFELD, RICHTUNG, RICHTUNGSNAMEN, imFeld, feldNr, entfernungen } from '../src/kern/feld.js';
-import { istHindernis, istMarkiert } from '../src/kern/lage.js';
+import { istHindernis, istMarkiert, tuerFrei } from '../src/kern/lage.js';
 import { erzeugeSpiel, HERZEN_VOLL, RUHE_VOLL } from '../src/kern/spiel.js';
 import { GEGNERWERTE } from '../src/kern/gegner.js';
 import { WAGENZAHL } from '../src/kern/wagen.js';
@@ -25,6 +25,7 @@ function pruefeZustand(z, wo) {
   assert.ok(imFeld(s.x, s.y) && !istHindernis(z, s.x, s.y), `${wo}: Spieler steht falsch (${s.x},${s.y})`);
   assert.ok(s.herzen >= 0 && s.herzen <= HERZEN_VOLL, `${wo}: Herzen ${s.herzen}`);
   assert.ok(s.ruhe >= 0 && s.ruhe <= RUHE_VOLL, `${wo}: Ruhe ${s.ruhe}`);
+  assert.ok(!s.praesenz || s.ruhe === RUHE_VOLL, `${wo}: Präsenz ohne volle Ruhe`);
   assert.ok(z.gegner.length <= 6, `${wo}: ${z.gegner.length} Gegner gleichzeitig`);
   assert.equal(z.status === 'tot', s.herzen === 0, `${wo}: Status ${z.status} bei ${s.herzen} Herzen`);
 
@@ -34,6 +35,7 @@ function pruefeZustand(z, wo) {
     assert.ok(!belegt.has(feldNr(g.x, g.y)), `${wo}: ${g.typ} überlappt mit ${belegt.get(feldNr(g.x, g.y))} auf ${g.x},${g.y}`);
     belegt.set(feldNr(g.x, g.y), g.typ);
     assert.ok(g.hp >= 1 && g.hp <= GEGNERWERTE[g.typ].hp, `${wo}: ${g.typ} mit ${g.hp} HP`);
+    if (g.typ === 'kontrolleur') assert.deepEqual([g.x, g.y], [g.posten.x, g.posten.y], `${wo}: der Kontrolleur hat seinen Platz verlassen`);
     if (g.ansage) {
       assert.ok(g.ansage.length > 0, `${wo}: leere Ansage`);
       for (const f of g.ansage) {
@@ -61,6 +63,17 @@ function pruefeZustand(z, wo) {
     assert.ok(ausweg, `${wo}: Aus dem Muster von ${g.typ} führt bei ${s.x},${s.y} kein Schritt hinaus`);
   }
 
+  // Fahrkarte: jede Prüfung höchstens einmal gelocht, je Todesursache höchstens eine dunkle Lochung
+  const ids = z.fahrkarte.lochungen.filter((l) => l.art === 'pruefung').map((l) => l.id);
+  assert.equal(new Set(ids).size, ids.length, `${wo}: doppelte Lochung`);
+  const dunkel = z.fahrkarte.lochungen.filter((l) => l.art === 'tod' && !l.hell).map((l) => l.durch);
+  assert.equal(new Set(dunkel).size, dunkel.length, `${wo}: doppelte dunkle Lochung`);
+  if (z.angebot) {
+    assert.ok(!istHindernis(z, z.angebot.x, z.angebot.y), `${wo}: Angebot im Hindernis`);
+    assert.ok(!ids.includes(z.angebot.id), `${wo}: Angebot schon gelocht`);
+    assert.ok(!z.wagen.sicher, `${wo}: Angebot im sicheren Wagen`);
+  }
+
   // Tür immer erreichbar, alle freien Felder verbunden
   const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y));
   for (let y = 0; y < HOEHE; y++) {
@@ -68,8 +81,9 @@ function pruefeZustand(z, wo) {
       if (!istHindernis(z, x, y)) assert.ok(weit[feldNr(x, y)] >= 0, `${wo}: von ${x},${y} führt kein Weg zur Tür`);
     }
   }
-  assert.equal(z.tuerOffen, z.gegner.length === 0 || z.status === 'halt' ? z.tuerOffen : false, `${wo}: Tür offen trotz Gegnern`);
-  if (z.status === 'faehrt' && z.gegner.length === 0) assert.equal(z.tuerOffen, true, `${wo}: Tür zu ohne Gegner`);
+  // Die Tür ist offen, wenn kein Gegner mehr steht (im Wagen des Kontrolleurs: wenn er fort ist)
+  // oder wenn sie aufgebrochen wurde. Sonst ist sie zu.
+  if (z.status === 'faehrt') assert.equal(z.tuerOffen, tuerFrei(z) || z.aufgebrochen, `${wo}: Tür ${z.tuerOffen ? 'offen' : 'zu'}`);
 }
 
 function eineFahrt(seed, waehle, optionen) {
@@ -80,7 +94,7 @@ function eineFahrt(seed, waehle, optionen) {
     const aktion = waehle(z);
     const wo = `Seed ${seed}, Eingabe ${i} (${aktion}), Wagen ${z.wagenNr + 1}`;
     const vorher = JSON.stringify(z);
-    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug };
+    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug, rueckhalt: z.rueckhaltGenutzt, warten: z.staerken.warten };
     const rotVorher = [];
     for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (!istHindernis(z, x, y) && istMarkiert(z, x, y)) rotVorher.push(feldNr(x, y));
 
@@ -94,24 +108,48 @@ function eineFahrt(seed, waehle, optionen) {
     assert.equal(z.zug, alt.zug + 1, `${wo}: Zugzähler`);
     pruefeZustand(z, wo);
     if (typen.includes('wagenwechsel') || typen.includes('halt')) {
-      assert.equal(z.spieler.herzen, alt.herzen, `${wo}: Herzen beim Wagenwechsel`);
+      // nur der Speisewagen heilt beim Hineingehen
+      const heil = ereignisse.find((e) => e.typ === 'geheilt');
+      assert.equal(z.spieler.herzen, heil ? Math.min(HERZEN_VOLL, alt.herzen + z.wagen.heilt) : alt.herzen, `${wo}: Herzen beim Wagenwechsel`);
+      assert.equal(!!heil, z.status === 'faehrt' && z.wagen.heilt > 0, `${wo}: Heilen beim Wagenwechsel`);
       continue;
     }
+    // Im sicheren Wagen passiert nie etwas Schlimmes. Ein Herz geht dort nur, wer es selbst am Tisch lässt.
+    const gegoennt = typen.includes('gegoennt') ? 1 : 0;
+    if (gegoennt) assert.ok(z.wagen.sicher && alt.herzen > 1, `${wo}: gegönnt außerhalb des Speisewagens oder das letzte Herz`);
+    if (z.wagen.sicher) {
+      assert.equal(z.gegner.length, 0, `${wo}: Gegner im sicheren Wagen`);
+      assert.ok(z.spieler.herzen >= alt.herzen - gegoennt, `${wo}: Herz verloren im sicheren Wagen`);
+      assert.ok(z.spieler.herzen > 0, `${wo}: Tod im sicheren Wagen`);
+    }
 
-    // kein Angriff ohne Ankündigung, höchstens ein Herz je Zug
+    // kein Angriff ohne Ankündigung, höchstens ein Treffer je Zug. Er kostet ein Herz, beim Kontrolleur
+    // zwei. Aufbrechen kostet ein Herz.
     const verlust = alt.herzen - z.spieler.herzen;
-    assert.ok(verlust === 0 || verlust === 1, `${wo}: ${verlust} Herzen verloren`);
+    const treffer = ereignisse.filter((e) => e.typ === 'treffer');
+    assert.ok(treffer.length <= 1, `${wo}: ${treffer.length} Treffer in einem Zug`);
+    const schaden = treffer.length ? GEGNERWERTE[treffer[0].durch].schaden || 1 : 0;
+    const aufgebrochen = typen.includes('aufgebrochen') ? 1 : 0;
+    if (typen.includes('rueckhalt')) {
+      // Rückhalt: Der tödliche Treffer lässt ein Herz übrig, einmal je Fahrt
+      assert.ok(alt.herzen <= schaden + aufgebrochen && z.spieler.herzen === 1 && alt.rueckhalt === false, `${wo}: Rückhalt falsch`);
+    } else {
+      assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen + gegoennt), `${wo}: ${verlust} Herzen verloren`);
+    }
+    if (aufgebrochen) assert.equal(z.tuerOffen, true, `${wo}: aufgebrochen, Tür zu`);
     const standAufRot = rotVorher.includes(feldNr(z.spieler.x, z.spieler.y));
-    if (verlust === 1) {
+    if (treffer.length) {
       assert.ok(standAufRot, `${wo}: Treffer auf einem Feld, das nicht angekündigt war`);
       assert.equal(z.spieler.ruhe, 0, `${wo}: Ruhe nach Treffer`);
-      assert.ok(typen.includes('treffer'), `${wo}: Treffer ohne Ereignis`);
-    } else {
-      assert.ok(!typen.includes('treffer'), `${wo}: Ereignis Treffer ohne Verlust`);
-      const gewinn = z.spieler.ruhe - alt.ruhe;
+    } else if (z.status === 'faehrt') {
       const ausgewichen = rotVorher.includes(feldNr(alt.x, alt.y)) && !standAufRot && (alt.x !== z.spieler.x || alt.y !== z.spieler.y);
       assert.equal(typen.includes('ausgewichen'), ausgewichen, `${wo}: Ausweichen falsch erkannt`);
-      assert.equal(gewinn, ausgewichen && alt.ruhe < RUHE_VOLL ? 1 : 0, `${wo}: Ruhe von ${alt.ruhe} auf ${z.spieler.ruhe}`);
+      const ruhigGewartet = typen.includes('ruhigGewartet');
+      if (ruhigGewartet) assert.ok(aktion === 'warten' && alt.warten, `${wo}: Ruhe fürs Warten ohne Stärke`);
+      const kosten = typen.includes('sprint') ? 1 : 0; // ein Sprint kostet eine Ruhe
+      const basis = alt.ruhe - kosten;
+      const erwartet = basis + ((ausgewichen || ruhigGewartet) && basis < RUHE_VOLL ? 1 : 0);
+      assert.equal(z.spieler.ruhe, erwartet, `${wo}: Ruhe von ${alt.ruhe} auf ${z.spieler.ruhe}`);
     }
     // Ereignisse stehen in der Reihenfolge ihrer Phasen
     const phasen = ereignisse.map((e) => e.phase);
@@ -132,6 +170,17 @@ test('Fuzz: jeder Wagen als Start, mit reinem Zufall', () => {
     for (let seed = 1; seed <= 150; seed++) {
       const zufall = zufallsquelle(seed * 104729 + wagen);
       eineFahrt(seed, () => AKTIONEN[Math.floor(zufall() * AKTIONEN.length)], { startWagen: wagen });
+    }
+  }
+});
+
+test('Fuzz: mit allen Stärken und Sprints, reiner Zufall', () => {
+  const MIT_SPRINT = [...AKTIONEN, ...RICHTUNGSNAMEN.map((r) => `sprint-${r}`)];
+  const staerken = { warten: true, sprint: true, rueckhalt: true };
+  for (let wagen = 0; wagen < WAGENZAHL; wagen++) {
+    for (let seed = 1; seed <= 120; seed++) {
+      const zufall = zufallsquelle(seed * 7177 + wagen * 13);
+      eineFahrt(seed, () => MIT_SPRINT[Math.floor(zufall() * MIT_SPRINT.length)], { startWagen: wagen, staerken });
     }
   }
 });

@@ -11,13 +11,15 @@ import { WAGENZAHL } from '../kern/wagen.js';
 import { TEXTE, fuelle } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, leicht, hinUndHer } from './formen.js';
 import { berechneLayout, feldBei, KNOPF } from './layout.js';
-import { maleFigur, malePunkte, maleAchtung } from './figuren.js';
-import { maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
+import { maleFigur, malePunkte, maleAchtung, maleSymbol } from './figuren.js';
+import { herzPfad, maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
 import { maleKarte, kartenMasse } from './karte.js';
 import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } from './matrix.js';
 
 const ABFAHRT = 23 * 60 + 41; // die Uhr beim Einsteigen, jeder Zug ist eine Minute
 const TAKT = 1.3; // Sekunden zwischen zwei Schienenstößen im Flusszustand
+const SPALT_JE_STOSS = 0.16; // so weit gibt die geschlossene Tür bei jedem Stoß nach
+const RUECKBLICK_TAKT = 1400; // so lange steht eine Tatsache im Rückblick am Halt
 
 export function uhrzeit(zug) {
   const minuten = (ABFAHRT + zug) % (24 * 60);
@@ -44,8 +46,10 @@ export function erzeugeAnzeige(leinwand) {
     ruhe: 0,
     zug: 0,
     tuer: 0,
+    spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
   };
+  let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
   let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
   let geister = []; // Besiegte, die verblassen
@@ -59,7 +63,7 @@ export function erzeugeAnzeige(leinwand) {
   let karte = null;
   let hinweis = null;
   let tonAn = true;
-  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9 };
+  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9, leuchten: -1e9, lochung: -1e9 };
   const melder = { takt: null };
 
   // ---------------------------------------------------------------- Aufbau
@@ -109,6 +113,10 @@ export function erzeugeAnzeige(leinwand) {
     bild.ruhe = z.spieler.ruhe;
     bild.zug = z.zug;
     bild.tuer = z.tuerOffen ? 1 : 0;
+    bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
+    bild.angebot = z.angebot ? { id: z.angebot.id, x: z.angebot.x, y: z.angebot.y } : null;
+    bild.begleiter = z.begleiter ? { x: z.begleiter.x, y: z.begleiter.y, antworten: z.begleiter.antworten ? z.begleiter.antworten.map((a) => ({ ...a })) : null } : null;
+    bild.pruefung = z.pruefung ? z.pruefung.id : null;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
     bild.gegner = z.gegner.map((g) => {
@@ -122,6 +130,7 @@ export function erzeugeAnzeige(leinwand) {
       b.pausiert = g.pause > 0;
       b.gruppe = g.gruppe;
       b.rang = g.rang;
+      b.ruhig = g.ruhig || 0;
       return b;
     });
   }
@@ -164,6 +173,16 @@ export function erzeugeAnzeige(leinwand) {
 
   // ---------------------------------------------------------------- Ereignisse
 
+  // Der Rückblick am Halt: je Lochung Handlung und Ort, ohne Adjektiv
+  function rueckblickZeilen(fahrkarte) {
+    return fahrkarte.lochungen.map((l) => {
+      const ort = TEXTE.wagen[l.wagen] || '';
+      if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
+      return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
+    });
+  }
+
   function zeigeKarte(art, zeilen, jetzt, pause) {
     karte = {
       art,
@@ -171,6 +190,7 @@ export function erzeugeAnzeige(leinwand) {
       herzen: z.spieler.herzen,
       herzenVoll: HERZEN_VOLL,
       minuten: ABFAHRT + z.zug,
+      fahrkarte: JSON.parse(JSON.stringify(z.fahrkarte)),
       start: jetzt + pause,
       einblenden: 0,
       weg: 0,
@@ -254,7 +274,14 @@ export function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      if (e.genug) {
+        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+        karte.knopftexte = TEXTE.knopf;
+      } else {
+        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
+        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
+      }
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -302,6 +329,134 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ausgewichen') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'tuerStoss') {
+      // gegen die geschlossene Tür: Sie zuckt und gibt ein Stück nach
+      wirkung.tuerZu = jetzt;
+      bild.zug += 1;
+      const von = bild.spalt;
+      const nach = Math.min(1, e.n * SPALT_JE_STOSS);
+      bewege(jetzt, 110, (p) => {
+        s.sy = -hinUndHer(p) * 0.16;
+        bild.spalt = von + (nach - von) * sanft(p);
+      });
+    } else if (e.typ === 'aufgebrochen') {
+      bild.herzen = e.herzen;
+      wirkung.treffer = jetzt;
+      if (!ruhig) wirkung.wackeln = jetzt;
+    } else if (e.typ === 'sprint') {
+      // zwei Felder in einem Zug, wer im Weg steht, wird getroffen
+      bild.zug += 1;
+      bild.ruhe = e.ruhe;
+      const r = RICHTUNG[e.richtung];
+      if (e.nach) {
+        s.x = e.nach.x;
+        s.y = e.nach.y;
+        bewege(jetzt, 110, (p) => {
+          const q = leicht(p);
+          s.px = e.von.x + (e.nach.x - e.von.x) * q;
+          s.py = e.von.y + (e.nach.y - e.von.y) * q;
+        });
+      } else {
+        bewege(jetzt, 115, (p) => {
+          s.sx = r.x * hinUndHer(p) * 0.34;
+          s.sy = r.y * hinUndHer(p) * 0.34;
+        });
+      }
+      for (const t of e.getroffen) {
+        const g = findeGegner(t.id);
+        if (!g) continue;
+        g.hp = t.hp;
+        if (t.besiegt) {
+          bild.gegner = bild.gegner.filter((x) => x !== g);
+          const geist = { g, alpha: 1 };
+          geister.push(geist);
+          bewege(jetzt, 140, (p) => {
+            geist.alpha = 1 - p;
+            g.blitz = 1 - p;
+            if (p >= 1) geister = geister.filter((x) => x !== geist);
+          }, true);
+        } else {
+          bewege(jetzt, 140, (p) => {
+            g.blitz = 1 - p;
+            g.sx = r.y * hinUndHer(p) * 0.14; // er wird zur Seite gedrängt
+            g.sy = r.x * hinUndHer(p) * 0.14;
+          }, true);
+        }
+      }
+    } else if (e.typ === 'ruhigGewartet') {
+      bild.ruhe = e.ruhe;
+      wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'gegoennt') {
+      // ein Herz bleibt auf dem Tisch liegen; ob etwas zurückkommt, zeigt sich erst später
+      bild.herzen = e.herzen;
+      bild.zug += 1;
+      const r = { x: Math.sign(e.x - s.x), y: Math.sign(e.y - s.y) };
+      bewege(jetzt, 120, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.2;
+        s.sy = r.y * hinUndHer(p) * 0.2;
+      });
+    } else if (e.typ === 'geheilt') {
+      bild.herzen = e.herzen;
+      if (e.plus > 0) wirkung.leuchten = jetzt + 160; // nach dem Hereinschieben des Wagens
+    } else if (e.typ === 'rueckhalt' || e.typ === 'verstanden') {
+      // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
+      if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
+      wirkung.leuchten = jetzt;
+    } else if (e.typ === 'angenommen') {
+      // Prüfung angenommen: das Symbol geht vom Boden nach oben, die Worte stehen kurz über dem Spieler
+      bild.angebot = null;
+      bild.pruefung = e.id;
+      rede = { text: TEXTE.pruefung[e.id], x: s.x, y: s.y };
+    } else if (e.typ === 'gespraech') {
+      if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
+    } else if (e.typ === 'antwort') {
+      if (bild.begleiter) bild.begleiter.antworten = null;
+    } else if (e.typ === 'gelocht') {
+      if (e.art === 'pruefung') {
+        wirkung.lochung = jetzt;
+        bild.gelocht = e.id;
+        bild.pruefung = null;
+      }
+    } else if (e.typ === 'aufgehellt') {
+      wirkung.leuchten = jetzt;
+    } else if (e.typ === 'zoegert') {
+      // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
+      const g = findeGegner(e.id);
+      if (g) {
+        const p = bild.spieler;
+        const dx = Math.sign(g.x - p.x);
+        const dy = Math.sign(g.y - p.y);
+        bewege(jetzt, 150, (q) => {
+          g.sx = dx * hinUndHer(q) * 0.14;
+          g.sy = dy * hinUndHer(q) * 0.14;
+        });
+      }
+    } else if (e.typ === 'kontrolle') {
+      const g = findeGegner(e.id);
+      if (g) rede = { text: TEXTE.kontrolleur.satz, x: g.x, y: g.y };
+    } else if (e.typ === 'ruhig') {
+      const g = findeGegner(e.id);
+      if (g) {
+        const von = g.ruhig || 0;
+        bewege(jetzt, 140, (p) => {
+          g.ruhig = von + (e.ruhig - von) * sanft(p);
+        });
+      }
+    } else if (e.typ === 'durchgewinkt') {
+      // Er greift an die Mütze und geht durch die Tür.
+      const g = findeGegner(e.id);
+      if (g) {
+        bild.gegner = bild.gegner.filter((x) => x !== g);
+        const geist = { g, alpha: 1 };
+        geister.push(geist);
+        bewege(jetzt, 420, (p) => {
+          g.winkt = Math.min(1, p * 2.5);
+          geist.alpha = p < 0.5 ? 1 : 1 - (p - 0.5) * 2;
+          g.sy = p < 0.5 ? 0 : -(p - 0.5) * 0.8;
+          if (p >= 1) geister = geister.filter((x) => x !== geist);
+        }, true);
+      }
+      rede = null;
     } else if (e.typ === 'tod') {
       const uebrig = WAGENZAHL - e.wagenNr;
       const text = uebrig === 1 ? TEXTE.ende.einWagen : fuelle(TEXTE.ende.mehrereWagen, { n: TEXTE.zahlwort[uebrig] });
@@ -311,6 +466,7 @@ export function erzeugeAnzeige(leinwand) {
 
   // Nimmt die Ereignisse eines Zugs entgegen und verteilt sie auf die nächsten Augenblicke.
   function spiele(ereignisse, jetzt) {
+    rede = null; // der Satz des Kontrolleurs verschwindet mit der nächsten Eingabe
     const phasen = [[], [], []];
     for (const e of ereignisse) phasen[e.phase].push(e);
     let zeit = jetzt;
@@ -356,6 +512,8 @@ export function erzeugeAnzeige(leinwand) {
     blitze = [];
     bild.gegner = [];
     bild.tuer = 0;
+    bild.spalt = 0;
+    rede = null;
     altesWagenbild = null;
     bild.wagenNr = -1;
     gleicheAb();
@@ -472,7 +630,20 @@ export function erzeugeAnzeige(leinwand) {
     const fy = boden.y + (g.py + g.sy + 0.86) * s + oy;
     let neigung = 0;
     if (g.typ === 'draengler' && g.ansage && g.ansage.length) neigung = Math.sign(g.ansage[0].x - g.x) * 0.55;
+    // Der Kontrolleur hält dem, der in seiner Nähe ist, die Zange hin. Sie sinkt, je länger man ruhig steht.
+    let zeigt = null;
+    let heben = 0;
+    if (g.typ === 'kontrolleur') {
+      const p = bild.spieler;
+      const nah = Math.max(Math.abs(p.x - g.x), Math.abs(p.y - g.y)) === 1;
+      const ziel = g.ansage && g.ansage.length ? g.ansage[0] : nah ? p : null;
+      if (ziel) zeigt = { x: ziel.x - g.x, y: ziel.y - g.y };
+      heben = g.ansage ? 1 : nah ? 1 - ((g.ruhig || 0) / GEGNERWERTE.kontrolleur.geduld) * 0.85 : 0;
+    }
     maleFigur(stift, g.typ, cx, fy, s, {
+      zeigt,
+      heben,
+      winkt: g.winkt || 0,
       t,
       takt: g.id * 1.7,
       alpha,
@@ -485,7 +656,7 @@ export function erzeugeAnzeige(leinwand) {
       ansagend: !!g.ansage,
     });
     if (alpha > 0.5) {
-      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : 0.86;
+      const kopf = g.typ === 'gruppe' ? 0.74 : g.typ === 'draengler' ? (g.erschoepft ? 0.74 : 0.94) : g.typ === 'kontrolleur' ? 0.94 : 0.86;
       malePunkte(stift, cx, fy - s * kopf, s, g.hp, GEGNERWERTE[g.typ].hp);
     }
   }
@@ -528,7 +699,8 @@ export function erzeugeAnzeige(leinwand) {
     if (!hinweis || karte || bild.schwenk > 0.01) return;
     const p = bild.spieler;
     const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
-    const nachbar = bild.gegner.find((a) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
+    // den Kontrolleur schlägt das Spiel nicht vor
+    const nachbar = bild.gegner.find((a) => a.typ !== 'kontrolleur' && Math.abs(a.x - p.x) + Math.abs(a.y - p.y) === 1);
     if (hinweis.wischen && bild.zug === 0) {
       const ort = schildAn(p, 0.42);
       maleSchild(TEXTE.hinweis[hinweis.wischen], ort.cx, ort.cy);
@@ -553,12 +725,48 @@ export function erzeugeAnzeige(leinwand) {
     let zucken = 0;
     const seit = jetzt - wirkung.tuerZu;
     if (seit < 160 && !ruhig) zucken = Math.sin(seit / 12) * 1.5 * (1 - seit / 160);
-    maleTuer(stift, layout, bild.tuer, t, zucken, oy);
+    maleTuer(stift, layout, bild.tuer, t, zucken, oy, bild.spalt);
+
+    // Speisewagen: warmes Licht über den Tischen, Fahrgäste an ihren Plätzen
+    if (z.wagen.sicher) {
+      stift.fillStyle = 'rgba(255, 190, 120, 0.13)';
+      stift.fillRect(boden.x, boden.y + oy, boden.b, boden.h);
+      for (let y = 0; y < z.wagen.plan.length; y++) {
+        for (const x of [0, z.wagen.plan[y].length - 1]) {
+          if (z.wagen.plan[y][x] !== 'T') continue;
+          const lx = boden.x + (x + 0.5) * s;
+          const ly = boden.y + (y + 0.4) * s + oy;
+          const schein = stift.createRadialGradient(lx, ly, 0, lx, ly, s * 1.5);
+          schein.addColorStop(0, 'rgba(255, 210, 150, 0.34)');
+          schein.addColorStop(1, 'rgba(255, 210, 150, 0)');
+          stift.fillStyle = schein;
+          stift.fillRect(lx - s * 1.5, ly - s * 1.5, s * 3, s * 3);
+        }
+      }
+      if (z.wagen.gegoennt) {
+        const hx = boden.x + (z.wagen.gegoennt.x + 0.5) * s;
+        const hy = boden.y + (z.wagen.gegoennt.y + 0.36) * s + oy;
+        herzPfad(stift, hx, hy, s * 0.2);
+        stift.fillStyle = FARBE.herz;
+        stift.fill();
+      }
+      for (const f of z.wagen.fahrgaeste) {
+        const cx = boden.x + (f.x + 0.5) * s;
+        const fy = boden.y + (f.y + 0.8) * s + oy;
+        maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false, gesicht: true });
+      }
+      const b = bild.begleiter;
+      if (b) {
+        maleFigur(stift, 'begleiter', boden.x + (b.x + 0.5) * s, boden.y + (b.y + 0.8) * s + oy, s * 0.82, { t, takt: 5, ruhig });
+        if (b.antworten) for (const a of b.antworten) maleAntwort(a, t, oy);
+      }
+    }
 
     const imWechsel = bild.schwenk > 0.01;
     if (!imWechsel) {
       maleLichtschein(stift, layout, lichter, klar);
       maleRot(t);
+      if (bild.angebot) maleAngebot(bild.angebot, t);
       maleTuerlicht(stift, layout, bild.tuer, t, ruhig);
     }
 
@@ -583,6 +791,16 @@ export function erzeugeAnzeige(leinwand) {
         stift.fillStyle = hof;
         stift.fillRect(cx - s * 0.7, fy - s * 0.4, s * 1.4, s * 0.8);
       }
+      const seitLeuchten = jetzt - wirkung.leuchten;
+      if (seitLeuchten >= 0 && seitLeuchten < 700) {
+        const q = seitLeuchten / 700;
+        const ring = stift.createRadialGradient(cx, fy - s * 0.35, s * (0.2 + q * 0.3), cx, fy - s * 0.35, s * (0.45 + q * 0.4));
+        ring.addColorStop(0, 'rgba(255, 217, 160, 0)');
+        ring.addColorStop(0.5, `rgba(255, 217, 160, ${0.5 * (1 - q)})`);
+        ring.addColorStop(1, 'rgba(255, 217, 160, 0)');
+        stift.fillStyle = ring;
+        stift.fillRect(cx - s, fy - s * 1.35, s * 2, s * 2);
+      }
       const tot = karte && karte.art === 'tod';
       maleFigur(stift, 'spieler', cx, fy, s, { t, takt: 0, ruhig, blitz: p.blitz, fluss: klar > 0.5, alpha: tot ? 0.45 : 1 });
       const markiert = bild.gegner.some((g) => g.ansage && g.ansage.some((f) => f.x === p.x && f.y === p.y));
@@ -591,7 +809,63 @@ export function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
+    if (rede && !karte && !imWechsel) maleRede(rede.text, rede, oy);
+    else if (bild.begleiter && bild.begleiter.antworten && !karte && !imWechsel) maleRede(TEXTE.begleiter.frage, bild.begleiter, oy);
     maleHinweis();
+  }
+
+  // Eine Antwort an den Begleiter: eine kleine Figur auf leuchtendem Boden, bei der Tür eine Tür, sonst „Pech".
+  function maleAntwort(a, t, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (a.x + 0.5) * s;
+    const cy = boden.y + (a.y + 0.5) * s + oy;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
+    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    if (a.id === 'pech') {
+      maleSchild(TEXTE.begleiter.pech, cx, cy);
+    } else if (a.id === 'tuer') {
+      stift.fillStyle = '#35415f';
+      stift.fillRect(cx - s * 0.16, cy - s * 0.26, s * 0.32, s * 0.5);
+      stift.fillStyle = FARBE.glas;
+      stift.fillRect(cx - s * 0.11, cy - s * 0.2, s * 0.22, s * 0.16);
+    } else {
+      maleFigur(stift, a.id, cx, cy + s * 0.3, s * 0.55, { t, takt: a.x, ruhig: true });
+    }
+  }
+
+  // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
+  function maleAngebot(a, t) {
+    const { boden, s } = layout;
+    const cx = boden.x + (a.x + 0.5) * s;
+    const cy = boden.y + (a.y + 0.5) * s;
+    const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
+    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    stift.globalAlpha = puls;
+    maleSymbol(stift, a.id, cx, cy, s * 0.42, FARBE.warm);
+    stift.globalAlpha = 1;
+  }
+
+  // Ein Schild über dem Kopf dessen, der spricht, mit einer Spitze zu ihm hin.
+  function maleRede(text, feld, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (feld.x + 0.5) * s;
+    const h = ZEILENHOEHE * 2 + 10;
+    const cy = boden.y + feld.y * s - s * 0.04 - h / 2 + oy;
+    maleSchild(text, cx, cy);
+    stift.fillStyle = 'rgba(13, 17, 25, 0.94)';
+    stift.beginPath();
+    stift.moveTo(cx - 6, cy + h / 2 - 1);
+    stift.lineTo(cx, cy + h / 2 + 7);
+    stift.lineTo(cx + 6, cy + h / 2 - 1);
+    stift.closePath();
+    stift.fill();
   }
 
   function zeichne(jetzt) {
@@ -654,9 +928,33 @@ export function erzeugeAnzeige(leinwand) {
     const druck = begrenze(1 - (jetzt - wirkung.uhr) / 140, 0, 1);
     maleUhr(stift, layout.uhr, ABFAHRT + bild.zug, druck);
     maleTonknopf(stift, layout.ton, tonAn);
+    // die laufende Prüfung als Symbol rechts neben der Uhr; ist sie erfüllt, wird gelocht
+    const px = layout.uhr.x + layout.uhr.r + 24;
+    const py = layout.uhr.y;
+    const seitLochung = jetzt - wirkung.lochung;
+    if (bild.pruefung) {
+      maleSymbol(stift, bild.pruefung, px, py, 22, FARBE.warm);
+    } else if (bild.gelocht && seitLochung >= 0 && seitLochung < 700) {
+      const q = seitLochung / 700;
+      stift.globalAlpha = 1 - q;
+      maleSymbol(stift, bild.gelocht, px, py, 22, FARBE.warm);
+      stift.fillStyle = FARBE.warm;
+      stift.beginPath();
+      stift.arc(px + 9, py - 9, 4 + q * 3, 0, Math.PI * 2);
+      stift.fill();
+      stift.globalAlpha = 1;
+    }
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
+      if (karte.rueckblick && !karte.rueckblickFertig) {
+        const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);
+        if (i >= karte.rueckblick.length) karte.rueckblickFertig = true;
+        karte.rueckblickZeile = i >= 0 && !karte.rueckblickFertig ? karte.rueckblick[i] : i < 0 ? karte.zeilen : null;
+      } else if (karte.rueckblick) {
+        karte.rueckblickZeile = null;
+      }
       if (karte.geht) {
         karte.weg = begrenze((jetzt - karte.geht) / 150, 0, 1);
         if (ruhig) karte.weg = 1;
@@ -671,8 +969,16 @@ export function erzeugeAnzeige(leinwand) {
   // Was liegt an diesem Bildschirmpunkt?
   function wasLiegtBei(px, py) {
     if (karte && !karte.geht) {
-      const w = kartenMasse(layout, karte.art).weiter;
-      if (px >= w.x && px <= w.x + w.b && py >= w.y && py <= w.y + w.h) return { art: 'weiter' };
+      const m = kartenMasse(layout, karte.art);
+      const w = m.weiter;
+      const drin = (k) => k && px >= k.x && px <= k.x + k.b && py >= k.y && py <= k.y + k.h;
+      if (karte.art === 'halt' && karte.rueckblick && !karte.rueckblickFertig) return { art: 'ueberspringen' };
+      if (karte.art === 'halt' && !karte.ausgestiegen) {
+        if (drin(m.aussteigen)) return { art: 'aussteigen' };
+        if (drin(w)) return { art: 'weiter' };
+        return { art: 'karte' };
+      }
+      if (drin(w)) return { art: 'weiter' };
       return { art: 'karte' };
     }
     const nah = (ort, r) => Math.hypot(px - ort.x, py - ort.y) <= r;
@@ -698,7 +1004,14 @@ export function erzeugeAnzeige(leinwand) {
       tonAn = an;
     },
     zeigtKarte: () => karte !== null && !karte.geht,
-    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120,
+    // während des Rückblicks am Halt beginnt noch keine neue Fahrt
+    karteBereit: (jetzt) => karte !== null && !karte.geht && jetzt >= karte.start + 120 && !(karte.rueckblick && !karte.rueckblickFertig),
+    ueberspringe: () => {
+      if (karte && karte.rueckblick) karte.rueckblickFertig = true;
+    },
+    steigeAus: () => {
+      if (karte && karte.art === 'halt') karte.ausgestiegen = true;
+    },
     tuerfeld: () => TUERFELD,
   };
 }

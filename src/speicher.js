@@ -1,11 +1,16 @@
+import { neueFahrkarte, bereinigeFahrkarte } from './kern/fahrkarte.js';
+
 // Was das Spiel sich merkt. Safari kann lokale Daten nach einigen Tagen ohne Besuch löschen,
 // im privaten Modus fehlt der Speicher ganz. Deshalb liefert ladeStand() immer einen
 // vollständigen Stand, auch aus dem Nichts oder aus Unsinn, und Schreiben darf scheitern.
 
 const SCHLUESSEL = 'endstation.1';
 
+// staerken: was der Spieler in früheren Fahrten verstanden hat (Stärken aus Schatten)
 export function leererStand() {
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true };
+  // mehrAmTisch: so viele sitzen nach dem Gönnen später zusätzlich im Speisewagen
+  // fahrkarte: die Lochungen der laufenden Reise, bis zum Halt
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte() };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -16,6 +21,11 @@ export function bereinigeStand(roh) {
     for (const name of Object.keys(stand.gelernt)) stand.gelernt[name] = roh.gelernt[name] === true;
   }
   if (typeof roh.ton === 'boolean') stand.ton = roh.ton;
+  if (roh.staerken && typeof roh.staerken === 'object') {
+    for (const name of Object.keys(stand.staerken)) stand.staerken[name] = roh.staerken[name] === true;
+  }
+  if (Number.isInteger(roh.mehrAmTisch) && roh.mehrAmTisch >= 0) stand.mehrAmTisch = Math.min(5, roh.mehrAmTisch);
+  stand.fahrkarte = bereinigeFahrkarte(roh.fahrkarte);
   return stand;
 }
 

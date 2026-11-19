@@ -11,14 +11,20 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 1. Diese Datei und `docs/FAHRPLAN.md` lesen.
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
 
+## Weiterarbeiten
+- Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
+- Nach jedem abgeschlossenen Teilschritt: `docs/STAND.md` aktualisieren, committen, pushen.
+- Bei „Weiter" ohne weitere Angabe: den nächsten Schritt aus `docs/STAND.md` ausführen.
+- Arbeitsaufträge liegen wörtlich in `docs/auftraege/`. Einen neuen Auftrag dort ablegen, bevor gebaut wird.
+
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: **freigegeben, noch nicht begonnen.** Der Auftraggeber hat am 18.11. „Weitermachen" gesagt. Es gibt dafür noch keinen Code und keinen Entwurf.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **gebaut, wartet auf Rückmeldung** (Pull Request #2). Nicht gebaut: die letzte Szene gefahrlos wiederholen (Begleiter). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
-Stand der Zahlen (500 Fahrten je Bot, `npm run balance`): Der ausgewogene Bot erreicht den Halt in 48 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, und in 78 % ohne Fehler. Wagen 1 und 2 schafft er immer. Der Ausweicher kommt auf 55 %, der Kämpfer auf 0 %.
+Stand der Zahlen (500 Fahrten je Bot, `npm run balance`, sieben Wagen): Der ausgewogene Bot erreicht den Halt in 55 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, in 86 % ohne Fehler und in 73 % mit Fehlern und allen Stärken. Wagen 1 bis 4 schafft er immer. Der Ausweicher kommt auf 60 %, der Kämpfer auf 0 %.
 
 ## Wie wir arbeiten
 - Der Auftraggeber ist kein Entwickler und arbeitet am Handy. Claude baut, er testet und gibt Rückmeldung zum Gefühl. Antworten auf Deutsch, kurz, ohne Fachsprache.
@@ -89,10 +95,13 @@ src/
   kern/             reine Logik ohne DOM
     feld.js         Raster 5x8, Richtungen, Breitensuche
     zufall.js       Zufall mit Seed, Stand liegt im Zustand
-    wagen.js        die fünf Wagen: Plan, Gegner, Bauregel
+    wagen.js        die sieben Wagen: Plan, Gegner, Bauregel; der dritte ist der Mittelwagen, der vierte der Speisewagen
     lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
-    gegner.js       Verhalten von Pendler, Reisegruppe, Drängler
-    spiel.js        erzeugeSpiel(seed) -> { zustand, act(aktion) }
+    gegner.js       Verhalten von Pendler, Reisegruppe, Drängler, Kontrolleur
+    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen
+    begleiter.js    der Begleiter im Speisewagen nach einem Tod
+    reise.js        was eine neue Fahrt mitnimmt (für main.js und die Werkzeuge)
+    spiel.js        erzeugeSpiel(seed, optionen) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
     anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
     layout.js       Bildschirmaufteilung ab 360 x 600, nichts am unteren Rand
@@ -125,8 +134,8 @@ prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Haup
 ```
 
 So läuft ein Zug (`src/kern/spiel.js`):
-1. Phase 0: Der Spieler bewegt sich, schlägt oder wartet. Ungültiges kostet keinen Zug.
-2. Phase 1: Alle angekündigten Angriffe treffen ein. Höchstens ein Herz je Zug.
+1. Phase 0: Der Spieler bewegt sich, schlägt, wartet oder läuft gegen die geschlossene Tür (beim dritten Mal bricht sie auf, 1 Herz). Ungültiges kostet keinen Zug.
+2. Phase 1: Alle angekündigten Angriffe treffen ein. Höchstens ein Treffer je Zug, er kostet ein Herz, beim Kontrolleur zwei.
 3. Phase 2: Gegner bewegen sich oder kündigen an. Ein Gegner tut je Zug nur eines von beiden: Wer herantritt, überlässt dem Spieler den ersten Schlag.
 
 Feste Regeln der Architektur:

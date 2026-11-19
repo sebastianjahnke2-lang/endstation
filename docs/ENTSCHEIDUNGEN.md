@@ -4,7 +4,14 @@ Detailfragen, die Claude selbst entschieden hat. Neueste Etappe oben. Jede Zeile
 
 ## Offen
 
-Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/PROTOTYP-freier-platz.md`) und den vorhandenen Dokumenten. Sie sind **nicht entschieden**. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/auftraege/freier-platz.md`) und den vorhandenen Dokumenten. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+
+### Entschieden am 19.11.
+
+- **Gesichter: ja.** Verstandene Fahrgäste im Speisewagen haben ein Gesicht, wie im Fahrplan. Gegner und alle anderen Figuren bleiben ohne Gesicht, der Prototyp auch.
+- **Lob: nein.** Der Begleiter nennt nicht, was gelungen ist. Die Zeile im Fahrplan („nennt zuerst, was neu gelungen ist") gilt nicht mehr.
+- **Prototyp und Hauptspiel** (vom Auftraggeber an Claude übergeben): „Der freie Platz" bleibt ein eigener Versuch, bis der Spieltest gelaufen ist. Nennen mindestens drei von fünf Testpersonen den Schatten, wird er in Etappe 3 eine weitere Form des Autoritätswagens, neben Kontrolleur, Ruhebereich und erster Klasse. Damit ist auch „Rätsel oder Taktik" beantwortet: Das Hauptspiel bleibt ein Taktikspiel, Regelwagen wie dieser sind eine Szene darin. Die verbindlichen Vorgaben aus dem Prototyp-Auftrag gelten nur für den Prototyp. Fürs Hauptspiel entscheidet der Auftraggeber Punkt für Punkt, wie bei Gesichtern und Lob.
+- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt.
 
 ### Betrifft den Prototyp unmittelbar
 
@@ -20,12 +27,12 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 
 ### Betrifft das Konzept
 
-- **Rätsel oder Taktik.** Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
-- **Prototyp und Fahrplan.** `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
-- **Fahrkarte.** Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
+- **Rätsel oder Taktik.** Entschieden am 19.11., siehe oben. Ursprünglich: Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
+- **Prototyp und Fahrplan.** Entschieden am 19.11., siehe oben. Ursprünglich: `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
+- **Fahrkarte.** Entschieden am 19.11.: wie im Fahrplan. Ursprünglich: Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
 - **Mitgezählter Spielstil.** Auftrag: kein Punktestand, kein Moralwert, kein Persönlichkeitstest. Fahrplan Etappe 3: Spielstil mitzählen, Wärme und Kälte, Haltung der Figur nach Spielstil. Etappe 5: Bestwerte gegen sich selbst. Nicht umgesetzt, nur vermerkt.
-- **Kein Lob.** Auftrag: kein Lob, kein „Geschafft". Fahrplan Etappe 2: Der Begleiter „nennt zuerst, was neu gelungen ist".
-- **Gesichter.** Auftrag: Figuren haben keine Gesichter. Fahrplan Etappe 2: Verstandene Gegner sitzen im Speisewagen „und haben ein Gesicht". Vision: Am Ende sieht man „zum ersten Mal das eigene Gesicht".
+- **Kein Lob.** Entschieden am 19.11., siehe oben.
+- **Gesichter.** Entschieden am 19.11., siehe oben. Offen bleibt nur das eigene Gesicht am Ende (Vision), das gehört zum Halt.
 - **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
 - **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
 
@@ -92,6 +99,99 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 - Der Ton wurde nicht angehört.
 - Unabhängige Prüfung am 19.11.: Regeln und Anzeige sind vollständig geprüft. Die Regeln wurden dabei über alle 40.501 erreichbaren Zustände mit einem eigenen Modell verglichen, ohne Abweichung. Die Funde zur Anzeige sind behoben, sechs fehlende Tests sind nachgetragen. Die Prüfer für Speicher, Tests und Ton sind am Nutzungslimit ausgefallen. Speicher und Sprachmittel für Safari ab iOS 13 habe ich danach selbst geprüft, ohne Befund. Ton und Haltung sind nicht noch einmal unabhängig geprüft.
 - Ob jemand die Regel errät und ob es komisch ist, zeigt nur der Spieltest.
+
+## Etappe 2
+
+Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigegeben, danach „Mach jetzt weiter, danach kümmern wir uns um die Korrektur". Gebaut werden deshalb nur Teile, die seinen Vorgaben aus dem Prototyp-Auftrag nicht widersprechen: Kontrolleur, Aufbrechen, Präsenz, Stärken, Speisewagen ohne Gesichter und ohne Begleiter. Fahrkarte mit Symbolen, helle und dunkle Lochungen, Angebote, Begleiter und Halt mit Schaffner warten auf seine Entscheidung (siehe „Offen").
+
+### Fahrkarte und Prüfungen
+
+- **Sechs Prüfungen.** Drei stehen im Fahrplan: „Nicht aufregen" (kein Schlag), „Erst aussteigen lassen" (drei Züge hintereinander stillstehen), „Ohne Rempeln" (kein Treffer). Der Fahrplan nennt sechs Symbole, deshalb drei eigene im selben Ton: „Nicht drängeln" (nie auf ein rotes Feld treten), „Pünktlich" (den Wagen höchstens zwölf Züge nach dem Annehmen verlassen), „Ruhe bewahren" (volle Ruhe erreichen). Gelten bis zum Verlassen des Wagens, dann wird ausgewertet.
+- **Angebot:** In jedem Wagen außer dem Speisewagen leuchtet ein Symbol auf einem freien Feld, mindestens zwei Schritte vom Start. Angeboten wird nur, was noch nicht gelocht ist. Drauftreten nimmt an, die Worte stehen kurz über der Figur, das Symbol bleibt neben der Uhr, bis ausgewertet ist. Vorbeigehen und Nichterfüllen kosten nichts.
+- **Die Angebote würfeln mit eigenem Zufall.** Warum: Sonst sähen dieselben Wagen mit derselben Zahl anders aus als vorher, und die Zahlen der Bots sprängen ohne Grund.
+- **Dunkle Lochung** nach einem Tod, je Ursache höchstens eine, solange sie dunkel ist. **Sie wird hell, wenn man es einmal anders macht:** einen Wagen, in dem diese Ursache war, verlassen, ohne von ihr getroffen zu werden. Bei der Tür: einen Wagen verlassen, ohne aufzubrechen.
+- **Die Fahrkarte gilt für die ganze Reise:** vom ersten Wagen bis zum Halt, über Tode hinweg. Nach dem Halt beginnt eine neue Reise mit frischer Karte. Sie steht im Speicher (`fahrkarte` in `src/speicher.js`).
+- **Zu sehen ist die Karte auf der Endkarte:** sechs Symbole, gelochte mit einem hellen Loch, rechts Platz für Sonder-Lochungen, hell oder dunkel.
+
+### Halt
+
+- **Der Schaffner steht am Zug auf dem Bahnsteig:** der Begleiter, jetzt mit Mütze. Er verlangt drei helle Lochungen, egal welche: erfüllte Prüfungen, aufgehellte dunkle, ehrliche Antworten.
+- **Reichen sie, zeigt die Anzeige den Rückblick:** je Lochung eine Tatsache, erste Zeile die Handlung, zweite der Wagen, etwa „Ohne Rempeln / Fahrradabteil", „Ende durch Drängler / Liegewagen", „Antwort: Drängler / Speisewagen". Ohne Adjektiv. Alle 1,4 Sekunden die nächste, ein Tipp überspringt alles.
+- **Danach das Schlussbild mit „Aussteigen" und „Noch eine Fahrt".** „Aussteigen" lässt das Bild stehen, nichts beginnt von selbst. Wer danach nach oben wischt, beginnt eine neue Reise. „Noch eine Fahrt" beginnt sie sofort. Beides mit frischer Fahrkarte.
+- **Reichen sie nicht, steht dort die wahre Zeile, was fehlt** („Noch eine helle Lochung"), und der Schaffner hält die Zange hin. Wer wegwischt, fährt ab dem Speisewagen weiter, mit derselben Karte. Der Fahrplan sagt nicht, was dann geschieht. So bleibt es eine Fahrt mit Ende, und man bekommt eine neue Gelegenheit, ohne von vorn zu beginnen.
+- **Zahlen:** Wer die Angebote nicht sucht, kommt im Mittel mit einer hellen Lochung am Halt an (ausgewogener Bot ohne Fehler, 400 Fahrten), nur 5 % haben schon drei. Der Fahrplan sagt: „Ein bis zwei davon passieren fast von allein."
+- **Die Anzeige der Karte am Halt ist dichter gesetzt** (Punktabstand 2,2 statt 2,5 bei schmalen Handys), damit „Erst aussteigen lassen" und „Ende durch Reisegruppe" in eine Zeile passen. Der Ton-Test prüft jede Rückblick-Zeile bei 360 Pixeln.
+
+### Begleiter
+
+- **Nach einem Tod sitzt er im Speisewagen,** in derselben Uniform wie der Kontrolleur, die Mütze abgesetzt, ohne Gesicht. Am Halt wird er der Schaffner sein.
+- **Lag der Tod hinter dem Speisewagen, beginnt die nächste Fahrt im Speisewagen, sonst vorn.** Abweichung vom Fahrplan („Nach einem Tod beginnt die nächste Fahrt im Speisewagen"): Wer in Wagen 1 bis 3 stirbt, würde sonst Wagen überspringen, die er nie geschafft hat. Er trifft den Begleiter dann, wenn er in den Speisewagen kommt.
+- **Wer neben ihn tritt, hört „Woran lag es?".** Darunter liegen drei Antworten auf dem Boden: die ehrliche (die Todesursache), eine andere Ursache und „Pech", in zufälliger Reihenfolge. Die Ursachen sind kleine Figuren, die Tür ist eine Tür, nur „Pech" ist ein Wort. Warum keine Wörter: Drei Schilder nebeneinander passen bei 360 Pixeln nicht. Draufgehen heißt antworten, wie beim Angebot.
+- **Die ehrliche Antwort gibt eine helle Lochung,** je Todesursache eine. Eine andere Antwort hat keine Folge. Er nennt nicht, was gelungen ist (Entscheidung vom 19.11.).
+- **Nicht gebaut: die letzte Szene gefahrlos wiederholen.**
+- **Was eine neue Fahrt mitnimmt, steht an einer Stelle:** `src/kern/reise.js`. Spiel und Prüfwerkzeuge nutzen sie beide, damit sie dieselbe Fahrt nachrechnen.
+
+### Präsenz
+
+- **Bei voller Ruhe zögert der nächste Gegner, der angreifen würde, einen Zug lang.** Er kündigt nicht an und weicht kurz zurück. Das gilt einmal je voller Ruhe: Erst ein Treffer und neue volle Ruhe bringen die Präsenz zurück. Warum: Gälte sie in jedem Zug, griffe bei voller Ruhe niemand mehr an. Die erste Fassung ließ den nächststehenden Gegner zögern. Bei gleichem Abstand traf das oft einen, der gar nicht angreifen wollte, und die Präsenz verpuffte.
+- **Zahlen mit Präsenz** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 50 %, ohne Fehler 86 %, Ausweicher 58 %, Kämpfer 0 %.
+
+### Speisewagen
+
+- **Vierter von jetzt sieben Wagen, direkt nach dem Mittelwagen,** wie im Fahrplan („der Safe Space nach dem Autoritätswagen").
+- **Keine Gegner, die Tür ist von Anfang an offen, nie passiert etwas.** Der Fuzz-Test prüft in jedem Zug, dass dort niemand ist und kein Herz verloren geht.
+- **Er heilt zwei Herzen beim Hineingehen,** höchstens bis fünf. Warum beim Hineingehen: Wer durchgehen will, soll nicht warten müssen. Reibung ist ein Fehler.
+- **Tische an beiden Wänden, dazwischen ein Gang drei Felder breit.** Mehr erlaubt die Bauregel nicht: Ein Tisch in der Mitte ließe Felder ohne Ausweg zur Seite zurück.
+- **Warmes Licht** über den Tischen und auf dem ganzen Boden.
+- **Fahrgäste sind die verstandenen Gegnertypen:** Wer die Stärke des Pendlers, der Reisegruppe oder des Dränglers hat, findet eine solche Figur auf einem Sitz. **Sie haben ein Gesicht** (entschieden am 19.11.): zwei Punkte und ein kurzer Mund, schlicht. Auch wer nach dem Gönnen später dazukommt, hat eins.
+- **Fenster wie in jedem Wagen,** mit vorbeiziehenden Lichtern. Kein „Blick nach draußen" mit Landschaft, das widerspricht ebenfalls dem Prototyp-Auftrag.
+- **Gönnen: Wer gegen einen Tisch läuft, lässt dort ein Herz liegen.** Das geht einmal je Besuch und kostet einen Zug. Das letzte Herz lässt man nicht liegen: Im sicheren Ort passiert nie etwas Schlimmes, auch nicht durch einen selbst. Das Herz bleibt sichtbar auf dem Tisch, bis man weiterfährt.
+- **Meistens kommt nichts zurück.** In einem von drei Fällen (aus dem Zufall der Fahrt) sitzt bei späteren Fahrten jemand mehr im Speisewagen, höchstens fünf. Das zeigt sich erst bei der nächsten Fahrt und wird nirgends angekündigt. Gespeichert als `mehrAmTisch` in `src/speicher.js`.
+- **Nicht gebaut: der Begleiter.** Er widerspricht dem Prototyp-Auftrag (kein Lob).
+- **Zahlen mit Speisewagen** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 55 %, ohne Fehler 86 %, Ausweicher 60 %, Kämpfer 0 %, ausgewogen mit Unachtsamkeit und allen Stärken 73 %. Das Heilen hilft wenig, weil die meisten mit fast vollen Herzen ankommen.
+
+### Stärken aus Schatten
+
+- **Pendler verstanden, wer dreimal neben einem Pendler wartet** (waagerecht oder senkrecht daneben, nicht hintereinander nötig). Stärke: **Ruhe fürs Warten.** Wer neben einem Gegner wartet und in diesem Zug nicht getroffen wird, bekommt eine Ruhe.
+- **Drängler verstanden, wer dreimal einer Drängler-Linie ausweicht, ohne zwischendurch einen Drängler zu schlagen.** Ein Schlag beginnt das Zählen von vorn. Stärke: **Sprint.**
+- **Reisegruppe verstanden, wer einen Wagen, in dem eine Reisegruppe war, mit genau einem Herz verlässt.** Stärke: **Rückhalt.** Einmal je Fahrt lässt ein tödlicher Treffer ein Herz übrig. Fürs Aufbrechen gilt er nicht, das ist kein Treffer.
+- **Eine neue Stärke gilt ab dem nächsten Zug.** Die erste Fassung ließ sie schon im selben Zug wirken, das fiel im Fuzz-Test auf.
+- **Die Stärken bleiben gespeichert** (`staerken` in `src/speicher.js`). Löscht Safari den Speicher, sind sie fort, wie alles andere auch.
+- **Kein Text und kein Symbol zeigt sie an.** Wer eine Stärke bekommt, sieht ein warmes Leuchten um die Figur. Dasselbe Leuchten zeigt, dass der Rückhalt gegriffen hat.
+- **Sprint mit einem Tipp auf ein Feld zwei weiter in gerader Linie.** Warum nicht wischen: Ein Wisch löst nach 18 Pixeln aus und ist da schon ein Schritt. Am Rechner gibt es keinen Sprint. Ohne die Stärke geschieht beim Tipp nichts, ohne Ruhe lehnt sich die Figur nur kurz hin. Gegner auf dem Weg nehmen einen Schaden. Man landet auf dem weitesten freien Feld des Wegs, ist keines frei, bleibt man stehen. Wer aus einem roten Feld heraussprintet, ist ausgewichen und bekommt die Ruhe zurück.
+- **Zahlen:** Die Bots verdienen die Stärken innerhalb einer Fahrt selten, ihre Werte bleiben gleich. Mit allen Stärken von Anfang an, wie nach einigen Fahrten, erreicht der ausgewogene Bot mit Unachtsamkeit den Halt in 69 % statt 50 % der Fahrten, der Ausweicher in 74 %. Die Bots sprinten nie.
+- **Für die Rückmeldung:** Merkt man ohne Hinweis, dass man sprinten kann? Bisher nur durch Ausprobieren.
+
+### Kontrolleur: Regeln
+
+- **Mittelwagen als dritter von jetzt sechs Wagen.** Warum: Der Fahrplan setzt den Autoritätswagen in die Mitte der Fahrt. Darin steht der Kontrolleur neben der Tür, dazu zwei Pendler. Ohne sie wäre Stillstehen nie eine Entscheidung.
+- **Seine Nähe sind die acht Felder um ihn herum.** Er geht nie von seinem Platz.
+- **„Er prüft nur, wer sich bewegt" heißt: wer sich innerhalb seiner Nähe bewegt.** Wer von außen hereintritt, wird nur angesprochen. Warum: Sonst könnte man nie ruhig neben ihn treten, ohne vorher geprüft zu werden.
+- **Prüfen ist ein angekündigter Angriff auf das Feld des Spielers,** wie bei jedem Gegner einen Zug vorher rot. Ein Treffer kostet zwei Herzen, so steht es im Fahrplan („2 Schaden"). Das weicht von der eigenen Regel aus Etappe 1 ab, nach der Rot immer genau ein Herz kostet. Es bleibt bei höchstens einem Treffer je Zug. Treffen mehrere, zählt der schwerere.
+- **Wer ihn schlägt, wird ebenso geprüft.** Kämpfen geht: fünf Schläge. Wer nach jedem Schlag aus seiner Nähe ausweicht und von außen wiederkommt, bleibt heil, braucht aber drei Züge je Schlag.
+- **Drei Züge ruhig heißt dreimal „Warten" hintereinander in seiner Nähe.** Gegen die Tür laufen und Schlagen zählen nicht als ruhig, Wegtreten beginnt von vorn.
+- **Durchgewinkt geht er fort.** Warum: Der Kernsatz sagt, dass Gegner verschwinden, sobald man sie versteht. Seine Tür geht dann auf, auch wenn noch Pendler im Wagen sind, ebenso nach seiner Niederlage. Im Wagen des Kontrolleurs gehört die Tür ihm.
+- **Aufbrechen gilt für jede Tür,** wie im Fahrplan: dreimal gegen die geschlossene Tür laufen, jeder Stoß kostet einen Zug, beim dritten geht sie auf und kostet ein Herz. Die Stöße zählen je Wagen und müssen nicht hintereinander kommen. Aufbrechen ist kein Treffer, die Ruhe bleibt. Mit dem letzten Herz ist es der Tod. Warum: dieselbe Regel für alle, Kanten bleiben drin.
+
+### Kontrolleur: Anzeige
+
+- **Er hält dem, der in seiner Nähe ist, die Lochzange hin.** Mit jedem ruhigen Zug sinkt sie ein Stück, beim dritten greift er an die Mütze und geht durch die Tür. So ist ohne Text zu sehen, dass Stillstehen etwas bewirkt.
+- **„Fahrkarte, bitte." steht als Schild über ihm,** beim Herantreten und bei jeder Prüfung. Es verschwindet mit der nächsten Eingabe.
+- **Der Hinweis „Anrempeln" erscheint nie über ihm.** Das Spiel schlägt keinen der Wege vor.
+- **Die geschlossene Tür gibt bei jedem Stoß sichtbar nach:** Ein Spalt mit Licht wird breiter. Das grüne Licht neben der Tür geht erst an, wenn sie offen ist.
+- **Er sieht dem Schaffner aus dem Prototyp ähnlich:** Mütze mit rotem Band, Lochzange. Ob es dieselbe Figur ist, bleibt offen.
+- **Kein eigener Name auf der Zuganzeige für ihn,** nur der Wagen heißt „Mittelwagen".
+
+### Kontrolleur: Schwierigkeit
+
+- **Die Zahlen bleiben fast gleich** (500 Fahrten je Bot, vor der Präsenz): Mit Unachtsamkeit erreicht der ausgewogene Bot den Halt in 48 % der Fahrten, ohne Fehler in 79 %, der Ausweicher in 56 %, der Kämpfer in 0 %. Der Kämpfer scheitert jetzt meist am Kontrolleur.
+- **Ausweicher und Ausgewogener lassen den Kontrolleur in Ruhe,** erledigen die Pendler und stellen sich dann ruhig in seine Nähe. Im Mittelwagen bekommen sie kaum Treffer. Die Bots nutzen das Aufbrechen nicht.
+- **Der Test „es wird schwerer" zählt nur Kampfwagen.** Der Autoritätswagen ist bewusst leichter für den, der ihn durchschaut.
+
+### Nicht geprüft
+
+- Kein echtes iPhone und keine WebKit-Engine, nur Chromium mit iPhone-Profil bei allen sechs Pflichtgrößen.
+- Ob man ohne Hinweis herausfindet, dass er Ruhige durchlässt, zeigt nur der Test am Gerät.
 
 ## Etappe 1
 

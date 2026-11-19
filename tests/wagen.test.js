@@ -34,8 +34,13 @@ function baueMitFolge(nr, folge) {
   return { plan, gegner, folge };
 }
 
-test('es gibt fünf Wagen', () => {
-  assert.equal(WAGENZAHL, 5);
+test('es gibt sieben Wagen: der Autoritätswagen in der Mitte, gleich danach der Speisewagen', () => {
+  assert.equal(WAGENZAHL, 7);
+  const autoritaet = WAGENPLAENE.map((w, nr) => (w.autoritaet ? nr : -1)).filter((nr) => nr >= 0);
+  assert.deepEqual(autoritaet, [2]);
+  const sicher = WAGENPLAENE.map((w, nr) => (w.sicher ? nr : -1)).filter((nr) => nr >= 0);
+  assert.deepEqual(sicher, [3]);
+  assert.equal(WAGENPLAENE[3].gegner.length, 0, 'im sicheren Wagen ist niemand gefährlich');
 });
 
 test('baueWagen und die Nachrechnung im Test stimmen überein', () => {
@@ -79,7 +84,8 @@ for (let nr = 0; nr < WAGENZAHL; nr++) {
         }
       }
 
-      assert.ok(gegner.length >= 1 && gegner.length <= 6, `${wo}: ${gegner.length} Gegner`);
+      if (WAGENPLAENE[nr].sicher) assert.equal(gegner.length, 0, `${wo}: Gegner im sicheren Wagen`);
+      else assert.ok(gegner.length >= 1 && gegner.length <= 6, `${wo}: ${gegner.length} Gegner`);
       const belegt = new Set();
       for (const g of gegner) {
         assert.ok(!hindernis(g.x, g.y), `${wo}: ${g.typ} steht im Hindernis ${g.x},${g.y}`);
@@ -91,8 +97,9 @@ for (let nr = 0; nr < WAGENZAHL; nr++) {
   });
 }
 
-test('die Zahl der Gegner fällt von Wagen zu Wagen nicht', () => {
-  const zahl = WAGENPLAENE.map((w) => w.gegner.reduce((s, g) => s + (g.ketten ? g.ketten[0].length : 1), 0));
+test('die Zahl der Gegner fällt von Kampfwagen zu Kampfwagen nicht', () => {
+  // Der Speisewagen ist ein sicherer Ort ohne Gegner und zählt hier nicht mit.
+  const zahl = WAGENPLAENE.filter((w) => !w.sicher).map((w) => w.gegner.reduce((s, g) => s + (g.ketten ? g.ketten[0].length : 1), 0));
   for (let i = 1; i < zahl.length; i++) assert.ok(zahl[i] >= zahl[i - 1] - 2, `Wagen ${i + 1}: ${zahl.join(', ')}`);
   assert.equal(zahl[0], 1, 'Wagen 1 hat genau einen Gegner');
 });

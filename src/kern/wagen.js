@@ -1,7 +1,7 @@
 // Die Wagen einer Fahrt. Zahlen sind Startwerte.
 // "art" ist die Kennung des Wagens, sein Name für die Anzeige steht in texte.js.
 //
-// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand. Alles außer "." ist ein Hindernis.
+// Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand, T Tisch. Alles außer "." ist ein Hindernis.
 // Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
@@ -49,6 +49,55 @@ export const WAGENPLAENE = [
       { typ: 'pendler', orte: [[1, 3], [2, 3], [1, 2]] },
       { typ: 'pendler', orte: [[4, 2], [3, 3], [4, 4]] },
     ],
+  },
+  // Autoritätswagen, fest in der Mitte der Fahrt. Der Kontrolleur steht neben der Tür,
+  // dazu zwei Pendler. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  // Die Tür gehört dem Kontrolleur: Sie geht auf, sobald er fort ist. Verhalten in gegner.js.
+  {
+    art: 'mittelwagen',
+    autoritaet: true,
+    plan: [
+      '.....',
+      '.....',
+      'S...S',
+      '..K..',
+      '.....',
+      'S...S',
+      '.....',
+      '.....',
+    ],
+    gegner: [
+      { typ: 'kontrolleur', orte: [[1, 0]] },
+      { typ: 'pendler', orte: [[0, 3], [1, 4]] },
+      { typ: 'pendler', orte: [[4, 3], [3, 4]] },
+    ],
+  },
+  // Speisewagen: der sichere Ort nach dem Autoritätswagen. Keine Gegner, die Tür ist offen, nie passiert
+  // etwas. Beim Hineingehen heilt er zwei Herzen. Wer einen Gegnertyp verstanden hat, findet ihn hier als
+  // Fahrgast am Tisch. Bedingungen, Pause und Vorrang gibt es erst mit der Regie (Etappe 3).
+  {
+    art: 'speisewagen',
+    sicher: true,
+    heilt: 2,
+    plan: [
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+      'K...K',
+      'S...S',
+      'T...T',
+      'S...S',
+    ],
+    gegner: [],
+    fahrgaeste: [
+      { typ: 'pendler', staerke: 'warten', x: 0, y: 1 },
+      { typ: 'gruppe', staerke: 'rueckhalt', x: 4, y: 3 },
+      { typ: 'draengler', staerke: 'sprint', x: 0, y: 7 },
+    ],
+    // freie Plätze für die, die nach dem Gönnen später dazukommen
+    mehrPlaetze: [[4, 1], [0, 3], [0, 5], [4, 7]],
+    begleiterPlatz: [4, 5], // hier sitzt nach einem Tod der Begleiter
   },
   {
     art: 'grossraumwagen',
@@ -128,5 +177,8 @@ export function baueWagen(nr, z) {
       gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
     }
   }
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner };
+  const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
+  const mehrPlaetze = (vorlage.mehrPlaetze || []).map(([x, y]) => ({ x: sx(x), y }));
+  const begleiterPlatz = vorlage.begleiterPlatz ? { x: sx(vorlage.begleiterPlatz[0]), y: vorlage.begleiterPlatz[1] } : null;
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }

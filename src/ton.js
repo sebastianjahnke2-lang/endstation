@@ -102,6 +102,17 @@ export function erzeugeTon() {
       klang(1175, 1175, 0.16, 0.25, 'sine', 0.13);
     },
     wagenwechsel: () => hauch(320, 0.24, 0.5),
+    // Etappe 2
+    tuerStoss: () => {
+      klang(90, 60, 0.12, 0.6, 'triangle');
+      hauch(180, 0.08, 0.3);
+    },
+    kontrolle: () => klang(2600, 2400, 0.02, 0.12, 'square'), // die Zange klickt
+    sprint: () => hauch(1500, 0.12, 0.35),
+    geheilt: () => {
+      klang(523, 523, 0.3, 0.16, 'sine');
+      klang(659, 659, 0.36, 0.14, 'sine', 0.12);
+    },
     tod: () => klang(196, 98, 0.5, 0.4, 'sine', 0.1),
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);

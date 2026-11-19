@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { werteAus } from './balance.js';
+import { WAGENPLAENE } from '../src/kern/wagen.js';
 
 const FAHRTEN = 400;
 // Der ausgewogene Bot spielt wie ein aufmerksamer Mensch, dem ab und zu ein Zug verrutscht:
@@ -30,9 +31,10 @@ test('ohne Fehler spielt der ausgewogene Bot besser, und kein Zug ist ungültig'
   assert.equal(sauber.haengt, 0);
 });
 
-test('es wird von Wagen zu Wagen schwerer', () => {
+test('es wird von Kampfwagen zu Kampfwagen schwerer', () => {
   const b = werteAus('ausgewogener', FAHRTEN, UNACHTSAM);
-  const treffer = b.jeWagen.map((w) => w.treffer);
+  // Autoritätswagen und Speisewagen sind keine Kampfwagen und zählen hier nicht mit.
+  const treffer = b.jeWagen.filter((w) => !WAGENPLAENE[w.nr].autoritaet && !WAGENPLAENE[w.nr].sicher).map((w) => w.treffer);
   for (let i = 1; i < treffer.length; i++) {
     assert.ok(treffer[i] >= treffer[i - 1], `Treffer je Wagen: ${treffer.map((t) => t.toFixed(2)).join(', ')}`);
   }

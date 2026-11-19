@@ -87,6 +87,11 @@ test('die Texte passen bei 360 Pixel Breite auf die Anzeige', () => {
   const schild = Math.floor((360 - 12 - 14) / 2); // Hinweisschild: Punktabstand 2, Rand und Polster
   for (const name of Object.values(TEXTE.wagen)) assert.ok(textBreite(name) <= kopf, `Wagenname zu lang: ${name}`);
   for (const text of Object.values(TEXTE.hinweis)) assert.ok(textBreite(text) <= schild, `Hinweis zu lang: ${text}`);
+  // Rückblick am Halt: Handlung und Wagen, je eine Zeile
+  for (const text of [...Object.values(TEXTE.pruefung), ...Object.values(TEXTE.wagen)]) assert.ok(textBreite(text) <= karte, `Rückblick zu lang: ${text}`);
+  for (const muster of Object.values(TEXTE.rueckblick)) {
+    for (const wer of Object.values(TEXTE.wer)) assert.ok(textBreite(muster.replace('{wer}', wer)) <= karte, `Rückblick zu lang: ${muster} ${wer}`);
+  }
   for (const text of Object.values(TEXTE.ende)) {
     for (const zahl of TEXTE.zahlwort) {
       for (const zeile of text.replace('{n}', zahl).replace('{zeit}', '00:00').split(' / ')) {
