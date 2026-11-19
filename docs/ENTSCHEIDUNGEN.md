@@ -4,7 +4,14 @@ Detailfragen, die Claude selbst entschieden hat. Neueste Etappe oben. Jede Zeile
 
 ## Offen
 
-Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/PROTOTYP-freier-platz.md`) und den vorhandenen Dokumenten. Sie sind **nicht entschieden**. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/PROTOTYP-freier-platz.md`) und den vorhandenen Dokumenten. Der Auftraggeber entscheidet. Bei jedem Punkt steht, was der Prototyp vorläufig tut, weil er irgendetwas tun muss.
+
+### Entschieden am 19.11.
+
+- **Gesichter: ja.** Verstandene Fahrgäste im Speisewagen haben ein Gesicht, wie im Fahrplan. Gegner und alle anderen Figuren bleiben ohne Gesicht, der Prototyp auch.
+- **Lob: nein.** Der Begleiter nennt nicht, was gelungen ist. Die Zeile im Fahrplan („nennt zuerst, was neu gelungen ist") gilt nicht mehr.
+- **Prototyp und Hauptspiel** (vom Auftraggeber an Claude übergeben): „Der freie Platz" bleibt ein eigener Versuch, bis der Spieltest gelaufen ist. Nennen mindestens drei von fünf Testpersonen den Schatten, wird er in Etappe 3 eine weitere Form des Autoritätswagens, neben Kontrolleur, Ruhebereich und erster Klasse. Damit ist auch „Rätsel oder Taktik" beantwortet: Das Hauptspiel bleibt ein Taktikspiel, Regelwagen wie dieser sind eine Szene darin. Die verbindlichen Vorgaben aus dem Prototyp-Auftrag gelten nur für den Prototyp. Fürs Hauptspiel entscheidet der Auftraggeber Punkt für Punkt, wie bei Gesichtern und Lob.
+- **Fahrkarte: noch offen.** Seine Antwort war „dunkel". Was das heißt, ist nachgefragt.
 
 ### Betrifft den Prototyp unmittelbar
 
@@ -20,12 +27,12 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 
 ### Betrifft das Konzept
 
-- **Rätsel oder Taktik.** Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
-- **Prototyp und Fahrplan.** `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
-- **Fahrkarte.** Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
+- **Rätsel oder Taktik.** Entschieden am 19.11., siehe oben. Ursprünglich: Auftrag: „rundenbasiertes Rätselspiel", jeder Wagen enthält eine Regel, die man durchschauen oder brechen kann, ohne Herzen und Gegner. Kernsatz der Vision: „Ein Taktikspiel, in dem Gegner verschwinden, sobald man sie versteht". Offen: das Verhältnis dieses Wagentyps zum bisherigen Kern.
+- **Prototyp und Fahrplan.** Entschieden am 19.11., siehe oben. Ursprünglich: `CLAUDE.md`: Gebaut wird nur die aktuelle Etappe, keine Funktionen außerhalb des Fahrplans. Etappe 2 ist freigegeben und nicht begonnen. Der Prototyp steht in keiner Etappe. Offen: ob er Etappe 2 ersetzt, ihr vorausgeht oder daneben steht.
+- **Fahrkarte** (Antwort „dunkel", nachgefragt). Auftrag: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen, höchstens eine Lochung, sie schaltet nichts frei und wird nirgends gezählt. Fahrplan Etappe 2: sechs Prüfungs-Symbole auf der Karte, helle und dunkle Lochungen, am Halt werden drei helle Lochungen verlangt. Nicht umgesetzt, nur vermerkt.
 - **Mitgezählter Spielstil.** Auftrag: kein Punktestand, kein Moralwert, kein Persönlichkeitstest. Fahrplan Etappe 3: Spielstil mitzählen, Wärme und Kälte, Haltung der Figur nach Spielstil. Etappe 5: Bestwerte gegen sich selbst. Nicht umgesetzt, nur vermerkt.
-- **Kein Lob.** Auftrag: kein Lob, kein „Geschafft". Fahrplan Etappe 2: Der Begleiter „nennt zuerst, was neu gelungen ist".
-- **Gesichter.** Auftrag: Figuren haben keine Gesichter. Fahrplan Etappe 2: Verstandene Gegner sitzen im Speisewagen „und haben ein Gesicht". Vision: Am Ende sieht man „zum ersten Mal das eigene Gesicht".
+- **Kein Lob.** Entschieden am 19.11., siehe oben.
+- **Gesichter.** Entschieden am 19.11., siehe oben. Offen bleibt nur das eigene Gesicht am Ende (Vision), das gehört zum Halt.
 - **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
 - **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
 
@@ -109,7 +116,7 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Er heilt zwei Herzen beim Hineingehen,** höchstens bis fünf. Warum beim Hineingehen: Wer durchgehen will, soll nicht warten müssen. Reibung ist ein Fehler.
 - **Tische an beiden Wänden, dazwischen ein Gang drei Felder breit.** Mehr erlaubt die Bauregel nicht: Ein Tisch in der Mitte ließe Felder ohne Ausweg zur Seite zurück.
 - **Warmes Licht** über den Tischen und auf dem ganzen Boden.
-- **Fahrgäste sind die verstandenen Gegnertypen:** Wer die Stärke des Pendlers, der Reisegruppe oder des Dränglers hat, findet eine solche Figur auf einem Sitz. **Ohne Gesicht,** obwohl der Fahrplan Gesichter nennt. Das widerspricht den Vorgaben aus dem Prototyp-Auftrag und steht unter „Offen".
+- **Fahrgäste sind die verstandenen Gegnertypen:** Wer die Stärke des Pendlers, der Reisegruppe oder des Dränglers hat, findet eine solche Figur auf einem Sitz. **Sie haben ein Gesicht** (entschieden am 19.11.): zwei Punkte und ein kurzer Mund, schlicht. Auch wer nach dem Gönnen später dazukommt, hat eins.
 - **Fenster wie in jedem Wagen,** mit vorbeiziehenden Lichtern. Kein „Blick nach draußen" mit Landschaft, das widerspricht ebenfalls dem Prototyp-Auftrag.
 - **Gönnen: Wer gegen einen Tisch läuft, lässt dort ein Herz liegen.** Das geht einmal je Besuch und kostet einen Zug. Das letzte Herz lässt man nicht liegen: Im sicheren Ort passiert nie etwas Schlimmes, auch nicht durch einen selbst. Das Herz bleibt sichtbar auf dem Tisch, bis man weiterfährt.
 - **Meistens kommt nichts zurück.** In einem von drei Fällen (aus dem Zufall der Fahrt) sitzt bei späteren Fahrten jemand mehr im Speisewagen, höchstens fünf. Das zeigt sich erst bei der nächsten Fahrt und wird nirgends angekündigt. Gespeichert als `mehrAmTisch` in `src/speicher.js`.

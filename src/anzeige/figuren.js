@@ -1,4 +1,5 @@
-// Figuren und Hindernisse. Niemand hat ein Gesicht. Jede Figur ist am Umriss erkennbar:
+// Figuren und Hindernisse. Niemand hat ein Gesicht, nur verstandene Fahrgäste im Speisewagen.
+// Jede Figur ist am Umriss erkennbar:
 // der Spieler am Schal, der Pendler an der Aktentasche, die Reisegruppe am Rucksack
 // und ihr Vorderster am Wimpel, der Drängler an den breiten Schultern, der Kontrolleur
 // an Mütze und Lochzange.
@@ -242,6 +243,7 @@ export function maleFigur(stift, art, cx, fy, s, o) {
   stift.globalAlpha *= alpha;
   maleSchatten(stift, cx, fy, s * (art === 'draengler' ? 0.27 : art === 'gruppe' ? 0.19 : 0.22));
   const k = MALER[art](stift, cx, fy, s, o);
+  if (o.gesicht && k) maleGesicht(stift, k.kopfX, k.kopfY, s * 0.115);
   if (o.blitz > 0.01) {
     // kurzes Aufleuchten bei einem Treffer
     stift.globalCompositeOperation = 'lighter';
@@ -255,6 +257,22 @@ export function maleFigur(stift, art, cx, fy, s, o) {
   }
   stift.restore();
   return k;
+}
+
+// Ein schlichtes Gesicht: zwei Punkte, ein kurzer Mund. Nur für verstandene Fahrgäste.
+function maleGesicht(stift, x, y, r) {
+  stift.fillStyle = '#2a2f3a';
+  kreis(stift, x - r * 0.36, y + r * 0.04, r * 0.11);
+  stift.fill();
+  kreis(stift, x + r * 0.36, y + r * 0.04, r * 0.11);
+  stift.fill();
+  stift.strokeStyle = '#2a2f3a';
+  stift.lineWidth = Math.max(1, r * 0.1);
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(x - r * 0.24, y + r * 0.42);
+  stift.quadraticCurveTo(x, y + r * 0.52, x + r * 0.24, y + r * 0.42);
+  stift.stroke();
 }
 
 // HP als Punkte über dem Kopf

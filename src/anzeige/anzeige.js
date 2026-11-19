@@ -714,7 +714,7 @@ export function erzeugeAnzeige(leinwand) {
       for (const f of z.wagen.fahrgaeste) {
         const cx = boden.x + (f.x + 0.5) * s;
         const fy = boden.y + (f.y + 0.8) * s + oy;
-        maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false });
+        maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false, gesicht: true });
       }
     }
 
