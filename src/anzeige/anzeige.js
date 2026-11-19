@@ -11,7 +11,7 @@ import { WAGENZAHL } from '../kern/wagen.js';
 import { TEXTE, fuelle } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, leicht, hinUndHer } from './formen.js';
 import { berechneLayout, feldBei, KNOPF } from './layout.js';
-import { maleFigur, malePunkte, maleAchtung } from './figuren.js';
+import { maleFigur, malePunkte, maleAchtung, maleSymbol } from './figuren.js';
 import { herzPfad, maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
 import { maleKarte, kartenMasse } from './karte.js';
 import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } from './matrix.js';
@@ -48,7 +48,7 @@ export function erzeugeAnzeige(leinwand) {
     spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
   };
-  let rede = null; // der Satz des Kontrolleurs, bis zur nächsten Eingabe: { x, y }
+  let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
   let laeufer = []; // laufende Bewegungen: { start, dauer, schritt, bleibt }
   let geister = []; // Besiegte, die verblassen
@@ -62,7 +62,7 @@ export function erzeugeAnzeige(leinwand) {
   let karte = null;
   let hinweis = null;
   let tonAn = true;
-  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9, leuchten: -1e9 };
+  const wirkung = { wackeln: -1e9, treffer: -1e9, zuwachs: -1e9, uhr: -1e9, tuerZu: -1e9, leuchten: -1e9, lochung: -1e9 };
   const melder = { takt: null };
 
   // ---------------------------------------------------------------- Aufbau
@@ -113,6 +113,8 @@ export function erzeugeAnzeige(leinwand) {
     bild.zug = z.zug;
     bild.tuer = z.tuerOffen ? 1 : 0;
     bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
+    bild.angebot = z.angebot ? { id: z.angebot.id, x: z.angebot.x, y: z.angebot.y } : null;
+    bild.pruefung = z.pruefung ? z.pruefung.id : null;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
     bild.gegner = z.gegner.map((g) => {
@@ -176,6 +178,7 @@ export function erzeugeAnzeige(leinwand) {
       herzen: z.spieler.herzen,
       herzenVoll: HERZEN_VOLL,
       minuten: ABFAHRT + z.zug,
+      fahrkarte: JSON.parse(JSON.stringify(z.fahrkarte)),
       start: jetzt + pause,
       einblenden: 0,
       weg: 0,
@@ -380,6 +383,19 @@ export function erzeugeAnzeige(leinwand) {
       // ein warmes Leuchten um die Figur: Rückhalt hat gegriffen, oder eine Stärke ist dazugekommen
       if (e.typ === 'rueckhalt') bild.herzen = e.herzen;
       wirkung.leuchten = jetzt;
+    } else if (e.typ === 'angenommen') {
+      // Prüfung angenommen: das Symbol geht vom Boden nach oben, die Worte stehen kurz über dem Spieler
+      bild.angebot = null;
+      bild.pruefung = e.id;
+      rede = { text: TEXTE.pruefung[e.id], x: s.x, y: s.y };
+    } else if (e.typ === 'gelocht') {
+      if (e.art === 'pruefung') {
+        wirkung.lochung = jetzt;
+        bild.gelocht = e.id;
+        bild.pruefung = null;
+      }
+    } else if (e.typ === 'aufgehellt') {
+      wirkung.leuchten = jetzt;
     } else if (e.typ === 'zoegert') {
       // Präsenz: Er wollte angreifen und weicht kurz vor dem Spieler zurück
       const g = findeGegner(e.id);
@@ -394,7 +410,7 @@ export function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'kontrolle') {
       const g = findeGegner(e.id);
-      if (g) rede = { x: g.x, y: g.y };
+      if (g) rede = { text: TEXTE.kontrolleur.satz, x: g.x, y: g.y };
     } else if (e.typ === 'ruhig') {
       const g = findeGegner(e.id);
       if (g) {
@@ -722,6 +738,7 @@ export function erzeugeAnzeige(leinwand) {
     if (!imWechsel) {
       maleLichtschein(stift, layout, lichter, klar);
       maleRot(t);
+      if (bild.angebot) maleAngebot(bild.angebot, t);
       maleTuerlicht(stift, layout, bild.tuer, t, ruhig);
     }
 
@@ -764,8 +781,24 @@ export function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
-    if (rede && !karte && !imWechsel) maleRede(TEXTE.kontrolleur.satz, rede, oy);
+    if (rede && !karte && !imWechsel) maleRede(rede.text, rede, oy);
     maleHinweis();
+  }
+
+  // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
+  function maleAngebot(a, t) {
+    const { boden, s } = layout;
+    const cx = boden.x + (a.x + 0.5) * s;
+    const cy = boden.y + (a.y + 0.5) * s;
+    const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
+    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    stift.globalAlpha = puls;
+    maleSymbol(stift, a.id, cx, cy, s * 0.42, FARBE.warm);
+    stift.globalAlpha = 1;
   }
 
   // Ein Schild über dem Kopf dessen, der spricht, mit einer Spitze zu ihm hin.
@@ -844,6 +877,22 @@ export function erzeugeAnzeige(leinwand) {
     const druck = begrenze(1 - (jetzt - wirkung.uhr) / 140, 0, 1);
     maleUhr(stift, layout.uhr, ABFAHRT + bild.zug, druck);
     maleTonknopf(stift, layout.ton, tonAn);
+    // die laufende Prüfung als Symbol rechts neben der Uhr; ist sie erfüllt, wird gelocht
+    const px = layout.uhr.x + layout.uhr.r + 24;
+    const py = layout.uhr.y;
+    const seitLochung = jetzt - wirkung.lochung;
+    if (bild.pruefung) {
+      maleSymbol(stift, bild.pruefung, px, py, 22, FARBE.warm);
+    } else if (bild.gelocht && seitLochung >= 0 && seitLochung < 700) {
+      const q = seitLochung / 700;
+      stift.globalAlpha = 1 - q;
+      maleSymbol(stift, bild.gelocht, px, py, 22, FARBE.warm);
+      stift.fillStyle = FARBE.warm;
+      stift.beginPath();
+      stift.arc(px + 9, py - 9, 4 + q * 3, 0, Math.PI * 2);
+      stift.fill();
+      stift.globalAlpha = 1;
+    }
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);

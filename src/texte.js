@@ -23,6 +23,16 @@ export const TEXTE = {
     anrempeln: 'Anrempeln',
   },
 
+  // Prüfungen auf der Fahrkarte: Alltagsvorsätze, höchstens drei Worte. Schlüssel wie in kern/fahrkarte.js
+  pruefung: {
+    aufregen: 'Nicht aufregen',
+    aussteigen: 'Erst aussteigen lassen',
+    rempeln: 'Ohne Rempeln',
+    draengeln: 'Nicht drängeln',
+    puenktlich: 'Pünktlich',
+    ruhe: 'Ruhe bewahren',
+  },
+
   // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft
   kontrolleur: {
     satz: 'Fahrkarte, bitte.',

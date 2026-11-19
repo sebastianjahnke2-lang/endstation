@@ -259,6 +259,52 @@ export function maleFigur(stift, art, cx, fy, s, o) {
   return k;
 }
 
+// Die Symbole der sechs Prüfungen, schlicht wie Piktogramme im Zug. (cx, cy) Mitte, g Größe.
+export function maleSymbol(stift, id, cx, cy, g, farbe) {
+  stift.save();
+  stift.strokeStyle = farbe;
+  stift.fillStyle = farbe;
+  stift.lineWidth = Math.max(1.5, g * 0.11);
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  const h = g / 2;
+  if (id === 'aufregen') {
+    // eine ruhige Linie: ein flacher Puls
+    linie(stift, [[cx - h, cy], [cx - h * 0.3, cy], [cx - h * 0.15, cy - h * 0.25], [cx + h * 0.05, cy + h * 0.2], [cx + h * 0.2, cy], [cx + h, cy]], farbe, stift.lineWidth);
+  } else if (id === 'aussteigen') {
+    // eine Tür, ein Pfeil hinaus
+    stift.strokeRect(cx - h * 0.1, cy - h * 0.8, h * 0.9, h * 1.6);
+    linie(stift, [[cx + h * 0.3, cy], [cx - h, cy]], farbe, stift.lineWidth);
+    linie(stift, [[cx - h * 0.6, cy - h * 0.35], [cx - h, cy], [cx - h * 0.6, cy + h * 0.35]], farbe, stift.lineWidth);
+  } else if (id === 'rempeln') {
+    // zwei Figuren mit Abstand
+    for (const dx of [-0.5, 0.5]) {
+      kreis(stift, cx + dx * h, cy - h * 0.45, h * 0.22);
+      stift.fill();
+      linie(stift, [[cx + dx * h, cy - h * 0.15], [cx + dx * h, cy + h * 0.75]], farbe, stift.lineWidth * 1.4);
+    }
+  } else if (id === 'draengeln') {
+    // eine Schlange, einer hinter dem anderen
+    for (const dx of [-0.65, 0, 0.65]) {
+      kreis(stift, cx + dx * h, cy - h * 0.4, h * 0.17);
+      stift.fill();
+      linie(stift, [[cx + dx * h, cy - h * 0.15], [cx + dx * h, cy + h * 0.6]], farbe, stift.lineWidth * 1.2);
+    }
+  } else if (id === 'puenktlich') {
+    // eine Uhr
+    kreis(stift, cx, cy, h * 0.85);
+    stift.stroke();
+    linie(stift, [[cx, cy - h * 0.55], [cx, cy], [cx + h * 0.4, cy + h * 0.15]], farbe, stift.lineWidth);
+  } else if (id === 'ruhe') {
+    // drei Punkte wie die Ruhe oben
+    for (const dx of [-0.6, 0, 0.6]) {
+      kreis(stift, cx + dx * h, cy, h * 0.22);
+      stift.fill();
+    }
+  }
+  stift.restore();
+}
+
 // Ein schlichtes Gesicht: zwei Punkte, ein kurzer Mund. Nur für verstandene Fahrgäste.
 function maleGesicht(stift, x, y, r) {
   stift.fillStyle = '#2a2f3a';

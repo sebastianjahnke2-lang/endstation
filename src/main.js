@@ -38,22 +38,25 @@ function starteFahrt(jetzt) {
   const fest = festerSeed();
   const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
   fahrten += 1;
-  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch });
+  // Nach dem Halt beginnt eine neue Reise mit frischer Fahrkarte. Nach einem Tod bleibt sie.
+  if (spiel && spiel.zustand.status === 'halt') stand.fahrkarte = { lochungen: [] };
+  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch, fahrkarte: stand.fahrkarte });
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
 function merke(ereignisse) {
   const g = stand.gelernt;
-  const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch]);
+  const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
     if (e.typ === 'schlag') g.anrempeln = true;
     if (e.typ === 'verstanden') stand.staerken[e.staerke] = true; // dauerhaft, auch für die nächsten Fahrten
     if (e.typ === 'gegoennt') stand.mehrAmTisch = e.mehrAmTisch; // zeigt sich erst bei einer späteren Fahrt
+    if (e.typ === 'gelocht' || e.typ === 'aufgehellt') stand.fahrkarte = JSON.parse(JSON.stringify(spiel.zustand.fahrkarte));
   }
-  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch]) !== vorher) {
+  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher) {
     sichereStand(stand);
     zeigeHinweise();
   }

@@ -32,7 +32,7 @@ test('ganz ohne Fenster und Speicher gibt es einen vollständigen leeren Stand',
 
 test('leerer Speicher: alles steht auf Anfang', () => {
   mitFenster({ localStorage: speicherMit({}) }, () => {
-    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0 });
+    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] } });
   });
 });
 
@@ -67,7 +67,7 @@ test('Unsinn im Speicher wird zu einem gültigen Stand', () => {
 test('ein gesicherter Stand kommt genauso zurück', () => {
   const speicher = speicherMit({});
   mitFenster({ localStorage: speicher }, () => {
-    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true }, mehrAmTisch: 2 };
+    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true }, mehrAmTisch: 2, fahrkarte: { lochungen: [{ art: 'pruefung', id: 'ruhe', hell: true }, { art: 'tod', durch: 'pendler', hell: false }] } };
     assert.equal(sichereStand(stand), true);
     assert.deepEqual(ladeStand(), stand);
   });
@@ -75,7 +75,13 @@ test('ein gesicherter Stand kommt genauso zurück', () => {
 
 test('bereinigeStand übernimmt nur Bekanntes', () => {
   const stand = bereinigeStand({ gelernt: { wischen: true, ausweichen: 'ja', hacken: true }, ton: false, lochungen: 99 });
-  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0 });
+  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] } });
+});
+
+test('Fahrkarte: Anfangswert leer, Unsinn fällt weg, Bekanntes bleibt', () => {
+  assert.deepEqual(leererStand().fahrkarte, { lochungen: [] });
+  assert.deepEqual(bereinigeStand({ fahrkarte: 'voll' }).fahrkarte, { lochungen: [] });
+  assert.deepEqual(bereinigeStand({ fahrkarte: { lochungen: [{ art: 'pruefung', id: 'rempeln' }, { art: 'pruefung', id: 'zaubern' }] } }).fahrkarte, { lochungen: [{ art: 'pruefung', id: 'rempeln', hell: true }] });
 });
 
 test('Gönnen: Anfangswert null, Unsinn wird zu null, höchstens fünf', () => {

@@ -2,7 +2,8 @@
 // Nach oben wegwischen beginnt die nächste Fahrt.
 
 import { FARBE, rundesRechteck, kreis, sanft } from './formen.js';
-import { maleFigur } from './figuren.js';
+import { maleFigur, maleSymbol } from './figuren.js';
+import { PRUEFUNGEN } from '../kern/fahrkarte.js';
 import { maleHerzen, maleUhr } from './kulisse.js';
 import { neuesPunktfeld, schreibeMittig, zeichnePunktfeld, ZEILENHOEHE } from './matrix.js';
 
@@ -17,7 +18,8 @@ export function kartenMasse(layout, art) {
   const bildH = Math.max(150, Math.min(250, Math.round(layout.hoehe * 0.34)));
   const tafelH = Math.ceil(zeilen * raster + 2 * polster);
   const herzenH = art === 'halt' ? 40 : 0;
-  const h = 10 + bildH + 10 + tafelH + herzenH + 66;
+  const fahrkarteH = 62;
+  const h = 10 + bildH + 10 + tafelH + herzenH + fahrkarteH + 66;
   const y = Math.round((layout.hoehe - h) / 2) - 4;
   return {
     x,
@@ -27,6 +29,7 @@ export function kartenMasse(layout, art) {
     bild: { x: x + 10, y: y + 10, b: b - 20, h: bildH },
     tafel: { x: x + 10, y: y + 20 + bildH, b: b - 20, h: tafelH, raster, spalten, zeilen, polster },
     herzenY: y + 20 + bildH + tafelH + 22,
+    fahrkarte: { x: x + 18, y: y + 20 + bildH + tafelH + herzenH + 10, b: b - 36, h: fahrkarteH - 14 },
     weiter: { x: layout.breite / 2 - 70, y: y + h - 66, b: 140, h: 66 },
   };
 }
@@ -163,7 +166,42 @@ function maleBahnsteig(stift, r, karte, t) {
   stift.restore();
 }
 
-// karte: { art, zeilen, herzen, herzenVoll, minuten, einblenden 0..1, weg 0..1, ruhig }
+// Die Fahrkarte: oben die sechs Prüfungen, darunter Platz für Sonder-Lochungen.
+// Eine helle Lochung ist ein Loch, durch das warmes Licht fällt, eine dunkle bleibt dunkel.
+export function maleFahrkarteBild(stift, r, fahrkarte) {
+  stift.fillStyle = '#e8dcc2';
+  rundesRechteck(stift, r.x, r.y, r.b, r.h, 4);
+  stift.fill();
+  stift.fillStyle = '#d6c7a8';
+  stift.fillRect(r.x + r.b * 0.82, r.y, 1.5, r.h);
+  const breit = (r.b * 0.8) / PRUEFUNGEN.length;
+  const g = Math.min(breit * 0.62, r.h * 0.5);
+  PRUEFUNGEN.forEach((id, i) => {
+    const cx = r.x + breit * (i + 0.5) + 2;
+    const cy = r.y + r.h * 0.5;
+    const gelocht = fahrkarte.lochungen.some((l) => l.art === 'pruefung' && l.id === id);
+    maleSymbol(stift, id, cx, cy, g, gelocht ? '#8a7a5c' : '#b9a986');
+    if (gelocht) maleLoch(stift, cx + g * 0.45, cy - g * 0.45, g * 0.22, true);
+  });
+  // Sonder-Lochungen rechts vom Strich, untereinander in zwei Spalten
+  const sonder = fahrkarte.lochungen.filter((l) => l.art !== 'pruefung');
+  sonder.forEach((l, i) => {
+    const sx = r.x + r.b * 0.86 + (i % 2) * r.b * 0.07;
+    const sy = r.y + r.h * (0.25 + Math.floor(i / 2) * 0.25);
+    maleLoch(stift, sx + r.b * 0.02, sy, Math.min(r.h * 0.1, 5), l.hell);
+  });
+}
+
+function maleLoch(stift, x, y, r, hell) {
+  stift.fillStyle = hell ? FARBE.warm : '#1a1f2b';
+  kreis(stift, x, y, r);
+  stift.fill();
+  stift.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+  stift.lineWidth = 1;
+  stift.stroke();
+}
+
+// karte: { art, zeilen, herzen, herzenVoll, minuten, fahrkarte, einblenden 0..1, weg 0..1, ruhig }
 export function maleKarte(stift, layout, karte, t) {
   const m = kartenMasse(layout, karte.art);
   const ein = sanft(karte.einblenden);
@@ -193,6 +231,8 @@ export function maleKarte(stift, layout, karte, t) {
   schreibeMittig(feld, karte.zeilen[0] || '', 1);
   schreibeMittig(feld, karte.zeilen[1] || '', ZEILENHOEHE + 3);
   zeichnePunktfeld(stift, feld, tf.x + tf.polster, tf.y + tf.polster, tf.raster, FARBE.bernstein, FARBE.bernsteinAus);
+
+  if (karte.fahrkarte) maleFahrkarteBild(stift, m.fahrkarte, karte.fahrkarte);
 
   if (karte.art === 'halt') {
     const g = 17;
