@@ -34,9 +34,11 @@ export const TEXTE = {
   },
 
   // Der Begleiter im Speisewagen nach einem Tod. Die Antworten sind Figuren auf dem Boden, nur „Pech" ist ein Wort.
+  // Nach der Antwort liegt neben ihm „Noch mal": Wer draufgeht, spielt den letzten Wagen noch einmal, gefahrlos.
   begleiter: {
     frage: 'Woran lag es?',
     pech: 'Pech',
+    nochmal: 'Noch mal',
   },
 
   // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft

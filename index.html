@@ -538,7 +538,10 @@ function lochungFuerTod(z, durch, ereignisse, phase) {
 // „Woran lag es?" Drei Antworten liegen vor ihm auf dem Boden, draufgehen heißt antworten.
 // Das Spiel kennt den Grund. Die ehrliche Antwort gibt eine helle Lochung, je Todesursache eine.
 // Er nennt nicht, was gelungen ist (Entscheidung des Auftraggebers vom 19.11.: kein Lob).
+// Nach der Antwort liegt neben ihm „Noch mal": Wer draufgeht, spielt den Wagen, in dem die letzte
+// Fahrt endete, noch einmal, gefahrlos und folgenlos. Die Wiederholung selbst steht in spiel.js.
 // Kennt weder Bildschirm noch Browser.
+
 
 
 
@@ -546,38 +549,67 @@ function lochungFuerTod(z, durch, ereignisse, phase) {
 const ANTWORTARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer', 'pech'];
 const URSACHEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
 
+// Die Szene, in der die vorige Fahrt endete: Wagennummer und Stand des Zufalls vor ihrem Bau.
+// Nimmt nur, was die erwartete Form hat, sonst null. Der sichere Wagen ist nie eine solche Szene.
+function bereinigeSzene(roh) {
+  if (!roh || typeof roh !== 'object') return null;
+  const { nr, zufall } = roh;
+  if (!Number.isInteger(nr) || nr < 0 || nr >= WAGENPLAENE.length || WAGENPLAENE[nr].sicher) return null;
+  if (!Number.isInteger(zufall) || zufall < 0 || zufall > 0xffffffff) return null;
+  return { nr, zufall };
+}
+
 // Beim Einrichten des Speisewagens: Er sitzt dort, wenn die vorige Fahrt mit einem Tod endete.
 function setzeBegleiter(z, platz) {
   z.begleiter = null;
   if (!z.wagen.sicher || !z.begleiterDurch || !platz) return;
-  z.begleiter = { durch: z.begleiterDurch, x: platz.x, y: platz.y, antworten: null, gesprochen: false };
+  z.begleiter = { durch: z.begleiterDurch, szene: z.begleiterSzene, x: platz.x, y: platz.y, antworten: null, gesprochen: false, wiederholen: null };
   z.begleiterDurch = null; // er sitzt nur beim ersten Besuch dieser Fahrt dort
+  z.begleiterSzene = null;
 }
 
 function frei(z, x, y) {
   return x >= 0 && x < BREITE && y >= 0 && y < z.wagen.plan.length && z.wagen.plan[y][x] === '.' && !(z.spieler.x === x && z.spieler.y === y);
 }
 
-// Nach jedem Schritt im Speisewagen. Gibt zurück, ob etwas geschah.
+// „Noch mal" liegt auf einem freien Feld neben ihm, auf dem der Spieler gerade nicht steht.
+function feldNeben(z, b) {
+  for (const name of RICHTUNGSNAMEN) {
+    const x = b.x + RICHTUNG[name].x;
+    const y = b.y + RICHTUNG[name].y;
+    if (frei(z, x, y)) return { x, y };
+  }
+  return null;
+}
+
+// Nach jedem Schritt im Speisewagen. Gibt true zurück, wenn der Spieler auf „Noch mal" getreten ist:
+// Dann beginnt spiel.js die Wiederholung.
 function sprichMitBegleiter(z, ereignisse) {
   const b = z.begleiter;
-  if (!b || b.gesprochen) return;
+  if (!b) return false;
   const s = z.spieler;
+  if (b.wiederholen) {
+    if (s.x !== b.wiederholen.x || s.y !== b.wiederholen.y) return false;
+    b.wiederholen = null; // einmal je Tod
+    return true;
+  }
+  if (b.gesprochen) return false;
   if (b.antworten) {
     const a = b.antworten.find((x) => x.x === s.x && x.y === s.y);
-    if (!a) return;
+    if (!a) return false;
     b.antworten = null;
     b.gesprochen = true;
     const ehrlich = a.id === b.durch;
-    ereignisse.push({ typ: 'antwort', phase: 0, id: a.id, ehrlich });
+    b.wiederholen = b.szene ? feldNeben(z, b) : null;
+    ereignisse.push({ typ: 'antwort', phase: 0, id: a.id, ehrlich, wiederholen: b.wiederholen ? { ...b.wiederholen } : null });
     const karte = z.fahrkarte;
     if (ehrlich && !karte.lochungen.some((l) => l.art === 'ehrlich' && l.durch === b.durch)) {
       karte.lochungen.push({ art: 'ehrlich', durch: b.durch, hell: true, wagen: z.wagen.art });
       ereignisse.push({ typ: 'gelocht', phase: 0, art: 'ehrlich', durch: b.durch, hell: true });
     }
-    return;
+    return false;
   }
-  if (Math.abs(s.x - b.x) + Math.abs(s.y - b.y) !== 1) return;
+  if (Math.abs(s.x - b.x) + Math.abs(s.y - b.y) !== 1) return false;
   // die drei Antworten: die ehrliche, eine andere Ursache und „Pech", in zufälliger Reihenfolge
   const andere = URSACHEN.filter((u) => u !== b.durch);
   const ids = [b.durch, andere[wuerfle(z.kartenzufall, andere.length)], 'pech'];
@@ -592,9 +624,10 @@ function sprichMitBegleiter(z, ereignisse) {
     if (felder.every((f) => frei(z, f.x, f.y))) {
       b.antworten = ids.map((id, i) => ({ id, x: felder[i].x, y: felder[i].y }));
       ereignisse.push({ typ: 'gespraech', phase: 0, antworten: b.antworten.map((a) => ({ ...a })) });
-      return;
+      return false;
     }
   }
+  return false;
 }
 
 // --- kern/gegner.js
@@ -914,6 +947,7 @@ function richtungVon(a, b) {
 //   erzeugeSpiel(seed, { staerken: { sprint, rueckhalt, warten } })   Stärken aus früheren Fahrten
 //   erzeugeSpiel(seed, { fahrkarte })    die Fahrkarte mit ihren Lochungen, siehe fahrkarte.js
 //   erzeugeSpiel(seed, { begleiter })    die Todesursache der vorigen Fahrt: Er sitzt im Speisewagen
+//   erzeugeSpiel(seed, { szene })        der Wagen, in dem sie endete: Der Begleiter wiederholt ihn
 //   Welche Optionen eine neue Fahrt bekommt, sagt optionenFuerFahrt() in reise.js.
 //
 // act() ändert spiel.zustand und gibt zurück, was dabei passiert ist.
@@ -949,9 +983,13 @@ const GOENNEN_ZURUECK = 3; // einer von drei Würfen
 const MEHR_AM_TISCH_HOECHSTENS = 5;
 const MEHR_TYPEN = ['gruppe', 'pendler', 'draengler'];
 
-function richteWagenEin(z) {
-  const wagen = baueWagen(z.wagenNr, z);
-  z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
+// szene: nur für die Wiederholung, { nr, zufall }. Dann entsteht der Wagen aus dem gemerkten Zufall,
+// ohne Angebot und ohne Begleiter, und der Zufall der Fahrt bleibt unberührt.
+function richteWagenEin(z, szene) {
+  const quelle = szene ? { zufall: szene.zufall } : z;
+  const anfang = quelle.zufall; // damit sich der Wagen nach einem Tod genau so wiederholen lässt
+  const wagen = baueWagen(z.wagenNr, quelle);
+  z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt, anfang };
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
   z.wagen.mitGruppe = z.gegner.some((g) => g.typ === 'gruppe');
@@ -964,8 +1002,14 @@ function richteWagenEin(z) {
   z.wagen.gegoennt = null;
   z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))]; // für das Aufhellen dunkler Lochungen
   z.getroffenVon = [];
-  stelleAngebot(z);
-  setzeBegleiter(z, wagen.begleiterPlatz);
+  if (szene) {
+    z.angebot = null;
+    z.pruefung = null;
+    z.begleiter = null;
+  } else {
+    stelleAngebot(z);
+    setzeBegleiter(z, wagen.begleiterPlatz);
+  }
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -983,13 +1027,15 @@ function oeffneTuer(z, ereignisse, phase) {
 function stirb(z, ereignisse, phase, durch) {
   z.status = 'tot';
   z.todDurch = durch;
+  z.todSzene = { nr: z.wagenNr, zufall: z.wagen.anfang };
   ereignisse.push({ typ: 'tod', phase, wagenNr: z.wagenNr, durch, uebrig: z.gegner.length });
   lochungFuerTod(z, durch, ereignisse, phase);
 }
 
 // Eine Stärke kommt hinzu. Gibt das Ereignis zurück oder null, wenn sie schon da war.
+// In der Wiederholung zählt nichts für die Reise.
 function verstehe(z, staerke, gegner, phase) {
-  if (z.staerken[staerke]) return null;
+  if (z.probe || z.staerken[staerke]) return null;
   z.staerken[staerke] = true;
   return { typ: 'verstanden', phase, staerke, gegner };
 }
@@ -999,8 +1045,46 @@ function nebenGegner(z, typ) {
   return z.gegner.some((g) => (!typ || g.typ === typ) && Math.abs(g.x - s.x) + Math.abs(g.y - s.y) === 1);
 }
 
+// Wiederholung: Der Begleiter spielt den Wagen, in dem die vorige Fahrt endete, noch einmal.
+// Gefahrlos: Kein Treffer und kein Aufbrechen kostet ein Herz. Folgenlos: kein Angebot, keine Lochung,
+// keine Stärke. Hinaus geht es durch die Tür oder mit einem Schritt nach unten vom Startfeld,
+// danach ist alles wie vorher, nur die Uhr ist weitergelaufen.
+function beginneProbe(z, ereignisse) {
+  const szene = z.begleiter.szene;
+  z.probe = {
+    zurueck: {
+      wagenNr: z.wagenNr,
+      wagen: z.wagen,
+      gegner: z.gegner,
+      tuerOffen: z.tuerOffen,
+      tuerStoesse: z.tuerStoesse,
+      aufgebrochen: z.aufgebrochen,
+      zuegeImWagen: z.zuegeImWagen,
+      getroffenVon: z.getroffenVon,
+      angebot: z.angebot,
+      pruefung: z.pruefung,
+      begleiter: z.begleiter,
+      spieler: { ...z.spieler },
+      verstehen: { ...z.verstehen },
+      zaehler: { ...z.zaehler },
+    },
+  };
+  z.wagenNr = szene.nr;
+  richteWagenEin(z, szene);
+  ereignisse.push({ typ: 'probe', phase: 1, nr: z.wagenNr });
+}
+
+function endeProbe(z) {
+  const r = z.probe.zurueck;
+  z.probe = null;
+  for (const name of ['wagenNr', 'wagen', 'gegner', 'tuerOffen', 'tuerStoesse', 'aufgebrochen', 'zuegeImWagen', 'getroffenVon', 'angebot', 'pruefung', 'begleiter', 'verstehen', 'zaehler']) z[name] = r[name];
+  Object.assign(z.spieler, r.spieler);
+  return [{ typ: 'probeEnde', phase: 0, nr: z.wagenNr }];
+}
+
 function wechsleWagen(z) {
   z.zug += 1;
+  if (z.probe) return endeProbe(z); // durch die Tür der Wiederholung: zurück in den Speisewagen
   z.zaehler.schritte += 1;
   z.zaehler.wagen += 1;
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
@@ -1083,6 +1167,7 @@ function fuehreAus(z, aktion) {
   const neben = nebenGegner(z); // für die Ruhe fürs Warten
   const draenglerRot = z.gegner.some((g) => g.typ === 'draengler' && g.ansage && g.ansage.some((f) => f.x === s.x && f.y === s.y));
   const spaeter = []; // Stärken, die in diesem Zug verstanden werden: [staerke, gegner]
+  let nochmal = false; // auf „Noch mal" getreten: Die Wiederholung beginnt nach diesem Schritt
 
   // Phase 0: der Spieler
   if (typeof aktion === 'string' && aktion.startsWith('sprint-')) {
@@ -1096,7 +1181,7 @@ function fuehreAus(z, aktion) {
     zielRot = bewegt && istMarkiert(z, s.x, s.y);
     if (bewegt) {
       nimmAn(z, ereignisse);
-      sprichMitBegleiter(z, ereignisse);
+      nochmal = sprichMitBegleiter(z, ereignisse);
     }
   } else if (aktion === 'warten') {
     ereignisse.push({ typ: 'warten', phase: 0 });
@@ -1113,6 +1198,10 @@ function fuehreAus(z, aktion) {
     const y = s.y + r.y;
     const anDerTuer = aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y;
     if (anDerTuer && z.tuerOffen) return wechsleWagen(z);
+    if (z.probe && aktion === 'runter' && s.x === STARTFELD.x && s.y === STARTFELD.y) {
+      z.zug += 1;
+      return endeProbe(z); // aus der Wiederholung nach unten hinaus
+    }
     const amTisch = z.wagen.sicher && imFeld(x, y) && z.wagen.plan[y][x] === 'T';
     if (amTisch) {
       // einmal je Besuch, und nie das letzte Herz: Im sicheren Ort passiert nichts Schlimmes
@@ -1136,7 +1225,7 @@ function fuehreAus(z, aktion) {
       if (z.tuerStoesse >= AUFBRECHEN_STOESSE) {
         z.tuerOffen = true;
         z.aufgebrochen = true;
-        s.herzen = Math.max(0, s.herzen - AUFBRECHEN_KOSTET);
+        s.herzen = Math.max(0, s.herzen - (z.probe ? 0 : AUFBRECHEN_KOSTET));
         z.zaehler.aufgebrochen += 1;
         ereignisse.push({ typ: 'aufgebrochen', phase: 0, herzen: s.herzen });
         ereignisse.push({ typ: 'tuerAuf', phase: 0 });
@@ -1168,17 +1257,22 @@ function fuehreAus(z, aktion) {
       bewegt = true;
       z.zaehler.schritte += 1;
       nimmAn(z, ereignisse); // auf das leuchtende Symbol treten heißt: die Prüfung annehmen
-      sprichMitBegleiter(z, ereignisse);
+      nochmal = sprichMitBegleiter(z, ereignisse);
     }
   }
   z.zug += 1;
   z.zuegeImWagen += 1;
+  if (nochmal) {
+    beginneProbe(z, ereignisse); // im Speisewagen geschieht in diesem Zug sonst nichts
+    return ereignisse;
+  }
 
   // Phase 1: angekündigte Angriffe treffen ein
   const { treffer, dran } = loeseAnsagenEin(z, ereignisse);
   if (treffer) {
-    // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei.
-    const schaden = schadenVon(treffer);
+    // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei,
+    // in der Wiederholung keines.
+    const schaden = z.probe ? 0 : schadenVon(treffer);
     s.herzen = Math.max(0, s.herzen - schaden);
     // Rückhalt: einmal je Fahrt bleibt nach einem tödlichen Treffer ein Herz
     const haelt = s.herzen <= 0 && z.staerken.rueckhalt && !z.rueckhaltGenutzt;
@@ -1253,8 +1347,11 @@ function erzeugeSpiel(seed, optionen = {}) {
     angebot: null, // { id, x, y }: das leuchtende Symbol im Wagen
     pruefung: null, // die angenommene Prüfung, bis zum Verlassen des Wagens
     begleiterDurch: ANTWORTARTEN.includes(optionen.begleiter) && optionen.begleiter !== 'pech' ? optionen.begleiter : null,
-    begleiter: null, // { durch, x, y, antworten, gesprochen }, nur im Speisewagen
+    begleiterSzene: bereinigeSzene(optionen.szene),
+    begleiter: null, // { durch, szene, x, y, antworten, gesprochen, wiederholen }, nur im Speisewagen
+    probe: null, // die Wiederholung: { zurueck } mit allem, was danach wieder gilt
     todDurch: null,
+    todSzene: null, // { nr, zufall }: der Wagen, in dem die Fahrt endete
     halt: null, // { genug, hell, fehlt } am Ende der Fahrt
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
@@ -1285,6 +1382,7 @@ function optionenFuerFahrt(stand, vorige) {
   }
   if (vorige && vorige.status === 'tot') {
     optionen.begleiter = vorige.todDurch;
+    optionen.szene = vorige.todSzene; // den Wagen kann er auf Wunsch wiederholen
     if (vorige.wagenNr > SPEISEWAGEN_NR) optionen.startWagen = SPEISEWAGEN_NR;
   }
   return optionen;
@@ -1327,9 +1425,11 @@ const TEXTE = {
   },
 
   // Der Begleiter im Speisewagen nach einem Tod. Die Antworten sind Figuren auf dem Boden, nur „Pech" ist ein Wort.
+  // Nach der Antwort liegt neben ihm „Noch mal": Wer draufgeht, spielt den letzten Wagen noch einmal, gefahrlos.
   begleiter: {
     frage: 'Woran lag es?',
     pech: 'Pech',
+    nochmal: 'Noch mal',
   },
 
   // Was der Kontrolleur sagt, wenn er jemanden anspricht oder prüft
@@ -2813,6 +2913,7 @@ function erzeugeAnzeige(leinwand) {
   let altesWagenbild = null;
   let tafelbild = null;
   let schleier = null;
+  let standbild = null; // das letzte Bild vor der Wiederholung, zum Überblenden
 
   const bild = {
     wagenNr: -1,
@@ -2824,6 +2925,8 @@ function erzeugeAnzeige(leinwand) {
     tuer: 0,
     spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
+    blende: 0, // beim Wechsel in die Wiederholung und zurück: wie viel vom alten Bild noch zu sehen ist
+    probe: false, // in der Wiederholung beim Begleiter
   };
   let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
@@ -2891,7 +2994,9 @@ function erzeugeAnzeige(leinwand) {
     bild.tuer = z.tuerOffen ? 1 : 0;
     bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
     bild.angebot = z.angebot ? { id: z.angebot.id, x: z.angebot.x, y: z.angebot.y } : null;
-    bild.begleiter = z.begleiter ? { x: z.begleiter.x, y: z.begleiter.y, antworten: z.begleiter.antworten ? z.begleiter.antworten.map((a) => ({ ...a })) : null } : null;
+    const b = z.begleiter;
+    bild.begleiter = b ? { x: b.x, y: b.y, antworten: b.antworten ? b.antworten.map((a) => ({ ...a })) : null, wiederholen: b.wiederholen ? { ...b.wiederholen } : null } : null;
+    bild.probe = !!z.probe;
     bild.pruefung = z.pruefung ? z.pruefung.id : null;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
@@ -2909,6 +3014,18 @@ function erzeugeAnzeige(leinwand) {
       b.ruhig = g.ruhig || 0;
       return b;
     });
+  }
+
+  // Was gerade auf dem Bildschirm steht, für das Überblenden in die Wiederholung
+  function merkeStandbild() {
+    try {
+      if (!standbild) standbild = document.createElement('canvas');
+      standbild.width = leinwand.width;
+      standbild.height = leinwand.height;
+      standbild.getContext('2d').drawImage(leinwand, 0, 0);
+    } catch (fehler) {
+      standbild = null; // dann eben ohne Überblenden
+    }
   }
 
   function bewege(start, dauer, schritt, bleibt) {
@@ -3048,6 +3165,20 @@ function erzeugeAnzeige(leinwand) {
       } else {
         altesWagenbild = null;
       }
+    } else if (e.typ === 'probe' || e.typ === 'probeEnde') {
+      // Die Wiederholung fährt nicht herein, sie blendet über wie eine Erinnerung. Zurück ebenso.
+      merkeStandbild();
+      altesWagenbild = null;
+      baueBilder();
+      gleicheAb();
+      geister = [];
+      blitze = [];
+      rede = null;
+      if (!ruhig && standbild) {
+        bewege(jetzt, 150, (p) => {
+          bild.blende = 1 - sanft(p);
+        });
+      }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
       if (e.genug) {
@@ -3186,7 +3317,10 @@ function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'gespraech') {
       if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
     } else if (e.typ === 'antwort') {
-      if (bild.begleiter) bild.begleiter.antworten = null;
+      if (bild.begleiter) {
+        bild.begleiter.antworten = null;
+        bild.begleiter.wiederholen = e.wiederholen ? { ...e.wiederholen } : null;
+      }
     } else if (e.typ === 'gelocht') {
       if (e.art === 'pruefung') {
         wirkung.lochung = jetzt;
@@ -3289,6 +3423,7 @@ function erzeugeAnzeige(leinwand) {
     bild.gegner = [];
     bild.tuer = 0;
     bild.spalt = 0;
+    bild.blende = 0;
     rede = null;
     altesWagenbild = null;
     bild.wagenNr = -1;
@@ -3533,6 +3668,7 @@ function erzeugeAnzeige(leinwand) {
       }
       const b = bild.begleiter;
       if (b) {
+        if (b.wiederholen) maleNochmal(b.wiederholen, oy);
         maleFigur(stift, 'begleiter', boden.x + (b.x + 0.5) * s, boden.y + (b.y + 0.8) * s + oy, s * 0.82, { t, takt: 5, ruhig });
         if (b.antworten) for (const a of b.antworten) maleAntwort(a, t, oy);
       }
@@ -3585,6 +3721,11 @@ function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
+    if (bild.probe) {
+      // die Wiederholung: kühleres Licht über dem ganzen Wagen, wie eine Erinnerung
+      stift.fillStyle = 'rgba(150, 175, 230, 0.13)';
+      stift.fillRect(rumpf.x, rumpf.y + oy, rumpf.b, rumpf.h);
+    }
     if (rede && !karte && !imWechsel) maleRede(rede.text, rede, oy);
     else if (bild.begleiter && bild.begleiter.antworten && !karte && !imWechsel) maleRede(TEXTE.begleiter.frage, bild.begleiter, oy);
     maleHinweis();
@@ -3610,6 +3751,19 @@ function erzeugeAnzeige(leinwand) {
     } else {
       maleFigur(stift, a.id, cx, cy + s * 0.3, s * 0.55, { t, takt: a.x, ruhig: true });
     }
+  }
+
+  // „Noch mal": ein Schild auf leuchtendem Boden neben dem Begleiter
+  function maleNochmal(f, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (f.x + 0.5) * s;
+    const cy = boden.y + (f.y + 0.5) * s + oy;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
+    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleSchild(TEXTE.begleiter.nochmal, cx, cy);
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
@@ -3694,11 +3848,20 @@ function erzeugeAnzeige(leinwand) {
       stift.fillRect(0, 0, layout.breite, layout.hoehe);
     }
 
+    if (bild.blende > 0.01 && standbild) {
+      stift.globalAlpha = bild.blende;
+      stift.drawImage(standbild, 0, 0, layout.breite, layout.hoehe);
+      stift.globalAlpha = 1;
+    }
+
     // Anzeigen am Rand
     const { tafel, status } = layout;
     if (tafelbild) stift.drawImage(tafelbild, tafel.x, tafel.y, tafel.b, tafel.h);
-    const verlust = begrenze(1 - seitTreffer / 320, 0, 1);
+    // In der Wiederholung sind die Herzen blass: Hier kostet nichts ein Herz.
+    const verlust = bild.probe ? 0 : begrenze(1 - seitTreffer / 320, 0, 1);
+    stift.globalAlpha = bild.probe ? 0.38 : 1;
     maleHerzen(stift, status.x, status.y + status.h / 2, bild.herzen, HERZEN_VOLL, verlust);
+    stift.globalAlpha = 1;
     const zuwachs = begrenze(1 - (jetzt - wirkung.zuwachs) / 380, 0, 1);
     maleRuhe(stift, status.x + status.b, status.y + status.h / 2, bild.ruhe, RUHE_VOLL, zuwachs);
     const druck = begrenze(1 - (jetzt - wirkung.uhr) / 140, 0, 1);
@@ -4045,6 +4208,15 @@ function erzeugeTon() {
       klang(659, 659, 0.36, 0.14, 'sine', 0.12);
     },
     tod: () => klang(196, 98, 0.5, 0.4, 'sine', 0.1),
+    // die Wiederholung beim Begleiter: ein Hauch, der Ton sinkt hinein und steigt wieder heraus
+    probe: () => {
+      hauch(260, 0.3, 0.35);
+      klang(440, 330, 0.3, 0.12, 'sine', 0.04);
+    },
+    probeEnde: () => {
+      hauch(260, 0.3, 0.35);
+      klang(330, 440, 0.3, 0.12, 'sine', 0.04);
+    },
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);
       klang(659, 659, 0.3, 0.3, 'sine', 0.38);

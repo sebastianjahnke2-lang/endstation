@@ -6,6 +6,7 @@
 //   erzeugeSpiel(seed, { staerken: { sprint, rueckhalt, warten } })   Stärken aus früheren Fahrten
 //   erzeugeSpiel(seed, { fahrkarte })    die Fahrkarte mit ihren Lochungen, siehe fahrkarte.js
 //   erzeugeSpiel(seed, { begleiter })    die Todesursache der vorigen Fahrt: Er sitzt im Speisewagen
+//   erzeugeSpiel(seed, { szene })        der Wagen, in dem sie endete: Der Begleiter wiederholt ihn
 //   Welche Optionen eine neue Fahrt bekommt, sagt optionenFuerFahrt() in reise.js.
 //
 // act() ändert spiel.zustand und gibt zurück, was dabei passiert ist.
@@ -17,7 +18,7 @@ import { istHindernis, gegnerAuf, istMarkiert, tuerFrei } from './lage.js';
 import { WAGENZAHL, baueWagen } from './wagen.js';
 import { wuerfle } from './zufall.js';
 import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod, helleLochungen, HALT_VERLANGT } from './fahrkarte.js';
-import { ANTWORTARTEN, setzeBegleiter, sprichMitBegleiter } from './begleiter.js';
+import { ANTWORTARTEN, bereinigeSzene, setzeBegleiter, sprichMitBegleiter } from './begleiter.js';
 import { neuerGegner, loeseAnsagenEin, planeGegner, schadenVon } from './gegner.js';
 
 export const HERZEN_VOLL = 5;
@@ -41,9 +42,13 @@ export const GOENNEN_ZURUECK = 3; // einer von drei Würfen
 export const MEHR_AM_TISCH_HOECHSTENS = 5;
 const MEHR_TYPEN = ['gruppe', 'pendler', 'draengler'];
 
-function richteWagenEin(z) {
-  const wagen = baueWagen(z.wagenNr, z);
-  z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
+// szene: nur für die Wiederholung, { nr, zufall }. Dann entsteht der Wagen aus dem gemerkten Zufall,
+// ohne Angebot und ohne Begleiter, und der Zufall der Fahrt bleibt unberührt.
+function richteWagenEin(z, szene) {
+  const quelle = szene ? { zufall: szene.zufall } : z;
+  const anfang = quelle.zufall; // damit sich der Wagen nach einem Tod genau so wiederholen lässt
+  const wagen = baueWagen(z.wagenNr, quelle);
+  z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt, anfang };
   z.gegner = wagen.gegner.map((vorgabe) => neuerGegner(z.naechsteId++, vorgabe));
   z.wagen.mitKontrolleur = z.gegner.some((g) => g.typ === 'kontrolleur');
   z.wagen.mitGruppe = z.gegner.some((g) => g.typ === 'gruppe');
@@ -56,8 +61,14 @@ function richteWagenEin(z) {
   z.wagen.gegoennt = null;
   z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))]; // für das Aufhellen dunkler Lochungen
   z.getroffenVon = [];
-  stelleAngebot(z);
-  setzeBegleiter(z, wagen.begleiterPlatz);
+  if (szene) {
+    z.angebot = null;
+    z.pruefung = null;
+    z.begleiter = null;
+  } else {
+    stelleAngebot(z);
+    setzeBegleiter(z, wagen.begleiterPlatz);
+  }
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -75,13 +86,15 @@ function oeffneTuer(z, ereignisse, phase) {
 function stirb(z, ereignisse, phase, durch) {
   z.status = 'tot';
   z.todDurch = durch;
+  z.todSzene = { nr: z.wagenNr, zufall: z.wagen.anfang };
   ereignisse.push({ typ: 'tod', phase, wagenNr: z.wagenNr, durch, uebrig: z.gegner.length });
   lochungFuerTod(z, durch, ereignisse, phase);
 }
 
 // Eine Stärke kommt hinzu. Gibt das Ereignis zurück oder null, wenn sie schon da war.
+// In der Wiederholung zählt nichts für die Reise.
 function verstehe(z, staerke, gegner, phase) {
-  if (z.staerken[staerke]) return null;
+  if (z.probe || z.staerken[staerke]) return null;
   z.staerken[staerke] = true;
   return { typ: 'verstanden', phase, staerke, gegner };
 }
@@ -91,8 +104,46 @@ function nebenGegner(z, typ) {
   return z.gegner.some((g) => (!typ || g.typ === typ) && Math.abs(g.x - s.x) + Math.abs(g.y - s.y) === 1);
 }
 
+// Wiederholung: Der Begleiter spielt den Wagen, in dem die vorige Fahrt endete, noch einmal.
+// Gefahrlos: Kein Treffer und kein Aufbrechen kostet ein Herz. Folgenlos: kein Angebot, keine Lochung,
+// keine Stärke. Hinaus geht es durch die Tür oder mit einem Schritt nach unten vom Startfeld,
+// danach ist alles wie vorher, nur die Uhr ist weitergelaufen.
+function beginneProbe(z, ereignisse) {
+  const szene = z.begleiter.szene;
+  z.probe = {
+    zurueck: {
+      wagenNr: z.wagenNr,
+      wagen: z.wagen,
+      gegner: z.gegner,
+      tuerOffen: z.tuerOffen,
+      tuerStoesse: z.tuerStoesse,
+      aufgebrochen: z.aufgebrochen,
+      zuegeImWagen: z.zuegeImWagen,
+      getroffenVon: z.getroffenVon,
+      angebot: z.angebot,
+      pruefung: z.pruefung,
+      begleiter: z.begleiter,
+      spieler: { ...z.spieler },
+      verstehen: { ...z.verstehen },
+      zaehler: { ...z.zaehler },
+    },
+  };
+  z.wagenNr = szene.nr;
+  richteWagenEin(z, szene);
+  ereignisse.push({ typ: 'probe', phase: 1, nr: z.wagenNr });
+}
+
+function endeProbe(z) {
+  const r = z.probe.zurueck;
+  z.probe = null;
+  for (const name of ['wagenNr', 'wagen', 'gegner', 'tuerOffen', 'tuerStoesse', 'aufgebrochen', 'zuegeImWagen', 'getroffenVon', 'angebot', 'pruefung', 'begleiter', 'verstehen', 'zaehler']) z[name] = r[name];
+  Object.assign(z.spieler, r.spieler);
+  return [{ typ: 'probeEnde', phase: 0, nr: z.wagenNr }];
+}
+
 function wechsleWagen(z) {
   z.zug += 1;
+  if (z.probe) return endeProbe(z); // durch die Tür der Wiederholung: zurück in den Speisewagen
   z.zaehler.schritte += 1;
   z.zaehler.wagen += 1;
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
@@ -175,6 +226,7 @@ function fuehreAus(z, aktion) {
   const neben = nebenGegner(z); // für die Ruhe fürs Warten
   const draenglerRot = z.gegner.some((g) => g.typ === 'draengler' && g.ansage && g.ansage.some((f) => f.x === s.x && f.y === s.y));
   const spaeter = []; // Stärken, die in diesem Zug verstanden werden: [staerke, gegner]
+  let nochmal = false; // auf „Noch mal" getreten: Die Wiederholung beginnt nach diesem Schritt
 
   // Phase 0: der Spieler
   if (typeof aktion === 'string' && aktion.startsWith('sprint-')) {
@@ -188,7 +240,7 @@ function fuehreAus(z, aktion) {
     zielRot = bewegt && istMarkiert(z, s.x, s.y);
     if (bewegt) {
       nimmAn(z, ereignisse);
-      sprichMitBegleiter(z, ereignisse);
+      nochmal = sprichMitBegleiter(z, ereignisse);
     }
   } else if (aktion === 'warten') {
     ereignisse.push({ typ: 'warten', phase: 0 });
@@ -205,6 +257,10 @@ function fuehreAus(z, aktion) {
     const y = s.y + r.y;
     const anDerTuer = aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y;
     if (anDerTuer && z.tuerOffen) return wechsleWagen(z);
+    if (z.probe && aktion === 'runter' && s.x === STARTFELD.x && s.y === STARTFELD.y) {
+      z.zug += 1;
+      return endeProbe(z); // aus der Wiederholung nach unten hinaus
+    }
     const amTisch = z.wagen.sicher && imFeld(x, y) && z.wagen.plan[y][x] === 'T';
     if (amTisch) {
       // einmal je Besuch, und nie das letzte Herz: Im sicheren Ort passiert nichts Schlimmes
@@ -228,7 +284,7 @@ function fuehreAus(z, aktion) {
       if (z.tuerStoesse >= AUFBRECHEN_STOESSE) {
         z.tuerOffen = true;
         z.aufgebrochen = true;
-        s.herzen = Math.max(0, s.herzen - AUFBRECHEN_KOSTET);
+        s.herzen = Math.max(0, s.herzen - (z.probe ? 0 : AUFBRECHEN_KOSTET));
         z.zaehler.aufgebrochen += 1;
         ereignisse.push({ typ: 'aufgebrochen', phase: 0, herzen: s.herzen });
         ereignisse.push({ typ: 'tuerAuf', phase: 0 });
@@ -260,17 +316,22 @@ function fuehreAus(z, aktion) {
       bewegt = true;
       z.zaehler.schritte += 1;
       nimmAn(z, ereignisse); // auf das leuchtende Symbol treten heißt: die Prüfung annehmen
-      sprichMitBegleiter(z, ereignisse);
+      nochmal = sprichMitBegleiter(z, ereignisse);
     }
   }
   z.zug += 1;
   z.zuegeImWagen += 1;
+  if (nochmal) {
+    beginneProbe(z, ereignisse); // im Speisewagen geschieht in diesem Zug sonst nichts
+    return ereignisse;
+  }
 
   // Phase 1: angekündigte Angriffe treffen ein
   const { treffer, dran } = loeseAnsagenEin(z, ereignisse);
   if (treffer) {
-    // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei.
-    const schaden = schadenVon(treffer);
+    // höchstens ein Treffer je Zug, egal wie viele treffen. Er kostet ein Herz, beim Kontrolleur zwei,
+    // in der Wiederholung keines.
+    const schaden = z.probe ? 0 : schadenVon(treffer);
     s.herzen = Math.max(0, s.herzen - schaden);
     // Rückhalt: einmal je Fahrt bleibt nach einem tödlichen Treffer ein Herz
     const haelt = s.herzen <= 0 && z.staerken.rueckhalt && !z.rueckhaltGenutzt;
@@ -345,8 +406,11 @@ export function erzeugeSpiel(seed, optionen = {}) {
     angebot: null, // { id, x, y }: das leuchtende Symbol im Wagen
     pruefung: null, // die angenommene Prüfung, bis zum Verlassen des Wagens
     begleiterDurch: ANTWORTARTEN.includes(optionen.begleiter) && optionen.begleiter !== 'pech' ? optionen.begleiter : null,
-    begleiter: null, // { durch, x, y, antworten, gesprochen }, nur im Speisewagen
+    begleiterSzene: bereinigeSzene(optionen.szene),
+    begleiter: null, // { durch, szene, x, y, antworten, gesprochen, wiederholen }, nur im Speisewagen
+    probe: null, // die Wiederholung: { zurueck } mit allem, was danach wieder gilt
     todDurch: null,
+    todSzene: null, // { nr, zufall }: der Wagen, in dem die Fahrt endete
     halt: null, // { genug, hell, fehlt } am Ende der Fahrt
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);

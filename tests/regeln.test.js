@@ -840,8 +840,8 @@ test('Fahrkarte: Sie kommt aus früheren Fahrten mit, Unsinn fällt weg', () => 
 
 import { optionenFuerFahrt, SPEISEWAGEN_NR } from '../src/kern/reise.js';
 
-function mitBegleiter(durch, seed = 9) {
-  const spiel = erzeugeSpiel(seed, { startWagen: SPEISEWAGEN_NR, begleiter: durch });
+function mitBegleiter(durch, seed = 9, szene) {
+  const spiel = erzeugeSpiel(seed, { startWagen: SPEISEWAGEN_NR, begleiter: durch, szene });
   const z = spiel.zustand;
   const b = z.begleiter;
   // neben ihn: das Gangfeld in seiner Reihe
@@ -882,6 +882,173 @@ test('Begleiter: Die ehrliche Antwort gibt eine helle Lochung, eine andere hat k
     assert.equal(a.ehrlich, ehrlich);
     assert.equal(z.fahrkarte.lochungen.some((l) => l.art === 'ehrlich'), ehrlich);
     assert.equal(z.begleiter.gesprochen, true, 'nur einmal');
+  }
+});
+
+// ---------------------------------------------------------------- Wiederholung beim Begleiter (Etappe 2)
+
+import { kaempfer, ausgewogener } from './bots.js';
+import { neueFahrkarte } from '../src/kern/fahrkarte.js';
+
+// Eine echte Fahrt eines Bots bis zum Tod. Gemerkt wird, wie der letzte Wagen beim Hineingehen aussah,
+// was der Bot darin tat und wo die Gegner danach jeweils standen.
+function botStirbt(bot, seed) {
+  const spiel = erzeugeSpiel(seed);
+  const z = spiel.zustand;
+  const merk = {};
+  const lage = () => z.gegner.map((g) => [g.typ, g.x, g.y]);
+  let anfang = { plan: z.wagen.plan, gegner: lage() };
+  let zuege = [];
+  for (let i = 0; i < 2000 && z.status === 'faehrt'; i++) {
+    let aktion = bot(z, merk);
+    let e = spiel.act(aktion);
+    if (e.length === 1 && e[0].typ === 'ungueltig') {
+      aktion = 'warten';
+      e = spiel.act(aktion);
+    }
+    if (e.some((x) => x.typ === 'wagenwechsel')) {
+      anfang = { plan: z.wagen.plan, gegner: lage() };
+      zuege = [];
+    } else {
+      zuege.push({ aktion, gegner: lage() });
+    }
+  }
+  assert.equal(z.status, 'tot', `Seed ${seed}: der Bot sollte sterben`);
+  return { z, anfang, zuege };
+}
+
+// Die nächste Fahrt im Speisewagen: neben ihn, auf die Antwort unter ihm. Danach liegt „Noch mal" dort,
+// wo man ihn angesprochen hat, und der Spieler steht genau darunter.
+function vorNochMal(tot, seed = 9) {
+  const optionen = optionenFuerFahrt({ staerken: {}, mehrAmTisch: 0, fahrkarte: tot.fahrkarte }, tot);
+  const spiel = erzeugeSpiel(seed, { ...optionen, startWagen: SPEISEWAGEN_NR });
+  const z = spiel.zustand;
+  const b = z.begleiter;
+  z.spieler.x = b.x === 4 ? 3 : 1;
+  z.spieler.y = b.y + 1;
+  spiel.act('hoch');
+  const e = spiel.act('runter');
+  assert.ok(e.some((x) => x.typ === 'antwort'), typen(e).join(','));
+  return { spiel, z, b };
+}
+
+const TODE = [[kaempfer, 1], [kaempfer, 5], [kaempfer, 19], [ausgewogener, 6]];
+
+test('Begleiter: Nach der Antwort liegt neben ihm „Noch mal", egal welche Antwort', () => {
+  for (const [bot, seed] of TODE) {
+    const tod = botStirbt(bot, seed);
+    const { z, b } = vorNochMal(tod.z);
+    assert.deepEqual(b.wiederholen, { x: b.x === 4 ? 3 : 1, y: b.y }, 'neben ihm, wo man ihn angesprochen hat');
+    assert.equal(z.wagen.plan[b.wiederholen.y][b.wiederholen.x], '.');
+  }
+  // ohne gemerkte Szene, etwa aus einer älteren Fahrt, liegt dort nichts
+  const { spiel, z } = mitBegleiter('pendler');
+  spiel.act('hoch');
+  const e = spiel.act('runter');
+  assert.equal(e.find((x) => x.typ === 'antwort').wiederholen, null);
+  assert.equal(z.begleiter.wiederholen, null);
+});
+
+test('Wiederholung: Wer auf „Noch mal" tritt, steht am Anfang des Wagens, in dem die Fahrt endete', () => {
+  for (const [bot, seed] of TODE) {
+    const tod = botStirbt(bot, seed);
+    const { spiel, z } = vorNochMal(tod.z, seed + 100);
+    const e = spiel.act('hoch');
+    assert.deepEqual(typen(e), ['schritt', 'probe']);
+    assert.equal(z.wagenNr, tod.z.wagenNr);
+    assert.deepEqual(z.wagen.plan, tod.anfang.plan, 'derselbe Plan');
+    assert.deepEqual(z.gegner.map((g) => [g.typ, g.x, g.y]), tod.anfang.gegner, 'dieselben Gegner an denselben Plätzen');
+    assert.deepEqual([z.spieler.x, z.spieler.y], [2, 7]);
+    assert.equal(z.angebot, null, 'kein Angebot');
+    assert.equal(z.begleiter, null);
+    // dieselben Züge, dieselben Gegnerzüge. Nur der letzte endet diesmal nicht.
+    tod.zuege.forEach((schritt, i) => {
+      spiel.act(schritt.aktion);
+      if (i < tod.zuege.length - 1) assert.deepEqual(z.gegner.map((g) => [g.typ, g.x, g.y]), schritt.gegner, `Seed ${seed}, Zug ${i + 1}`);
+    });
+    assert.equal(z.status, 'faehrt', 'in der Wiederholung endet nichts');
+  }
+});
+
+test('Wiederholung: gefahrlos und folgenlos, danach ist alles wie vorher', () => {
+  for (const [bot, seed] of TODE) {
+    const tod = botStirbt(bot, seed);
+    const { spiel, z, b } = vorNochMal(tod.z);
+    const vorher = JSON.parse(JSON.stringify(z));
+    spiel.act('hoch');
+    let treffer = 0;
+    for (const schritt of tod.zuege) {
+      const e = spiel.act(schritt.aktion);
+      treffer += e.filter((x) => x.typ === 'treffer').length;
+      assert.equal(z.spieler.herzen, vorher.spieler.herzen, 'kein Herz geht verloren');
+      assert.equal(e.some((x) => ['gelocht', 'aufgehellt', 'verstanden', 'angenommen', 'tod'].includes(x.typ)), false, typen(e).join(','));
+    }
+    if (tod.z.todDurch !== 'tuer') assert.ok(treffer > 0, 'die Treffer von damals sind zu sehen');
+    assert.deepEqual(z.fahrkarte, vorher.fahrkarte);
+    assert.deepEqual(z.staerken, vorher.staerken);
+    // hinaus durch die Tür
+    z.gegner = [];
+    z.tuerOffen = true;
+    z.spieler.x = 2;
+    z.spieler.y = 0;
+    const zug = z.zug;
+    assert.deepEqual(typen(spiel.act('hoch')), ['probeEnde']);
+    assert.equal(z.zug, zug + 1, 'die Uhr läuft weiter');
+    assert.equal(z.probe, null);
+    assert.equal(z.wagenNr, SPEISEWAGEN_NR);
+    assert.deepEqual(z.wagen, vorher.wagen);
+    assert.deepEqual(z.spieler, { ...vorher.spieler, x: b.x === 4 ? 3 : 1, y: b.y }, 'neben dem Begleiter, Herzen und Ruhe wie vorher');
+    assert.deepEqual(z.verstehen, vorher.verstehen);
+    assert.deepEqual(z.zaehler, { ...vorher.zaehler, schritte: vorher.zaehler.schritte + 1 }, 'nur der Schritt auf das Schild zählt');
+    assert.deepEqual(z.fahrkarte, vorher.fahrkarte);
+    assert.equal(z.begleiter.wiederholen, null, 'eine Wiederholung je Tod');
+    // vom Feld herunter und wieder hinauf: nichts geschieht
+    spiel.act('runter');
+    assert.deepEqual(typen(spiel.act('hoch')), ['schritt']);
+    assert.equal(z.probe, null);
+  }
+});
+
+test('Wiederholung: Aufbrechen kostet kein Herz, nichts wird verstanden, ein Schritt nach unten führt hinaus', () => {
+  const tod = botStirbt(kaempfer, 1);
+  const { spiel, z } = vorNochMal(tod.z);
+  spiel.act('hoch');
+  const herzen = z.spieler.herzen;
+  // dreimal gegen die geschlossene Tür
+  z.gegner = [neuerGegner(90, { typ: 'pendler', x: 4, y: 7 }), neuerGegner(91, { typ: 'pendler', x: 0, y: 7 })];
+  for (const g of z.gegner) g.pause = 999;
+  z.wagen.mitKontrolleur = false; // die Tür gehört hier niemandem
+  z.tuerOffen = false;
+  z.spieler.x = 2;
+  z.spieler.y = 0;
+  for (let i = 0; i < 3; i++) spiel.act('hoch');
+  assert.equal(z.tuerOffen, true);
+  assert.equal(z.spieler.herzen, herzen, 'Aufbrechen kostet hier nichts');
+  // dreimal neben dem Pendler warten verstünde ihn sonst
+  z.tuerOffen = false;
+  z.aufgebrochen = false;
+  z.spieler.x = 3;
+  z.spieler.y = 7;
+  z.verstehen.pendler = 2;
+  const e = spiel.act('warten');
+  assert.equal(e.some((x) => x.typ === 'verstanden'), false);
+  assert.equal(z.staerken.warten, false);
+  // vom Startfeld nach unten: zurück im Speisewagen
+  z.spieler.x = 2;
+  assert.deepEqual(typen(spiel.act('runter')), ['probeEnde']);
+  assert.equal(z.wagen.sicher, true);
+  assert.equal(z.spieler.herzen, herzen);
+  assert.equal(z.verstehen.pendler, 0, 'was in der Wiederholung gezählt wurde, ist fort');
+});
+
+test('Reise: Der Wagen des Todes kommt mit, Unsinn fällt weg', () => {
+  const tod = botStirbt(kaempfer, 5).z;
+  assert.deepEqual(tod.todSzene, { nr: tod.wagenNr, zufall: tod.todSzene.zufall });
+  assert.deepEqual(optionenFuerFahrt({ staerken: {}, mehrAmTisch: 0, fahrkarte: neueFahrkarte() }, tod).szene, tod.todSzene);
+  const szeneVon = (szene) => mitBegleiter('pendler', 9, szene).z.begleiter.szene;
+  assert.deepEqual(szeneVon({ nr: 2, zufall: 77 }), { nr: 2, zufall: 77 });
+  for (const unsinn of [{ nr: SPEISEWAGEN_NR, zufall: 1 }, { nr: 99, zufall: 1 }, { nr: 2, zufall: -1 }, { nr: 2.5, zufall: 1 }, { nr: 2 }, 'Wagen 3', null]) {
+    assert.equal(szeneVon(unsinn), null, JSON.stringify(unsinn));
   }
 });
 
