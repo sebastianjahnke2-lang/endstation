@@ -6,7 +6,8 @@ const SCHLUESSEL = 'endstation.1';
 
 // staerken: was der Spieler in früheren Fahrten verstanden hat (Stärken aus Schatten)
 export function leererStand() {
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false } };
+  // mehrAmTisch: so viele sitzen nach dem Gönnen später zusätzlich im Speisewagen
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0 };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -20,6 +21,7 @@ export function bereinigeStand(roh) {
   if (roh.staerken && typeof roh.staerken === 'object') {
     for (const name of Object.keys(stand.staerken)) stand.staerken[name] = roh.staerken[name] === true;
   }
+  if (Number.isInteger(roh.mehrAmTisch) && roh.mehrAmTisch >= 0) stand.mehrAmTisch = Math.min(5, roh.mehrAmTisch);
   return stand;
 }
 

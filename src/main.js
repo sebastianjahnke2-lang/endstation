@@ -38,21 +38,22 @@ function starteFahrt(jetzt) {
   const fest = festerSeed();
   const seed = fest !== null ? fest + fahrten : (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
   fahrten += 1;
-  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken } });
+  spiel = erzeugeSpiel(seed, { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch });
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
 function merke(ereignisse) {
   const g = stand.gelernt;
-  const vorher = JSON.stringify([g, stand.staerken]);
+  const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch]);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
     if (e.typ === 'schlag') g.anrempeln = true;
     if (e.typ === 'verstanden') stand.staerken[e.staerke] = true; // dauerhaft, auch für die nächsten Fahrten
+    if (e.typ === 'gegoennt') stand.mehrAmTisch = e.mehrAmTisch; // zeigt sich erst bei einer späteren Fahrt
   }
-  if (JSON.stringify([g, stand.staerken]) !== vorher) {
+  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch]) !== vorher) {
     sichereStand(stand);
     zeigeHinweise();
   }

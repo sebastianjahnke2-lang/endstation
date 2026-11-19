@@ -103,10 +103,13 @@ function eineFahrt(seed, waehle, optionen) {
       assert.equal(!!heil, z.status === 'faehrt' && z.wagen.heilt > 0, `${wo}: Heilen beim Wagenwechsel`);
       continue;
     }
-    // Im sicheren Wagen passiert nie etwas Schlimmes.
+    // Im sicheren Wagen passiert nie etwas Schlimmes. Ein Herz geht dort nur, wer es selbst am Tisch lässt.
+    const gegoennt = typen.includes('gegoennt') ? 1 : 0;
+    if (gegoennt) assert.ok(z.wagen.sicher && alt.herzen > 1, `${wo}: gegönnt außerhalb des Speisewagens oder das letzte Herz`);
     if (z.wagen.sicher) {
       assert.equal(z.gegner.length, 0, `${wo}: Gegner im sicheren Wagen`);
-      assert.ok(z.spieler.herzen >= alt.herzen, `${wo}: Herz verloren im sicheren Wagen`);
+      assert.ok(z.spieler.herzen >= alt.herzen - gegoennt, `${wo}: Herz verloren im sicheren Wagen`);
+      assert.ok(z.spieler.herzen > 0, `${wo}: Tod im sicheren Wagen`);
     }
 
     // kein Angriff ohne Ankündigung, höchstens ein Treffer je Zug. Er kostet ein Herz, beim Kontrolleur
@@ -120,7 +123,7 @@ function eineFahrt(seed, waehle, optionen) {
       // Rückhalt: Der tödliche Treffer lässt ein Herz übrig, einmal je Fahrt
       assert.ok(alt.herzen <= schaden + aufgebrochen && z.spieler.herzen === 1 && alt.rueckhalt === false, `${wo}: Rückhalt falsch`);
     } else {
-      assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen), `${wo}: ${verlust} Herzen verloren`);
+      assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen + gegoennt), `${wo}: ${verlust} Herzen verloren`);
     }
     if (aufgebrochen) assert.equal(z.tuerOffen, true, `${wo}: aufgebrochen, Tür zu`);
     const standAufRot = rotVorher.includes(feldNr(z.spieler.x, z.spieler.y));

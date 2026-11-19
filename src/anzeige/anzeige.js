@@ -12,7 +12,7 @@ import { TEXTE, fuelle } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, leicht, hinUndHer } from './formen.js';
 import { berechneLayout, feldBei, KNOPF } from './layout.js';
 import { maleFigur, malePunkte, maleAchtung } from './figuren.js';
-import { maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
+import { herzPfad, maleWagenbild, maleTuer, maleTuerlicht, maleLichter, maleLichtschein, maleTafelbild, maleHerzen, maleRuhe, maleUhr, maleTonknopf } from './kulisse.js';
 import { maleKarte, kartenMasse } from './karte.js';
 import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } from './matrix.js';
 
@@ -364,6 +364,15 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'ruhigGewartet') {
       bild.ruhe = e.ruhe;
       wirkung.zuwachs = jetzt;
+    } else if (e.typ === 'gegoennt') {
+      // ein Herz bleibt auf dem Tisch liegen; ob etwas zurückkommt, zeigt sich erst später
+      bild.herzen = e.herzen;
+      bild.zug += 1;
+      const r = { x: Math.sign(e.x - s.x), y: Math.sign(e.y - s.y) };
+      bewege(jetzt, 120, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.2;
+        s.sy = r.y * hinUndHer(p) * 0.2;
+      });
     } else if (e.typ === 'geheilt') {
       bild.herzen = e.herzen;
       if (e.plus > 0) wirkung.leuchten = jetzt + 160; // nach dem Hereinschieben des Wagens
@@ -694,6 +703,13 @@ export function erzeugeAnzeige(leinwand) {
           stift.fillStyle = schein;
           stift.fillRect(lx - s * 1.5, ly - s * 1.5, s * 3, s * 3);
         }
+      }
+      if (z.wagen.gegoennt) {
+        const hx = boden.x + (z.wagen.gegoennt.x + 0.5) * s;
+        const hy = boden.y + (z.wagen.gegoennt.y + 0.36) * s + oy;
+        herzPfad(stift, hx, hy, s * 0.2);
+        stift.fillStyle = FARBE.herz;
+        stift.fill();
       }
       for (const f of z.wagen.fahrgaeste) {
         const cx = boden.x + (f.x + 0.5) * s;

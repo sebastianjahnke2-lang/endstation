@@ -32,7 +32,7 @@ test('ganz ohne Fenster und Speicher gibt es einen vollständigen leeren Stand',
 
 test('leerer Speicher: alles steht auf Anfang', () => {
   mitFenster({ localStorage: speicherMit({}) }, () => {
-    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false } });
+    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0 });
   });
 });
 
@@ -67,7 +67,7 @@ test('Unsinn im Speicher wird zu einem gültigen Stand', () => {
 test('ein gesicherter Stand kommt genauso zurück', () => {
   const speicher = speicherMit({});
   mitFenster({ localStorage: speicher }, () => {
-    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true } };
+    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true }, mehrAmTisch: 2 };
     assert.equal(sichereStand(stand), true);
     assert.deepEqual(ladeStand(), stand);
   });
@@ -75,7 +75,14 @@ test('ein gesicherter Stand kommt genauso zurück', () => {
 
 test('bereinigeStand übernimmt nur Bekanntes', () => {
   const stand = bereinigeStand({ gelernt: { wischen: true, ausweichen: 'ja', hacken: true }, ton: false, lochungen: 99 });
-  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false } });
+  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0 });
+});
+
+test('Gönnen: Anfangswert null, Unsinn wird zu null, höchstens fünf', () => {
+  assert.equal(leererStand().mehrAmTisch, 0);
+  for (const roh of [-1, 2.5, '3', null, true]) assert.equal(bereinigeStand({ mehrAmTisch: roh }).mehrAmTisch, 0, String(roh));
+  assert.equal(bereinigeStand({ mehrAmTisch: 3 }).mehrAmTisch, 3);
+  assert.equal(bereinigeStand({ mehrAmTisch: 99 }).mehrAmTisch, 5);
 });
 
 test('Stärken: Anfangswert ist keine, Unsinn wird zu keiner, Bekanntes bleibt', () => {

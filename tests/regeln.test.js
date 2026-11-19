@@ -641,3 +641,53 @@ test('Speisewagen: An den Tischen sitzt, wen der Spieler verstanden hat', () => 
   assert.deepEqual(mit.wagen.fahrgaeste.map((f) => f.typ).sort(), ['draengler', 'pendler']);
   for (const f of mit.wagen.fahrgaeste) assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
 });
+
+// ---------------------------------------------------------------- Gönnen (Etappe 2)
+
+function imSpeisewagen(herzen) {
+  const spiel = erzeugeSpiel(9, { startWagen: 3 });
+  const z = spiel.zustand;
+  z.spieler.herzen = herzen;
+  const tisch = z.wagen.plan[2][0] === 'T' ? 0 : 4; // der Wagen kann gespiegelt sein
+  z.spieler.x = tisch === 0 ? 1 : 3;
+  z.spieler.y = 2;
+  return { spiel, z, richtung: tisch === 0 ? 'links' : 'rechts' };
+}
+
+test('Gönnen: Wer im Speisewagen gegen einen Tisch läuft, lässt dort ein Herz, einmal je Besuch', () => {
+  const { spiel, z, richtung } = imSpeisewagen(3);
+  const e = spiel.act(richtung);
+  assert.equal(e[0].typ, 'gegoennt');
+  assert.equal(z.spieler.herzen, 2);
+  assert.ok(z.wagen.gegoennt);
+  assert.equal(z.zug, 1, 'es kostet einen Zug');
+  assert.deepEqual(typen(spiel.act(richtung)), ['ungueltig'], 'nur einmal je Besuch');
+  assert.equal(z.spieler.herzen, 2);
+});
+
+test('Gönnen: Das letzte Herz lässt man nicht liegen', () => {
+  const { spiel, z, richtung } = imSpeisewagen(1);
+  assert.deepEqual(typen(spiel.act(richtung)), ['ungueltig']);
+  assert.equal(z.spieler.herzen, 1);
+});
+
+test('Gönnen: Meistens kommt nichts zurück, manchmal sitzt später jemand mehr am Tisch', () => {
+  let zurueck = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const spiel = erzeugeSpiel(seed, { startWagen: 3 });
+    const z = spiel.zustand;
+    z.spieler.herzen = 3;
+    const tisch = z.wagen.plan[2][0] === 'T' ? 0 : 4;
+    z.spieler.x = tisch === 0 ? 1 : 3;
+    z.spieler.y = 2;
+    const e = spiel.act(tisch === 0 ? 'links' : 'rechts');
+    if (e[0].zurueck) zurueck += 1;
+    assert.equal(e[0].mehrAmTisch, e[0].zurueck ? 1 : 0);
+  }
+  assert.ok(zurueck > 5 && zurueck < 35, `${zurueck} von 60`);
+  // eine spätere Fahrt: jemand mehr am Tisch, auf einem Platz, nicht im Gang
+  const spaeter = erzeugeSpiel(1, { startWagen: 3, mehrAmTisch: 2 }).zustand;
+  assert.equal(spaeter.wagen.fahrgaeste.length, 2);
+  for (const f of spaeter.wagen.fahrgaeste) assert.notEqual(spaeter.wagen.plan[f.y][f.x], '.');
+  assert.equal(erzeugeSpiel(1, { mehrAmTisch: 'viele' }).zustand.mehrAmTisch, 0);
+});

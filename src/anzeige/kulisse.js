@@ -210,7 +210,7 @@ export function maleTafelbild(layout, nummer, name, dichte) {
   return leinwand;
 }
 
-function herzPfad(stift, cx, cy, g) {
+export function herzPfad(stift, cx, cy, g) {
   stift.beginPath();
   stift.moveTo(cx, cy + g * 0.46);
   stift.bezierCurveTo(cx - g * 0.72, cy + g * 0.02, cx - g * 0.52, cy - g * 0.56, cx, cy - g * 0.18);

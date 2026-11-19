@@ -12,6 +12,7 @@
 import { RICHTUNG, STARTFELD, TUERFELD, imFeld } from './feld.js';
 import { istHindernis, gegnerAuf, istMarkiert, tuerFrei } from './lage.js';
 import { WAGENZAHL, baueWagen } from './wagen.js';
+import { wuerfle } from './zufall.js';
 import { neuerGegner, loeseAnsagenEin, planeGegner, schadenVon } from './gegner.js';
 
 export const HERZEN_VOLL = 5;
@@ -29,6 +30,12 @@ export const VERSTEHEN_NACH = 3; // so oft neben dem Pendler warten oder dem Dr�
 export const SPRINT_WEITE = 2;
 export const SPRINT_KOSTET = 1; // Ruhe
 
+// Gönnen: Im Speisewagen kann man an einem Tisch ein Herz lassen. Meistens kommt nichts zurück,
+// manchmal sitzt bei einer späteren Fahrt jemand mehr am Tisch.
+export const GOENNEN_ZURUECK = 3; // einer von drei Würfen
+export const MEHR_AM_TISCH_HOECHSTENS = 5;
+const MEHR_TYPEN = ['gruppe', 'pendler', 'draengler'];
+
 function richteWagenEin(z) {
   const wagen = baueWagen(z.wagenNr, z);
   z.wagen = { nr: wagen.nr, art: wagen.art, plan: wagen.plan, gespiegelt: wagen.gespiegelt };
@@ -39,6 +46,9 @@ function richteWagenEin(z) {
   z.wagen.heilt = wagen.heilt;
   // an den Tischen sitzt, wen der Spieler verstanden hat
   z.wagen.fahrgaeste = wagen.fahrgaeste.filter((f) => z.staerken[f.staerke]).map((f) => ({ typ: f.typ, x: f.x, y: f.y }));
+  const mehr = Math.min(z.mehrAmTisch, wagen.mehrPlaetze.length);
+  for (let i = 0; i < mehr; i++) z.wagen.fahrgaeste.push({ typ: MEHR_TYPEN[i % MEHR_TYPEN.length], x: wagen.mehrPlaetze[i].x, y: wagen.mehrPlaetze[i].y });
+  z.wagen.gegoennt = null;
   z.spieler.x = STARTFELD.x;
   z.spieler.y = STARTFELD.y;
   z.tuerOffen = z.gegner.length === 0;
@@ -174,9 +184,22 @@ function fuehreAus(z, aktion) {
     const y = s.y + r.y;
     const anDerTuer = aktion === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y;
     if (anDerTuer && z.tuerOffen) return wechsleWagen(z);
-    if (!anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
-    const g = anDerTuer ? null : gegnerAuf(z, x, y);
-    if (anDerTuer) {
+    const amTisch = z.wagen.sicher && imFeld(x, y) && z.wagen.plan[y][x] === 'T';
+    if (amTisch) {
+      // einmal je Besuch, und nie das letzte Herz: Im sicheren Ort passiert nichts Schlimmes
+      if (z.wagen.gegoennt || s.herzen <= 1) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+      s.herzen -= 1;
+      z.wagen.gegoennt = { x, y };
+      const zurueck = wuerfle(z, GOENNEN_ZURUECK) === 0;
+      if (zurueck) z.mehrAmTisch = Math.min(MEHR_AM_TISCH_HOECHSTENS, z.mehrAmTisch + 1);
+      ereignisse.push({ typ: 'gegoennt', phase: 0, x, y, herzen: s.herzen, zurueck, mehrAmTisch: z.mehrAmTisch });
+      tat = { art: 'stoss' };
+    }
+    if (!amTisch && !anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+    const g = anDerTuer || amTisch ? null : gegnerAuf(z, x, y);
+    if (amTisch) {
+      // schon erledigt
+    } else if (anDerTuer) {
       // Aufbrechen: Jede Tür gibt nach dreimal Dagegenlaufen nach und kostet ein Herz.
       tat = { art: 'stoss' };
       z.tuerStoesse += 1;
@@ -288,6 +311,7 @@ export function erzeugeSpiel(seed, optionen = {}) {
     naechsteId: 1,
     zaehler: { schritte: 0, schlaege: 0, gewartet: 0, ausgewichen: 0, treffer: 0, besiegt: 0, wagen: 0, aufgebrochen: 0 },
     staerken: {},
+    mehrAmTisch: Math.max(0, Math.min(MEHR_AM_TISCH_HOECHSTENS, Math.floor(optionen.mehrAmTisch) || 0)),
     verstehen: { pendler: 0, draengler: 0 }, // Zähler dieser Fahrt
     rueckhaltGenutzt: false,
   };

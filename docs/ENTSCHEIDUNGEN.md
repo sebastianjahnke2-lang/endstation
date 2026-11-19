@@ -111,7 +111,9 @@ Der Auftraggeber hat am 19.11. zuerst nur den Wagen mit dem Kontrolleur freigege
 - **Warmes Licht** über den Tischen und auf dem ganzen Boden.
 - **Fahrgäste sind die verstandenen Gegnertypen:** Wer die Stärke des Pendlers, der Reisegruppe oder des Dränglers hat, findet eine solche Figur auf einem Sitz. **Ohne Gesicht,** obwohl der Fahrplan Gesichter nennt. Das widerspricht den Vorgaben aus dem Prototyp-Auftrag und steht unter „Offen".
 - **Fenster wie in jedem Wagen,** mit vorbeiziehenden Lichtern. Kein „Blick nach draußen" mit Landschaft, das widerspricht ebenfalls dem Prototyp-Auftrag.
-- **Nicht gebaut: Gönnen und Begleiter.** Gönnen braucht einen späteren Besuch, in dem „jemand mehr am Tisch sitzt". Der Begleiter widerspricht dem Prototyp-Auftrag (kein Lob).
+- **Gönnen: Wer gegen einen Tisch läuft, lässt dort ein Herz liegen.** Das geht einmal je Besuch und kostet einen Zug. Das letzte Herz lässt man nicht liegen: Im sicheren Ort passiert nie etwas Schlimmes, auch nicht durch einen selbst. Das Herz bleibt sichtbar auf dem Tisch, bis man weiterfährt.
+- **Meistens kommt nichts zurück.** In einem von drei Fällen (aus dem Zufall der Fahrt) sitzt bei späteren Fahrten jemand mehr im Speisewagen, höchstens fünf. Das zeigt sich erst bei der nächsten Fahrt und wird nirgends angekündigt. Gespeichert als `mehrAmTisch` in `src/speicher.js`.
+- **Nicht gebaut: der Begleiter.** Er widerspricht dem Prototyp-Auftrag (kein Lob).
 - **Zahlen mit Speisewagen** (500 Fahrten je Bot): ausgewogen mit Unachtsamkeit 55 %, ohne Fehler 86 %, Ausweicher 60 %, Kämpfer 0 %, ausgewogen mit Unachtsamkeit und allen Stärken 73 %. Das Heilen hilft wenig, weil die meisten mit fast vollen Herzen ankommen.
 
 ### Stärken aus Schatten
