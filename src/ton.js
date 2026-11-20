@@ -114,6 +114,15 @@ export function erzeugeTon() {
       klang(659, 659, 0.36, 0.14, 'sine', 0.12);
     },
     tod: () => klang(196, 98, 0.5, 0.4, 'sine', 0.1),
+    // die Wiederholung beim Begleiter: ein Hauch, der Ton sinkt hinein und steigt wieder heraus
+    probe: () => {
+      hauch(260, 0.3, 0.35);
+      klang(440, 330, 0.3, 0.12, 'sine', 0.04);
+    },
+    probeEnde: () => {
+      hauch(260, 0.3, 0.35);
+      klang(330, 440, 0.3, 0.12, 'sine', 0.04);
+    },
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);
       klang(659, 659, 0.3, 0.3, 'sine', 0.38);

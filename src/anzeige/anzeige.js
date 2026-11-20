@@ -37,6 +37,7 @@ export function erzeugeAnzeige(leinwand) {
   let altesWagenbild = null;
   let tafelbild = null;
   let schleier = null;
+  let standbild = null; // das letzte Bild vor der Wiederholung, zum Überblenden
 
   const bild = {
     wagenNr: -1,
@@ -48,6 +49,8 @@ export function erzeugeAnzeige(leinwand) {
     tuer: 0,
     spalt: 0, // wie weit die geschlossene Tür nach Stößen schon nachgegeben hat
     schwenk: 0,
+    blende: 0, // beim Wechsel in die Wiederholung und zurück: wie viel vom alten Bild noch zu sehen ist
+    probe: false, // in der Wiederholung beim Begleiter
   };
   let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
@@ -115,7 +118,9 @@ export function erzeugeAnzeige(leinwand) {
     bild.tuer = z.tuerOffen ? 1 : 0;
     bild.spalt = z.tuerOffen ? 0 : (z.tuerStoesse || 0) * SPALT_JE_STOSS;
     bild.angebot = z.angebot ? { id: z.angebot.id, x: z.angebot.x, y: z.angebot.y } : null;
-    bild.begleiter = z.begleiter ? { x: z.begleiter.x, y: z.begleiter.y, antworten: z.begleiter.antworten ? z.begleiter.antworten.map((a) => ({ ...a })) : null } : null;
+    const b = z.begleiter;
+    bild.begleiter = b ? { x: b.x, y: b.y, antworten: b.antworten ? b.antworten.map((a) => ({ ...a })) : null, wiederholen: b.wiederholen ? { ...b.wiederholen } : null } : null;
+    bild.probe = !!z.probe;
     bild.pruefung = z.pruefung ? z.pruefung.id : null;
     bild.schwenk = 0;
     const alt = new Map(bild.gegner.map((g) => [g.id, g]));
@@ -133,6 +138,18 @@ export function erzeugeAnzeige(leinwand) {
       b.ruhig = g.ruhig || 0;
       return b;
     });
+  }
+
+  // Was gerade auf dem Bildschirm steht, für das Überblenden in die Wiederholung
+  function merkeStandbild() {
+    try {
+      if (!standbild) standbild = document.createElement('canvas');
+      standbild.width = leinwand.width;
+      standbild.height = leinwand.height;
+      standbild.getContext('2d').drawImage(leinwand, 0, 0);
+    } catch (fehler) {
+      standbild = null; // dann eben ohne Überblenden
+    }
   }
 
   function bewege(start, dauer, schritt, bleibt) {
@@ -272,6 +289,22 @@ export function erzeugeAnzeige(leinwand) {
       } else {
         altesWagenbild = null;
       }
+    } else if (e.typ === 'probe' || e.typ === 'probeEnde') {
+      // Die Wiederholung fährt nicht herein, sie blendet über wie eine Erinnerung. Zurück ebenso.
+      merkeStandbild();
+      for (const l of laeufer) if (!l.bleibt) l.schritt(1); // der Schritt auf das Schild ist vorbei
+      laeufer = laeufer.filter((l) => l.bleibt);
+      altesWagenbild = null;
+      baueBilder();
+      gleicheAb();
+      geister = [];
+      blitze = [];
+      rede = null;
+      if (!ruhig && standbild) {
+        bewege(jetzt, 150, (p) => {
+          bild.blende = 1 - sanft(p);
+        });
+      }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
       if (e.genug) {
@@ -410,7 +443,10 @@ export function erzeugeAnzeige(leinwand) {
     } else if (e.typ === 'gespraech') {
       if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
     } else if (e.typ === 'antwort') {
-      if (bild.begleiter) bild.begleiter.antworten = null;
+      if (bild.begleiter) {
+        bild.begleiter.antworten = null;
+        bild.begleiter.wiederholen = e.wiederholen ? { ...e.wiederholen } : null;
+      }
     } else if (e.typ === 'gelocht') {
       if (e.art === 'pruefung') {
         wirkung.lochung = jetzt;
@@ -513,6 +549,7 @@ export function erzeugeAnzeige(leinwand) {
     bild.gegner = [];
     bild.tuer = 0;
     bild.spalt = 0;
+    bild.blende = 0;
     rede = null;
     altesWagenbild = null;
     bild.wagenNr = -1;
@@ -757,6 +794,7 @@ export function erzeugeAnzeige(leinwand) {
       }
       const b = bild.begleiter;
       if (b) {
+        if (b.wiederholen) maleNochmal(b.wiederholen, b, oy);
         maleFigur(stift, 'begleiter', boden.x + (b.x + 0.5) * s, boden.y + (b.y + 0.8) * s + oy, s * 0.82, { t, takt: 5, ruhig });
         if (b.antworten) for (const a of b.antworten) maleAntwort(a, t, oy);
       }
@@ -809,6 +847,11 @@ export function erzeugeAnzeige(leinwand) {
         maleAchtung(stift, cx, fy - s * 0.84 + wippen, s);
       }
     }
+    if (bild.probe) {
+      // die Wiederholung: kühleres Licht über dem ganzen Wagen, wie eine Erinnerung
+      stift.fillStyle = 'rgba(150, 175, 230, 0.13)';
+      stift.fillRect(rumpf.x, rumpf.y + oy, rumpf.b, rumpf.h);
+    }
     if (rede && !karte && !imWechsel) maleRede(rede.text, rede, oy);
     else if (bild.begleiter && bild.begleiter.antworten && !karte && !imWechsel) maleRede(TEXTE.begleiter.frage, bild.begleiter, oy);
     maleHinweis();
@@ -834,6 +877,22 @@ export function erzeugeAnzeige(leinwand) {
     } else {
       maleFigur(stift, a.id, cx, cy + s * 0.3, s * 0.55, { t, takt: a.x, ruhig: true });
     }
+  }
+
+  // „Noch mal": ein Schild auf leuchtendem Boden neben dem Begleiter. Es ist breiter als ein Feld und
+  // schließt deshalb an seiner Seite mit dem Feld ab, damit es ihn nicht verdeckt.
+  function maleNochmal(f, b, oy) {
+    const { boden, s } = layout;
+    const cx = boden.x + (f.x + 0.5) * s;
+    const cy = boden.y + (f.y + 0.5) * s + oy;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
+    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
+    const seite = Math.sign(b.x - f.x);
+    maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
@@ -918,11 +977,20 @@ export function erzeugeAnzeige(leinwand) {
       stift.fillRect(0, 0, layout.breite, layout.hoehe);
     }
 
+    if (bild.blende > 0.01 && standbild) {
+      stift.globalAlpha = bild.blende;
+      stift.drawImage(standbild, 0, 0, layout.breite, layout.hoehe);
+      stift.globalAlpha = 1;
+    }
+
     // Anzeigen am Rand
     const { tafel, status } = layout;
     if (tafelbild) stift.drawImage(tafelbild, tafel.x, tafel.y, tafel.b, tafel.h);
-    const verlust = begrenze(1 - seitTreffer / 320, 0, 1);
+    // In der Wiederholung sind die Herzen blass: Hier kostet nichts ein Herz.
+    const verlust = bild.probe ? 0 : begrenze(1 - seitTreffer / 320, 0, 1);
+    stift.globalAlpha = bild.probe ? 0.38 : 1;
     maleHerzen(stift, status.x, status.y + status.h / 2, bild.herzen, HERZEN_VOLL, verlust);
+    stift.globalAlpha = 1;
     const zuwachs = begrenze(1 - (jetzt - wirkung.zuwachs) / 380, 0, 1);
     maleRuhe(stift, status.x + status.b, status.y + status.h / 2, bild.ruhe, RUHE_VOLL, zuwachs);
     const druck = begrenze(1 - (jetzt - wirkung.uhr) / 140, 0, 1);

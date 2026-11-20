@@ -20,6 +20,7 @@ export function optionenFuerFahrt(stand, vorige) {
   }
   if (vorige && vorige.status === 'tot') {
     optionen.begleiter = vorige.todDurch;
+    optionen.szene = vorige.todSzene; // den Wagen kann er auf Wunsch wiederholen
     if (vorige.wagenNr > SPEISEWAGEN_NR) optionen.startWagen = SPEISEWAGEN_NR;
   }
   return optionen;

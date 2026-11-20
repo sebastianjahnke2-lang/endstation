@@ -3,11 +3,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BREITE, HOEHE, TUERFELD, RICHTUNG, RICHTUNGSNAMEN, imFeld, feldNr, entfernungen } from '../src/kern/feld.js';
+import { BREITE, HOEHE, TUERFELD, RICHTUNG, RICHTUNGSNAMEN, imFeld, feldNr, entfernungen, naechsterSchritt } from '../src/kern/feld.js';
 import { istHindernis, istMarkiert, tuerFrei } from '../src/kern/lage.js';
 import { erzeugeSpiel, HERZEN_VOLL, RUHE_VOLL } from '../src/kern/spiel.js';
 import { GEGNERWERTE } from '../src/kern/gegner.js';
 import { WAGENZAHL } from '../src/kern/wagen.js';
+import { optionenFuerFahrt, SPEISEWAGEN_NR } from '../src/kern/reise.js';
 import { BOTS } from './bots.js';
 
 const AKTIONEN = [...RICHTUNGSNAMEN, 'warten'];
@@ -73,6 +74,7 @@ function pruefeZustand(z, wo) {
     assert.ok(!ids.includes(z.angebot.id), `${wo}: Angebot schon gelocht`);
     assert.ok(!z.wagen.sicher, `${wo}: Angebot im sicheren Wagen`);
   }
+  if (z.probe) assert.ok(!z.angebot && !z.pruefung && !z.begleiter && !z.wagen.sicher, `${wo}: Wiederholung mit Angebot, Begleiter oder im sicheren Wagen`);
 
   // Tür immer erreichbar, alle freien Felder verbunden
   const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y));
@@ -94,14 +96,14 @@ function eineFahrt(seed, waehle, optionen) {
     const aktion = waehle(z);
     const wo = `Seed ${seed}, Eingabe ${i} (${aktion}), Wagen ${z.wagenNr + 1}`;
     const vorher = JSON.stringify(z);
-    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug, rueckhalt: z.rueckhaltGenutzt, warten: z.staerken.warten };
+    const alt = { herzen: z.spieler.herzen, ruhe: z.spieler.ruhe, x: z.spieler.x, y: z.spieler.y, wagenNr: z.wagenNr, zug: z.zug, rueckhalt: z.rueckhaltGenutzt, warten: z.staerken.warten, probe: z.probe ? JSON.stringify(z.probe.zurueck) : null, folgen: JSON.stringify([z.fahrkarte, z.staerken]) };
     const rotVorher = [];
     for (let y = 0; y < HOEHE; y++) for (let x = 0; x < BREITE; x++) if (!istHindernis(z, x, y) && istMarkiert(z, x, y)) rotVorher.push(feldNr(x, y));
 
     const ereignisse = spiel.act(aktion);
     const typen = ereignisse.map((e) => e.typ);
 
-    if (typen[0] === 'ungueltig') {
+    if (!typen.length || typen[0] === 'ungueltig') { // Sprint ohne die Stärke: Es geschieht gar nichts
       assert.equal(JSON.stringify(z), vorher, `${wo}: ungültige Eingabe hat etwas verändert`);
       continue;
     }
@@ -112,6 +114,20 @@ function eineFahrt(seed, waehle, optionen) {
       const heil = ereignisse.find((e) => e.typ === 'geheilt');
       assert.equal(z.spieler.herzen, heil ? Math.min(HERZEN_VOLL, alt.herzen + z.wagen.heilt) : alt.herzen, `${wo}: Herzen beim Wagenwechsel`);
       assert.equal(!!heil, z.status === 'faehrt' && z.wagen.heilt > 0, `${wo}: Heilen beim Wagenwechsel`);
+      continue;
+    }
+    // Wiederholung beim Begleiter: gefahrlos, folgenlos, und danach ist alles wie vorher
+    if (alt.probe) assert.equal(JSON.stringify([z.fahrkarte, z.staerken]), alt.folgen, `${wo}: die Wiederholung hat Folgen`);
+    if (typen.includes('probe') || typen.includes('probeEnde')) {
+      assert.equal(z.spieler.herzen, alt.herzen, `${wo}: Herzen beim Wechsel in die Wiederholung oder zurück`);
+      if (typen.includes('probe')) {
+        assert.ok(z.probe && !alt.probe && z.wagenNr !== SPEISEWAGEN_NR && [z.spieler.x, z.spieler.y].join() === '2,7', `${wo}: Wiederholung beginnt falsch`);
+      } else {
+        const zurueck = JSON.parse(alt.probe);
+        assert.ok(!z.probe && z.wagen.sicher, `${wo}: Wiederholung endet falsch`);
+        assert.deepEqual(z.spieler, zurueck.spieler, `${wo}: nach der Wiederholung steht der Spieler anders da als vorher`);
+        assert.deepEqual([z.wagen, z.zaehler, z.verstehen], [zurueck.wagen, zurueck.zaehler, zurueck.verstehen], `${wo}: nach der Wiederholung ist etwas anders`);
+      }
       continue;
     }
     // Im sicheren Wagen passiert nie etwas Schlimmes. Ein Herz geht dort nur, wer es selbst am Tisch lässt.
@@ -134,7 +150,8 @@ function eineFahrt(seed, waehle, optionen) {
       // Rückhalt: Der tödliche Treffer lässt ein Herz übrig, einmal je Fahrt
       assert.ok(alt.herzen <= schaden + aufgebrochen && z.spieler.herzen === 1 && alt.rueckhalt === false, `${wo}: Rückhalt falsch`);
     } else {
-      assert.equal(verlust, Math.min(alt.herzen, schaden + aufgebrochen + gegoennt), `${wo}: ${verlust} Herzen verloren`);
+      const erwartet = alt.probe ? 0 : Math.min(alt.herzen, schaden + aufgebrochen + gegoennt); // in der Wiederholung gefahrlos
+      assert.equal(verlust, erwartet, `${wo}: ${verlust} Herzen verloren`);
     }
     if (aufgebrochen) assert.equal(z.tuerOffen, true, `${wo}: aufgebrochen, Tür zu`);
     const standAufRot = rotVorher.includes(feldNr(z.spieler.x, z.spieler.y));
@@ -198,4 +215,35 @@ test('Fuzz: Bots mit vielen Zufallszügen kommen weit und halten alle Regeln ein
   }
   for (let nr = 0; nr < WAGENZAHL; nr++) assert.ok(erreicht.has(nr), `der Fuzz-Test hat Wagen ${nr + 1} nie gesehen`);
   assert.ok(erreicht.has('halt'), 'der Fuzz-Test hat den Halt nie gesehen');
+});
+
+// Ein Weg zum Ziel, Schritt für Schritt, für das Gespräch mit dem Begleiter.
+function gehZu(z, ziel) {
+  const weit = entfernungen(ziel, (x, y) => !istHindernis(z, x, y));
+  const schritt = naechsterSchritt(z.spieler, weit, ziel);
+  return schritt ? schritt.richtung : 'warten';
+}
+
+test('Fuzz: Wiederholung beim Begleiter, darin und danach reiner Zufall', () => {
+  const MIT_SPRINT = [...AKTIONEN, ...RICHTUNGSNAMEN.map((r) => `sprint-${r}`)];
+  let wiederholt = 0;
+  for (let seed = 1; seed <= 120; seed++) {
+    // erst eine echte Fahrt bis zum Tod, mit Fehlern, damit er in vielen Wagen kommt
+    const zufall = zufallsquelle(seed * 6007);
+    const vorige = eineFahrt(seed, (zustand) => (zufall() < 0.25 ? AKTIONEN[Math.floor(zufall() * AKTIONEN.length)] : BOTS.ausgewogener(zustand, {})));
+    if (vorige.status !== 'tot') continue;
+    const staerken = seed % 2 ? { warten: true, sprint: true, rueckhalt: true } : {};
+    const optionen = { ...optionenFuerFahrt({ staerken, mehrAmTisch: seed % 4, fahrkarte: vorige.fahrkarte }, vorige), startWagen: SPEISEWAGEN_NR };
+    let drin = false;
+    eineFahrt(seed + 1000, (z) => {
+      if (z.probe) drin = true;
+      const b = z.begleiter;
+      if (!drin && b && b.wiederholen) return gehZu(z, b.wiederholen);
+      if (!drin && b && b.antworten) return gehZu(z, b.antworten[seed % 3]);
+      if (!drin && b && !b.gesprochen) return gehZu(z, { x: b.x === 4 ? 3 : 1, y: b.y });
+      return MIT_SPRINT[Math.floor(zufall() * MIT_SPRINT.length)];
+    }, optionen);
+    if (drin) wiederholt += 1;
+  }
+  assert.ok(wiederholt >= 40, `nur ${wiederholt} Wiederholungen gesehen`);
 });
