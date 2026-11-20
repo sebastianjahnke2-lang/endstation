@@ -5,7 +5,7 @@ Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt baue
 ## Aktueller Auftrag
 - Etappe 2 aus `docs/FAHRPLAN.md`. Freigaben und Antworten wörtlich: `docs/auftraege/etappe-2-anweisungen.md`. Entscheidungen: `docs/ENTSCHEIDUNGEN.md` („Entschieden am 19.11.", „Etappe 2").
 - Etappe 2 ist vollständig gebaut: Kontrolleur (Mittelwagen), Aufbrechen jeder Tür, Präsenz, Stärken aus Schatten, Speisewagen mit Gönnen und Gesichtern, Fahrkarte mit Angeboten und Lochungen, Begleiter, Halt mit Rückblick und Schlussbild, und zuletzt die Wiederholung beim Begleiter („Noch mal").
-- Pull Request #2 ist in `main` übernommen (alles außer der Wiederholung). Die Wiederholung liegt im Zweig `claude/exciting-brahmagupta-8qmtsg` und braucht einen neuen Pull Request. Den lege ich nur an, wenn der Auftraggeber es sagt.
+- Pull Request #2 ist in `main` übernommen (alles außer der Wiederholung). Die Wiederholung liegt im Zweig `claude/exciting-brahmagupta-8qmtsg`, Pull Request #3 ist angelegt (20.11.) und wartet darauf, dass der Auftraggeber ihn übernimmt.
 - Wartet auf den Auftraggeber: Abnahme Etappe 1 (vier Prüffragen im Fahrplan), Rückmeldung Etappe 2, Spieltest des Prototyps.
 - Prototyp „Der freie Platz": fertig. Auftrag `docs/auftraege/freier-platz.md`, Spieltest `docs/SPIELTEST-freier-platz.md`.
 - Dauerhafte Arbeitsweise: `docs/auftraege/sichern-und-weiterarbeiten.md`.
@@ -28,7 +28,7 @@ Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt baue
 - Browser: `node werkzeug/bedienung.mjs` bei den sechs Größen aus `CLAUDE.md` und `node werkzeug/begleiter.mjs` bei 390x844 und 360x600: 0 Mängel. Nur Chromium mit iPhone-Profil, kein WebKit, kein echtes iPhone.
 
 ## Nächster Schritt
-Nichts bauen. Auf die Rückmeldung des Auftraggebers warten. Sagt er „PR anlegen", einen Pull Request vom Zweig nach `main` anlegen (Inhalt: die Wiederholung beim Begleiter). Etappe 3 erst, wenn er sie freigibt.
+Nichts bauen. Auf die Rückmeldung des Auftraggebers warten. Etappe 3 erst, wenn er sie freigibt.
 
 ## Abweichungen vom Auftrag (Gründe in `docs/ENTSCHEIDUNGEN.md`)
 - Tod vor dem Speisewagen: Die nächste Fahrt beginnt vorn, nicht im Speisewagen. Sonst würden Wagen übersprungen, die man nie geschafft hat.
@@ -47,6 +47,6 @@ Nichts bauen. Auf die Rückmeldung des Auftraggebers warten. Sagt er „PR anleg
 - Ergebnis des Spieltests zum Prototyp.
 
 ## Am iPhone testen
-- Hauptspiel: https://sebastianjahnke2-lang.github.io/endstation/ zeigt `main`, also Etappe 2 ohne die Wiederholung. Die Wiederholung ist erst spielbar, wenn ein neuer Pull Request übernommen ist.
+- Hauptspiel: https://sebastianjahnke2-lang.github.io/endstation/ zeigt `main`, also Etappe 2 ohne die Wiederholung. Die Wiederholung ist erst spielbar nach „Merge pull request" und „Confirm merge" unter https://github.com/sebastianjahnke2-lang/endstation/pull/3
 - Prototyp: https://sebastianjahnke2-lang.github.io/endstation/prototyp/freier-platz/
 - GitHub Pages ist laut Auftraggeber aktiv. Von hier aus lässt sich die Adresse nicht prüfen.
