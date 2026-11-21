@@ -3,7 +3,7 @@
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
-- **Prototyp „Kontrolle"** (21.11.), wörtlich in `docs/auftraege/kontrolle.md`: gebaut in `prototyp/kontrolle/`, wartet auf den Test am iPhone. Nachtrag vom 21.11. gebaut: Beim Neustart werden neue, geprüfte Sitzordnungen ausgelost. Danach nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen und offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Prototyp Kontrolle"). Die Frage zur Musik im freien Platz ist laut Auftraggeber erledigt. Pull Request #4 ist in `main`.
+- **Prototyp „Kontrolle"** (21.11.), wörtlich in `docs/auftraege/kontrolle.md`: gebaut in `prototyp/kontrolle/`, wartet auf den Test am iPhone. Nachtrag vom 21.11. gebaut: Beim Neustart werden neue, geprüfte Sitzordnungen ausgelost. Nachbesserung „Einstieg" gebaut (`docs/auftraege/kontrolle-einstieg.md`): Antippen kontrolliert, Lernhalt bei der allerersten Fahrt, zwei Hinweiswörter. Danach nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen und offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Prototyp Kontrolle"). Die Frage zur Musik im freien Platz ist laut Auftraggeber erledigt. Pull Request #4 ist in `main`.
 
 Davor:
 - „Leitsätze und die ersten zehn Minuten", wörtlich in `docs/auftraege/leitsaetze.md`. Leitsätze in `docs/PRINZIPIEN.md`.
@@ -31,7 +31,7 @@ Vorher und nachher `npm run balance`, Zahlen in den Bericht.
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests, mit Musik
 
 ## Tests
-- `npm run build`, dann `npm test`: 295 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
+- `npm run build`, dann `npm test`: 306 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
 - `npm run balance` vorher und nachher gleich: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
 - Kontrolle im Browser: `prototyp/kontrolle/werkzeug/fotos.mjs` bei 390x844, 360x600 und 375x548 ohne Mängel.
 - Browser (nur Chromium mit iPhone-Profil): `bedienung.mjs` bei sechs Größen 0 Mängel, `begleiter.mjs` 0 Mängel, `fortsetzen.mjs` bei 390x844 und 360x600 0 Mängel.

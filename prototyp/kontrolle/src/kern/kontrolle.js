@@ -1,7 +1,8 @@
 // Prototyp "Kontrolle": Du bist der Kontrolleur. Finde den Fahrgast ohne Fahrkarte, bevor der Zug hält.
 // Reine Logik ohne Browser. erzeugeKontrolle() -> { zustand, act(handlung) }, act gibt Ereignisse zurück.
 //
-// Ein Zug: ein Feld im Gang gehen, einen Fahrgast in der eigenen Reihe kontrollieren, oder warten.
+// Ein Zug: ein Feld im Gang gehen (wischen), einen Fahrgast in der eigenen Reihe kontrollieren (antippen,
+// zur Seite wischen trifft den Gangplatz), oder warten.
 // Danach antwortet der Wagen: Die Strecke wird kürzer, und der Fahrgast ohne Fahrkarte reagiert.
 // Es wird nie eine Fahrkarte gelesen. Erkennbar ist er nur an seinem Verhalten:
 //   - Steht der Kontrolleur in der Reihe daneben, steht er auf und setzt sich weiter weg: auf den
@@ -24,10 +25,12 @@ function sitztAuf(z, x, y) {
 }
 
 // Richtet einen Halt nach einer Sitzordnung ein ({ farbe, sitze }, siehe halte.js).
+// Der Lernhalt gibt zusätzlich zuege (mehr Zeit) und start (Reihe des Kontrolleurs) an.
 export function setzeHalt(z, ordnung) {
   z.status = 'faehrt';
-  z.rest = ZUEGE_BIS_HALT;
-  z.k = { y: KONTROLLSTART, blick: 'hoch' };
+  z.rest = ordnung.zuege || ZUEGE_BIS_HALT;
+  z.zuegeGesamt = z.rest;
+  z.k = { y: ordnung.start || KONTROLLSTART, blick: 'hoch' };
   z.fahrgaeste = [];
   ordnung.sitze.forEach((zeile, i) => {
     for (const x of SITZSPALTEN) {
@@ -38,12 +41,10 @@ export function setzeHalt(z, ordnung) {
   });
 }
 
-// Wen eine Wischbewegung zur Seite kontrolliert: den Fahrgast am Gang, sonst den am Fenster.
+// Wen eine Wischbewegung zur Seite kontrolliert: nur den Fahrgast am Gang. Wer am Fenster sitzt,
+// wird angetippt. Antippen kontrolliert jeden Fahrgast in der eigenen Reihe.
 export function nachbarAufSeite(z, seite) {
-  const reihe = z.k.y;
-  const gang = seite === 'links' ? 1 : 3;
-  const fenster = seite === 'links' ? 0 : 4;
-  return sitztAuf(z, gang, reihe) || sitztAuf(z, fenster, reihe);
+  return sitztAuf(z, seite === 'links' ? 1 : 3, z.k.y);
 }
 
 // Der Fahrgast ohne Fahrkarte nach dem Zug des Kontrolleurs.

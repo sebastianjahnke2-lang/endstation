@@ -1,10 +1,11 @@
 // Einstieg des Prototyps "Kontrolle": verbindet Kern, Bühne, Eingabe und Ton.
-// Kein Menü, kein Speicher: Beim Öffnen steht man sofort unten im Gang. Neu laden beginnt von vorn.
+// Kein Menü: Beim Öffnen steht man sofort im Gang. Gemerkt wird nur, ob der Lernhalt geschafft ist.
 
 import { erzeugeKontrolle } from './kern/durchgang.js';
 import { erzeugeKontrollBuehne } from './anzeige/buehne.js';
 import { verbindeEingabe } from '../../../src/eingabe.js';
 import { erzeugeKontrollTon } from './ton.js';
+import { ladeKontrollStand, sichereKontrollStand } from './speicher.js';
 
 const leinwand = document.getElementById('bild');
 const buehne = erzeugeKontrollBuehne(leinwand);
@@ -20,7 +21,8 @@ function seedFuerNeustart() {
     return Math.floor(performance.now() * 1000) >>> 0;
   }
 }
-const spiel = erzeugeKontrolle(seedFuerNeustart());
+const stand = ladeKontrollStand();
+const spiel = erzeugeKontrolle(seedFuerNeustart(), { lernhalt: !stand.gelernt });
 let tonAn = true;
 
 function gibEin(handlung) {
@@ -30,6 +32,10 @@ function gibEin(handlung) {
   // nach dem Halt führt jede Eingabe weiter: zum nächsten Halt, zum Schluss, oder neu
   const ereignisse = spiel.act(spiel.zustand.status === 'faehrt' ? handlung : 'weiter');
   if (ereignisse.length) buehne.spiele(ereignisse, spiel.zustand, jetzt);
+  if (ereignisse.some((e) => e.typ === 'gelernt')) {
+    stand.gelernt = true;
+    sichereKontrollStand(stand); // scheitert das, kommt der Lernhalt beim nächsten Öffnen noch einmal
+  }
 }
 
 function tippe(x, y) {
