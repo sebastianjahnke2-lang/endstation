@@ -65,61 +65,19 @@ canvas {
 'use strict';
 
 // --- ../prototyp/kontrolle/src/kern/halte.js
-// Die drei Sitzordnungen, eine je Halt. Fest, ohne Zufall: Gleiche Eingaben ergeben denselben Verlauf.
-// Raster wie im Prototyp "Der freie Platz" (kern/abteil.js): 5 Spalten, 8 Reihen, Gang in Spalte 2,
-// Sitze in den Reihen 1 bis 6. Der Kontrolleur beginnt unten im Gang (Reihe 7).
+// Feste Sitzordnungen. Raster wie im Prototyp "Der freie Platz" (kern/abteil.js): 5 Spalten, 8 Reihen,
+// Gang in Spalte 2, Sitze in den Reihen 1 bis 6. Die Halte der Schicht werden ausgelost (auslosen.js),
+// fest ist nur der Lernhalt.
 //
 // Je Reihe 1 bis 6 eine Zeile mit 5 Zeichen, das mittlere ist der Gang:
-//   .  freier Sitz       S  der Fahrgast ohne Fahrkarte
-//   Z  ein Schlafender   a bis g  andere Fahrgäste (der Buchstabe wählt nur die Farbe)
-// "farbe" ist die Farbe des Fahrgasts ohne Fahrkarte. Sie wechselt je Halt und kommt in anderen Halten
-// bei Fahrgästen mit Fahrkarte vor: Man erkennt ihn nur am Verhalten, nie am Aussehen.
-//
-// Gedanke je Halt (Leitsatz 2 und 3, ein neuer Gedanke, gelernt im Spiel):
-//   1. Er sitzt nah und weicht beim ersten Schritt sichtbar aus, eine Reihe weiter.
-//   2. Vor ihm ist eine Reihe voll: Er springt weiter, und man holt ihn erst am Ende des Wagens ein.
-//   3. Er sitzt schon ganz vorn zwischen anderen und kann nicht weg: Man sieht nur, dass er aufstehen will.
-// Diese drei spielt der erste Durchgang. Jeder Neustart lost neue aus (auslosen.js).
-
-const HALTE = [
-  {
-    farbe: 'g',
-    sitze: [
-      '..|.d',
-      '.c|..',
-      'b.|Z.',
-      '..|.e',
-      '.f|S.',
-      'a.|..',
-    ],
-  },
-  {
-    farbe: 'd',
-    sitze: [
-      '..|e.',
-      '..|..',
-      'ab|Zc',
-      'S.|..',
-      '..|.g',
-      '.f|..',
-    ],
-  },
-  {
-    farbe: 'a',
-    sitze: [
-      'cg|SZ',
-      'b.|..',
-      '..|..',
-      '.d|..',
-      '..|.e',
-      'f.|..',
-    ],
-  },
-];
+//   .  freier Sitz          Z  ein Schlafender        a bis g  Fahrgäste mit Fahrkarte (Farbe)
+//   P  Platzwechsler (S im Lernhalt)   H  Scheinschläfer   T  Toilettengänger
+// "farben" gibt die Farbe von Platzwechsler und Toilettengänger an. Sie kommt im selben Halt bei keinem
+// anderen vor und wechselt von Halt zu Halt: Man erkennt sie nur am Verhalten, nie am Aussehen.
 
 const ZUEGE_BIS_HALT = 12; // Startwert aus dem Auftrag
 
-// Der Lernhalt: nur bei der allerersten Fahrt auf einem Gerät, vor den drei Halten (Auftrag „Einstieg").
+// Der Lernhalt: nur bei der allerersten Fahrt auf einem Gerät, vor der Schicht (Auftrag „Einstieg").
 // Drei Fahrgäste, keiner schläft, viel Zeit. Der Kontrolleur beginnt mitten im Gang (Reihe 4). Beim
 // ersten Schritt nach vorn steht er in der Reihe neben dem Fahrgast ohne Fahrkarte: Der steht auf und
 // setzt sich in die vorderste Reihe, neben einen anderen. Von dort kommt er nicht mehr weg und zuckt,
@@ -139,58 +97,90 @@ const LERNHALT = {
 };
 
 // --- ../prototyp/kontrolle/src/kern/kontrolle.js
-// Prototyp "Kontrolle": Du bist der Kontrolleur. Finde den Fahrgast ohne Fahrkarte, bevor der Zug hält.
-// Reine Logik ohne Browser. erzeugeKontrolle() -> { zustand, act(handlung) }, act gibt Ereignisse zurück.
+// Prototyp "Kontrolle": Du bist der Kontrolleur. Finde die Fahrgäste ohne Fahrkarte, bevor der Zug hält.
+// Reine Logik ohne Browser. Ein Halt: setzeHalt(z, ordnung), dann haltZug(z, handlung) -> Ereignisse.
+// Die Schicht aus vielen Halten steuert durchgang.js.
 //
 // Ein Zug: ein Feld im Gang gehen (wischen), einen Fahrgast in der eigenen Reihe kontrollieren (antippen,
-// zur Seite wischen trifft den Gangplatz), oder warten.
-// Danach antwortet der Wagen: Die Strecke wird kürzer, und der Fahrgast ohne Fahrkarte reagiert.
-// Es wird nie eine Fahrkarte gelesen. Erkennbar ist er nur an seinem Verhalten:
-//   - Steht der Kontrolleur in der Reihe daneben, steht er auf und setzt sich weiter weg: auf den
-//     nächsten freien Sitz, der mindestens zwei Reihen vom Kontrolleur entfernt ist, auf der Seite,
-//     die vom Kontrolleur wegführt. Am Kontrolleur kommt er im Gang nicht vorbei.
-//   - Das Umsetzen kostet ihn einen Zug: Im nächsten Zug bleibt er sitzen, was immer geschieht.
-//   - Steht der Kontrolleur in seiner Reihe, ist der Gang versperrt. Findet er keinen Platz,
-//     will er trotzdem aufstehen: Er zuckt hoch und setzt sich wieder.
-// Alle anderen bleiben sitzen. Jede Kontrolle kostet einen Zug, den Schlafenden zu kontrollieren zwei.
+// zur Seite wischen trifft den Gangplatz), oder warten. Danach antwortet der Wagen: Die Strecke wird kürzer,
+// und jeder Fahrgast ohne Fahrkarte reagiert nach seiner Masche. Es wird nie eine Fahrkarte gelesen.
+// Erkennbar sind sie nur am Verhalten. Alle anderen tun nichts.
+//
+// Die drei Maschen:
+//   Platzwechsler: Steht der Kontrolleur in der Reihe daneben, setzt er sich auf den nächsten freien Sitz,
+//     der mindestens zwei Reihen vom Kontrolleur entfernt ist, auf der Seite weg vom Kontrolleur. Das kostet
+//     ihn einen Zug: Im nächsten bleibt er sitzen. Steht der Kontrolleur in seiner Reihe, ist der Gang
+//     versperrt. Findet er keinen Platz oder ist der Gang versperrt, zuckt er hoch und setzt sich wieder.
+//   Scheinschläfer: sitzt da wie ein Schlafender. Dreht ihm der Kontrolleur den Rücken zu (er ist höchstens
+//     drei Reihen hinter ihm), hebt er kurz den Kopf. Ihn zu kontrollieren kostet einen Zug, den echten
+//     Schlafenden zwei.
+//   Toilettengänger: Steht der Kontrolleur zwei Reihen unter ihm, geht er zur Toilette am vorderen Wagenende.
+//     Er kommt erst zurück, wenn der Kontrolleur vorbei ist: umgedreht, mindestens drei Reihen von der
+//     Toilette weg und unterhalb seines Platzes. Sein Platz bleibt so lange frei. Wer vor der Toilettentür
+//     steht, wenn er nach vier Zügen herauskommt, erwischt ihn.
 
 
 
 const KONTROLLGANG = 2;
 const KONTROLLSTART = 7; // Reihe des Kontrolleurs zu Beginn, unten im Gang
-const OBERSTE_REIHE = 1; // in Reihe 0 ist die Tür
+const TOILETTE = { x: 2, y: 0 }; // vorn, wo sonst die Tür ist
+const WC_ZUEGE = 4; // so lange bleibt der Toilettengänger mindestens drin
+const SCHEIN_SICHT = 3; // so viele Reihen hinter dem Kontrolleur hebt der Scheinschläfer den Kopf
+const OBERSTE_REIHE = 1; // in Reihe 0 ist die Toilette
 const SITZSPALTEN = [0, 1, 3, 4];
+const MASCHE_VON = { S: 'platz', P: 'platz', H: 'schein', T: 'wc' };
 
+// belegt: Auch der Platz dessen, der auf der Toilette ist, bleibt belegt.
 function sitztAuf(z, x, y) {
   return z.fahrgaeste.find((f) => f.x === x && f.y === y) || null;
 }
 
-// Richtet einen Halt nach einer Sitzordnung ein ({ farbe, sitze }, siehe halte.js).
-// Der Lernhalt gibt zusätzlich zuege (mehr Zeit) und start (Reihe des Kontrolleurs) an.
+// wen man in seiner Reihe antreffen und kontrollieren kann
+function greifbar(z, x, y) {
+  const f = sitztAuf(z, x, y);
+  return f && f.ort === 'sitz' && !f.gefangen ? f : null;
+}
+
+function offeneSchwarzfahrer(z) {
+  return z.fahrgaeste.filter((f) => f.schwarz && !f.gefangen);
+}
+
+// Richtet einen Halt nach einer Sitzordnung ein, siehe halte.js und auslosen.js:
+// { sitze, farben: { P, T } (Farbe von Platzwechsler und Toilettengänger), zuege, start }
 function setzeHalt(z, ordnung) {
   z.status = 'faehrt';
   z.rest = ordnung.zuege || ZUEGE_BIS_HALT;
   z.zuegeGesamt = z.rest;
+  z.entkommenImHalt = 0;
   z.k = { y: ordnung.start || KONTROLLSTART, blick: 'hoch' };
   z.fahrgaeste = [];
+  const farben = ordnung.farben || {};
   ordnung.sitze.forEach((zeile, i) => {
     for (const x of SITZSPALTEN) {
       const c = zeile[x];
       if (c === '.' || c === '|') continue;
-      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe: c === 'S' ? ordnung.farbe : c === 'Z' ? 'z' : c, schlaeft: c === 'Z', schwarz: c === 'S', ruht: 0, kontrolliert: false });
+      const masche = MASCHE_VON[c] || null;
+      let farbe = c;
+      if (c === 'Z' || c === 'H') farbe = 'z'; // der Scheinschläfer sieht aus wie ein Schlafender
+      else if (masche) farbe = farben[c === 'S' ? 'P' : c] || ordnung.farbe || 'g';
+      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe, schlaeft: c === 'Z', schwarz: !!masche, masche, ruht: 0, kontrolliert: false, gefangen: false, ort: 'sitz', wc: 0 });
     }
   });
 }
 
-// Wen eine Wischbewegung zur Seite kontrolliert: nur den Fahrgast am Gang. Wer am Fenster sitzt,
-// wird angetippt. Antippen kontrolliert jeden Fahrgast in der eigenen Reihe.
+// Wen eine Wischbewegung zur Seite kontrolliert: nur den Fahrgast am Gang. Antippen trifft jeden in der Reihe.
 function nachbarAufSeite(z, seite) {
-  return sitztAuf(z, seite === 'links' ? 1 : 3, z.k.y);
+  return greifbar(z, seite === 'links' ? 1 : 3, z.k.y);
 }
 
-// Der Fahrgast ohne Fahrkarte nach dem Zug des Kontrolleurs.
-function schwarzfahrerZieht(z, ereignisse) {
-  const s = z.fahrgaeste.find((f) => f.schwarz);
+function gangweg(vonY, nachY) {
+  const weg = [];
+  const schritt = nachY < vonY ? -1 : 1;
+  for (let y = vonY; y !== nachY + schritt; y += schritt) weg.push({ x: KONTROLLGANG, y });
+  return weg;
+}
+
+function platzwechslerZieht(z, s, ereignisse) {
   if (s.ruht > 0) {
     s.ruht -= 1;
     return;
@@ -216,37 +206,76 @@ function schwarzfahrerZieht(z, ereignisse) {
     return;
   }
   const von = { x: s.x, y: s.y };
-  // sein Weg: in den Gang, den Gang entlang, auf den neuen Sitz
-  const pfad = [von, { x: KONTROLLGANG, y: s.y }];
-  for (let y = s.y + weg; y !== ziel.y + weg; y += weg) pfad.push({ x: KONTROLLGANG, y });
-  pfad.push(ziel);
+  const pfad = [von].concat(gangweg(s.y, ziel.y), [ziel]);
   s.x = ziel.x;
   s.y = ziel.y;
   s.ruht = 1;
   ereignisse.push({ typ: 'wechselt', nr: s.nr, von, nach: ziel, pfad });
 }
 
-// Ein Zug des Wagens: Die Strecke wird kürzer, der Fahrgast ohne Fahrkarte reagiert, vielleicht hält der Zug.
+function scheinschlaeferZieht(z, s, ereignisse) {
+  const hinten = z.k.blick === 'hoch' ? s.y - z.k.y : z.k.y - s.y;
+  if (hinten > 0 && hinten <= SCHEIN_SICHT) ereignisse.push({ typ: 'kopfHoch', nr: s.nr });
+}
+
+function toilettengaengerZieht(z, s, ereignisse) {
+  if (s.ort === 'sitz') {
+    // zwei Reihen unter ihm: Der Weg nach vorn zur Toilette ist frei
+    if (z.k.y - s.y !== 2) return;
+    s.ort = 'wc';
+    s.wc = 0;
+    ereignisse.push({ typ: 'toilette', nr: s.nr, pfad: [{ x: s.x, y: s.y }].concat(gangweg(s.y, TOILETTE.y)) });
+    return;
+  }
+  s.wc += 1;
+  if (s.wc >= WC_ZUEGE && z.k.y === TOILETTE.y + 1) {
+    // er kommt heraus, und der Kontrolleur steht vor der Tür
+    s.gefangen = true;
+    ereignisse.push({ typ: 'gefangen', nr: s.nr, x: TOILETTE.x, y: TOILETTE.y, tuer: true });
+    return;
+  }
+  const vorbei = z.k.blick === 'runter' && z.k.y - TOILETTE.y >= 3 && z.k.y > s.y;
+  if (!vorbei) return;
+  s.ort = 'sitz';
+  s.wc = 0;
+  ereignisse.push({ typ: 'zurueck', nr: s.nr, pfad: gangweg(TOILETTE.y, s.y).concat([{ x: s.x, y: s.y }]) });
+}
+
+// Ein Zug des Wagens: Die Strecke wird kürzer, jeder Fahrgast ohne Fahrkarte reagiert, vielleicht hält der Zug.
 function wagenZieht(z, ereignisse) {
   z.rest -= 1;
   ereignisse.push({ typ: 'strecke', rest: z.rest });
-  schwarzfahrerZieht(z, ereignisse);
+  for (const s of offeneSchwarzfahrer(z)) {
+    if (s.masche === 'platz') platzwechslerZieht(z, s, ereignisse);
+    else if (s.masche === 'schein') scheinschlaeferZieht(z, s, ereignisse);
+    else toilettengaengerZieht(z, s, ereignisse);
+  }
+  if (!offeneSchwarzfahrer(z).length) {
+    z.status = 'gefangen'; // der letzte kam vor der Toilettentür heraus
+    return;
+  }
   if (z.rest <= 0) {
-    const s = z.fahrgaeste.find((f) => f.schwarz);
-    // er steigt durch die Tür aus, die vom Kontrolleur weg liegt
-    const tuer = s.y <= z.k.y ? { x: KONTROLLGANG, y: 0 } : { x: KONTROLLGANG, y: 7 };
+    // der Zug hält: Wer noch da ist, steigt aus, durch die Tür, die vom Kontrolleur weg liegt
+    for (const s of offeneSchwarzfahrer(z)) {
+      const tuer = s.ort === 'wc' || s.y <= z.k.y ? { x: KONTROLLGANG, y: 0 } : { x: KONTROLLGANG, y: 7 };
+      const von = s.ort === 'wc' ? { x: TOILETTE.x, y: TOILETTE.y } : { x: s.x, y: s.y };
+      const pfad = s.ort === 'wc' ? [von] : [von].concat(gangweg(s.y, tuer.y));
+      ereignisse.push({ typ: 'halt', nr: s.nr, von, tuer, pfad, ausWc: s.ort === 'wc' });
+      z.entkommenImHalt += 1;
+    }
     z.status = 'entkommen';
-    z.ergebnisse.push(false);
-    ereignisse.push({ typ: 'halt', nr: s.nr, von: { x: s.x, y: s.y }, tuer });
   }
 }
 
 function kontrolliere(z, f, ereignisse) {
   if (f.schwarz) {
-    z.status = 'gefangen';
-    z.ergebnisse.push(true);
+    f.gefangen = true;
     ereignisse.push({ typ: 'gefangen', nr: f.nr, x: f.x, y: f.y });
-    return 0;
+    if (!offeneSchwarzfahrer(z).length) {
+      z.status = 'gefangen';
+      return 0;
+    }
+    return 1; // ein zweiter ist noch im Wagen: Der Zug läuft weiter
   }
   const schlief = f.schlaeft;
   f.schlaeft = false;
@@ -264,7 +293,7 @@ function spielerZieht(z, handlung, ereignisse) {
     if (x === KONTROLLGANG && Math.abs(y - z.k.y) === 1) ziel = y;
     else if (x === KONTROLLGANG && y === z.k.y) handlung = 'warten';
     else {
-      const f = sitztAuf(z, x, y);
+      const f = greifbar(z, x, y);
       return f && y === z.k.y ? kontrolliere(z, f, ereignisse) : -1;
     }
   }
@@ -288,6 +317,7 @@ function spielerZieht(z, handlung, ereignisse) {
 }
 
 // Ein Zug im laufenden Halt. Gibt die Ereignisse zurück, leer, wenn die Handlung nichts bewirkt.
+// Danach: status 'gefangen' (alle erwischt), 'entkommen' (der Zug hielt), sonst 'faehrt'.
 function haltZug(z, handlung) {
   const ereignisse = [];
   if (z.status !== 'faehrt') return ereignisse;
@@ -300,11 +330,9 @@ function haltZug(z, handlung) {
 
 // Schnelle Kopie für die Suche in pruefung.js
 function kopiereKontrolle(z) {
-  const kopie = {};
-  for (const name of Object.keys(z)) kopie[name] = z[name];
+  const kopie = Object.assign({}, z);
   kopie.k = { y: z.k.y, blick: z.k.blick };
-  kopie.fahrgaeste = z.fahrgaeste.map((f) => ({ nr: f.nr, x: f.x, y: f.y, farbe: f.farbe, schlaeft: f.schlaeft, schwarz: f.schwarz, ruht: f.ruht, kontrolliert: f.kontrolliert }));
-  kopie.ergebnisse = z.ergebnisse.slice();
+  kopie.fahrgaeste = z.fahrgaeste.map((f) => Object.assign({}, f));
   return kopie;
 }
 
@@ -326,39 +354,41 @@ function wuerfle(z, n) {
 }
 
 // --- ../prototyp/kontrolle/src/kern/pruefung.js
-// Prüft eine Sitzordnung, bevor sie gespielt wird. Reine Logik, auch für die Tests.
-// Eine Ordnung taugt, wenn sie
-//   - innerhalb der Züge lösbar ist, mit etwas Spielraum (vollständige Suche über alle Zustände),
-//   - nicht durch Durchkontrollieren der Reihe nach zu schaffen ist (von unten nach oben, jede Reihe
-//     von links nach rechts oder von rechts nach links),
-//   - für den zu schaffen ist, der hinsieht: wer aufsteht oder zuckt, dem folgt er,
-//   - und nicht alle Fahrgäste in den Zügen kontrolliert werden können.
+// Prüft einen Halt, bevor er gespielt wird. Reine Logik, auch für die Tests.
+// Ein Halt taugt, wenn
+//   - alle Fahrgäste ohne Fahrkarte innerhalb der Züge zu erwischen sind (vollständige Suche),
+//   - Durchkontrollieren der Reihe nach es nicht schafft (von unten nach oben, jede Reihe von links
+//     nach rechts oder von rechts nach links),
+//   - wer hinsieht, es schafft: Er folgt nur dem, der sich durch sein Verhalten verrät (aufstehen,
+//     zucken, Kopf heben, zur Toilette gehen). So ist jede Masche allein durch Beobachten erkennbar.
 
 
 
-
-const KUERZESTE_HOECHSTENS = ZUEGE_BIS_HALT - 2; // wer einen Fehler macht, kann es noch schaffen
 const KUERZESTE_MINDESTENS = 3;
+const VERRAETERISCH = ['wechselt', 'zuckt', 'kopfHoch', 'toilette', 'zurueck'];
 
 function haltNach(ordnung) {
-  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
+  const z = { halt: 0, status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
   setzeHalt(z, ordnung);
   return z;
 }
 
 function moeglicheHandlungen(z) {
   const liste = ['hoch', 'runter', 'warten'];
-  for (const f of z.fahrgaeste) if (f.y === z.k.y) liste.push({ tipp: 'feld', x: f.x, y: f.y });
+  for (const f of z.fahrgaeste) if (f.y === z.k.y && f.ort === 'sitz' && !f.gefangen) liste.push({ tipp: 'feld', x: f.x, y: f.y });
   return liste;
 }
 
-// Breitensuche: der kürzeste Weg zum Fang als Liste von Handlungen, oder null
+function schluessel(z) {
+  let text = `${z.k.y}${z.k.blick[0]}${z.rest}`;
+  for (const f of z.fahrgaeste) {
+    if (f.schwarz || f.schlaeft) text += `|${f.x}${f.y}${f.ruht}${f.schlaeft ? 1 : 0}${f.gefangen ? 1 : 0}${f.ort[0]}${f.wc}`;
+  }
+  return text;
+}
+
+// Breitensuche: der kürzeste Weg, bis alle erwischt sind, als Liste von Handlungen, oder null
 function kuerzesterFang(start) {
-  const schluessel = (z) => {
-    let text = `${z.k.y},${z.rest}`;
-    for (const f of z.fahrgaeste) if (f.schwarz || f.schlaeft) text += `|${f.x}${f.y}${f.ruht}${f.schlaeft ? 1 : 0}`;
-    return text;
-  };
   let schicht = [{ z: start, weg: [] }];
   const gesehen = new Set([schluessel(start)]);
   while (schicht.length) {
@@ -381,38 +411,42 @@ function kuerzesterFang(start) {
 }
 
 // Blind: von unten nach oben, jeden Fahrgast der Reihe nach kontrollieren. richtung: 'links' oder 'rechts'
-function durchkontrollieren(start, richtung) {
+// Gibt den Zustand am Ende zurück: status, und in zug, wie viele Züge es gebraucht hat.
+function durchkontrolliert(start, richtung) {
   const z = kopiereKontrolle(start);
   for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
-    const offen = z.fahrgaeste.filter((f) => f.y === z.k.y && !f.kontrolliert).sort((a, b) => (richtung === 'links' ? a.x - b.x : b.x - a.x))[0];
-    haltZug(z, offen ? { tipp: 'feld', x: offen.x, y: offen.y } : 'hoch');
+    const offen = z.fahrgaeste.filter((f) => f.y === z.k.y && f.ort === 'sitz' && !f.gefangen && !f.kontrolliert).sort((a, b) => (richtung === 'links' ? a.x - b.x : b.x - a.x))[0];
+    if (!haltZug(z, offen ? { tipp: 'feld', x: offen.x, y: offen.y } : 'hoch').length) break; // vorn, niemand mehr übrig
   }
-  return z.status;
+  return z;
 }
 
-// Wer hinsieht: geht nach vorn, merkt sich, wer aufsteht oder zuckt, und folgt ihm.
+function durchkontrollieren(start, richtung) {
+  return durchkontrolliert(start, richtung).status;
+}
+
+// Wer hinsieht: geht nach vorn, merkt sich jeden, der sich verrät, und folgt ihm.
+// Ist der auf der Toilette, wartet er vor der Tür.
 function hinsehen(start) {
   const z = kopiereKontrolle(start);
-  let verdacht = null;
+  const verdacht = [];
   for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
+    const ziel = verdacht.map((nr) => z.fahrgaeste[nr]).find((f) => !f.gefangen);
     let h = 'hoch';
-    if (verdacht !== null) {
-      const f = z.fahrgaeste[verdacht];
-      if (f.y === z.k.y) h = { tipp: 'feld', x: f.x, y: f.y };
-      else h = f.y < z.k.y ? 'hoch' : 'runter';
+    if (ziel) {
+      const reihe = ziel.ort === 'wc' ? TOILETTE.y + 1 : ziel.y;
+      if (ziel.ort === 'sitz' && ziel.y === z.k.y) h = { tipp: 'feld', x: ziel.x, y: ziel.y };
+      else if (reihe === z.k.y) h = 'warten';
+      else h = reihe < z.k.y ? 'hoch' : 'runter';
+    } else if (z.k.y === 1) {
+      h = 'warten'; // vorn angekommen, noch niemand hat sich verraten
     }
-    for (const e of haltZug(z, h)) if (e.typ === 'wechselt' || e.typ === 'zuckt') verdacht = e.nr;
+    for (const e of haltZug(z, h)) if (VERRAETERISCH.includes(e.typ) && !verdacht.includes(e.nr)) verdacht.push(e.nr);
   }
   return z.status;
 }
 
-// Was es kostet, alle zu kontrollieren: jeder einen Zug, der Schlafende zwei, dazu der Weg nach vorn.
-function alleKontrollierenKostet(start) {
-  const vorderste = Math.min(...start.fahrgaeste.map((f) => f.y));
-  return start.fahrgaeste.reduce((summe, f) => summe + (f.schlaeft ? 2 : 1), 0) + (start.k.y - vorderste);
-}
-
-function pruefeOrdnung(ordnung) {
+function pruefeHalt(ordnung) {
   const z = haltNach(ordnung);
   const weg = kuerzesterFang(z);
   return {
@@ -420,21 +454,26 @@ function pruefeOrdnung(ordnung) {
     blindLinks: durchkontrollieren(z, 'links'),
     blindRechts: durchkontrollieren(z, 'rechts'),
     hinsehen: hinsehen(z),
-    alleKosten: alleKontrollierenKostet(z),
   };
 }
 
-function ordnungTaugt(ordnung) {
-  const p = pruefeOrdnung(ordnung);
-  return p.kuerzeste !== null && p.kuerzeste >= KUERZESTE_MINDESTENS && p.kuerzeste <= KUERZESTE_HOECHSTENS &&
-    p.blindLinks !== 'gefangen' && p.blindRechts !== 'gefangen' && p.hinsehen === 'gefangen' && p.alleKosten > ZUEGE_BIS_HALT;
+function haltTaugt(ordnung) {
+  const p = pruefeHalt(ordnung);
+  return p.kuerzeste !== null && p.kuerzeste >= KUERZESTE_MINDESTENS && p.kuerzeste <= (ordnung.zuege || 12) &&
+    p.blindLinks !== 'gefangen' && p.blindRechts !== 'gefangen' && p.hinsehen === 'gefangen';
 }
 
 // --- ../prototyp/kontrolle/src/kern/auslosen.js
-// Neue Sitzordnungen für einen Neustart. Ausgelost wird nur zwischen den Halten, nie während eines Halts.
-// Jede Ordnung wird geprüft (pruefung.js): Wer nicht taugt, wird verworfen und neu gelost.
-// Neu verteilt werden die Plätze, der Schlafende und die Farben. Der Zufall kommt aus dem Zufallsmodul
-// des Hauptspiels, sein Stand liegt im Zustand: Gleicher Seed, gleiche Ordnungen.
+// Die Halte einer Schicht werden ausgelost, einer nach dem anderen. Innerhalb eines Halts gibt es keinen Zufall.
+// Jeder Halt wird geprüft (pruefung.js): Wer nicht taugt, wird verworfen und neu gelost.
+// Der Zufall kommt aus dem Zufallsmodul des Hauptspiels, sein Stand liegt im Zustand: gleicher Seed, gleiche Halte.
+//
+// Steigerung (Auftrag „Die Schicht"):
+//   Halt 1 und 2: ein Platzwechsler. Halt 3: ein Scheinschläfer allein. Halt 4: ein Toilettengänger allein.
+//   Ab Halt 5 gemischt, ab Halt 6 sitzen manchmal zwei im Wagen.
+//   Die Zeit beginnt bei 14 Zügen und wird alle zwei Halte um einen knapper, bis 8 (einer weniger erlaubt). Nie weniger als der
+//   kürzeste Weg, den die Suche findet, plus ein Zug. Und immer weniger, als blindes Durchkontrollieren
+//   der Reihe nach braucht: Sonst ginge es auch ohne Hinsehen. Passt beides nicht, wird neu gelost.
 
 
 
@@ -442,8 +481,16 @@ function ordnungTaugt(ordnung) {
 const ALLE_SITZE = [];
 for (let y = 1; y <= 6; y++) for (const x of [0, 1, 3, 4]) ALLE_SITZE.push({ x, y });
 const FARBEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+const ZEICHEN_FUER = { platz: 'P', schein: 'H', wc: 'T' };
+const MASCHEN = ['platz', 'schein', 'wc'];
 const FAHRGAESTE_JE_HALT = 8;
-const VERSUCHE_HOECHSTENS = 400;
+const VERSUCHE_HOECHSTENS = 600;
+const ZEIT_ANFANG = 14;
+const ZEIT_ENDE = 8;
+
+function zielZeit(halt) {
+  return Math.max(ZEIT_ENDE, ZEIT_ANFANG - Math.floor(halt / 2));
+}
 
 function mische(z, liste) {
   const kopie = liste.slice();
@@ -456,84 +503,136 @@ function mische(z, liste) {
   return kopie;
 }
 
-// Eine Ordnung ohne Prüfung: acht Plätze, der erste für ihn, der zweite für den Schlafenden.
-function roheOrdnung(z) {
-  const plaetze = mische(z, ALLE_SITZE).slice(0, FAHRGAESTE_JE_HALT);
-  const farben = mische(z, FARBEN);
-  const zeilen = [];
-  for (let y = 1; y <= 6; y++) zeilen.push(['.', '.', '|', '.', '.']);
-  plaetze.forEach((p, i) => {
-    zeilen[p.y - 1][p.x] = i === 0 ? 'S' : i === 1 ? 'Z' : farben[i - 1];
-  });
-  return { farbe: farben[0], sitze: zeilen.map((zeile) => zeile.join('')) };
+// Welche Maschen in Halt Nummer halt (ab 0) sitzen
+function maschenFuer(z, halt) {
+  if (halt <= 1) return ['platz'];
+  if (halt === 2) return ['schein'];
+  if (halt === 3) return ['wc'];
+  const erste = MASCHEN[wuerfle(z, 3)];
+  if (halt >= 5 && wuerfle(z, 3) === 0) {
+    const andere = MASCHEN.filter((m) => m !== erste);
+    return [erste, andere[wuerfle(z, 2)]];
+  }
+  return [erste];
 }
 
-// Lost eine taugliche Ordnung aus. z trägt den Zufallsstand.
-function losOrdnungAus(z) {
+// Ein Halt ohne Prüfung und ohne Zeit
+function roherHalt(z, maschen) {
+  const plaetze = mische(z, ALLE_SITZE).slice(0, FAHRGAESTE_JE_HALT);
+  const farben = mische(z, FARBEN);
+  // Schlafende: einer, ohne Scheinschläfer manchmal zwei. So verrät die Zahl der Schlafenden nichts.
+  const schlafende = maschen.includes('schein') ? 1 : 1 + wuerfle(z, 2);
+  const zeilen = [];
+  for (let y = 1; y <= 6; y++) zeilen.push(['.', '.', '|', '.', '.']);
+  const ordnung = { farben: {}, sitze: null };
+  let farbe = 0;
+  plaetze.forEach((p, i) => {
+    let c;
+    if (i < maschen.length) {
+      c = ZEICHEN_FUER[maschen[i]];
+      if (c !== 'H') ordnung.farben[c] = farben[farbe++];
+    } else if (i < maschen.length + schlafende) {
+      c = 'Z';
+    } else {
+      c = farben[farbe++];
+    }
+    zeilen[p.y - 1][p.x] = c;
+  });
+  ordnung.sitze = zeilen.map((zeile) => zeile.join(''));
+  return ordnung;
+}
+
+// Lost einen tauglichen Halt aus. z trägt den Zufallsstand.
+function losHaltAus(z, halt) {
+  const maschen = maschenFuer(z, halt);
   for (let i = 0; i < VERSUCHE_HOECHSTENS; i++) {
-    const ordnung = roheOrdnung(z);
-    if (ordnungTaugt(ordnung)) return ordnung;
+    const ordnung = roherHalt(z, maschen);
+    ordnung.zuege = ZEIT_ANFANG + 1; // erst mit reichlich Zeit: Was ist der kürzeste Weg, was braucht man blind?
+    const start = haltNach(ordnung);
+    const weg = kuerzesterFang(start);
+    if (!weg) continue;
+    let blind = ZEIT_ANFANG + 1;
+    for (const richtung of ['links', 'rechts']) {
+      const b = durchkontrolliert(start, richtung);
+      if (b.status === 'gefangen') blind = Math.min(blind, b.zug);
+    }
+    const zeit = Math.min(zielZeit(halt), blind - 1);
+    if (zeit < weg.length + 1 || zeit < zielZeit(halt) - 1) continue; // höchstens einen Zug knapper als geplant
+    ordnung.zuege = zeit;
+    ordnung.maschen = maschen;
+    if (haltTaugt(ordnung)) return ordnung;
   }
-  return null; // kommt nicht vor (Test), dann nimmt der Durchgang die festen Ordnungen
+  return null; // kommt nicht vor (Test)
 }
 
 // --- ../prototyp/kontrolle/src/kern/durchgang.js
-// Drei Halte hintereinander, bei der allerersten Fahrt auf einem Gerät davor der Lernhalt.
-// Der erste Durchgang spielt die drei festen Sitzordnungen aus halte.js,
-// die nacheinander je einen Gedanken zeigen. Jeder Neustart lost drei neue aus (auslosen.js).
+// Die Schicht: ein Halt nach dem anderen, jeder ausgelost (auslosen.js). Nach jedem Halt folgt sofort
+// der nächste. Die Schicht endet, wenn drei Fahrgäste ohne Fahrkarte entkommen sind. Dann steht nur der
+// Name der letzten erreichten Station da, und jede Eingabe beginnt sofort die nächste Schicht.
+// Bei der allerersten Fahrt auf einem Gerät kommt davor der Lernhalt. Er zählt nicht mit.
+//
 // erzeugeKontrolle(seed, { lernhalt }) -> { zustand, act(handlung) }, act gibt Ereignisse zurück.
-// Der Lernhalt zählt nicht mit. Läuft dort die Zeit ab, beginnt er neu. Wer ihn schafft, bekommt das
-// beim Fang das Ereignis "gelernt" (main.js merkt es sich), mit der nächsten Eingabe kommt Halt 1.
+// Station Nummer n ist die, auf die der Zug in Halt n zufährt (ab 0). Erreicht ist sie, wenn der Halt endet.
 
 
 
 
+
+const ENTKOMMEN_HOECHSTENS = 3;
+
+function beginneHalt(z, nr) {
+  z.halt = nr;
+  setzeHalt(z, losHaltAus(z, nr));
+}
+
+function beginneSchicht(z) {
+  z.entkommen = 0;
+  z.schicht += 1;
+  beginneHalt(z, 0);
+}
 
 function neueKontrolle(seed, optionen) {
   const lernhalt = !!(optionen && optionen.lernhalt);
-  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [], zufall: (seed || 0) >>> 0, durchgang: 0, ordnungen: HALTE.slice(), lernhalt };
-  setzeHalt(z, lernhalt ? LERNHALT : z.ordnungen[0]);
+  const z = { halt: 0, schicht: -1, entkommen: 0, status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [], zufall: (seed || 0) >>> 0, lernhalt };
+  if (lernhalt) setzeHalt(z, LERNHALT);
+  else beginneSchicht(z);
   return z;
-}
-
-function neueOrdnungen(z) {
-  return HALTE.map((fest) => losOrdnungAus(z) || fest);
 }
 
 function kontrollZug(z, handlung) {
   if (z.status === 'faehrt') {
     const ereignisse = haltZug(z, handlung);
-    if (z.lernhalt && z.status !== 'faehrt') z.ergebnisse.pop(); // der Lernhalt zählt nicht
-    if (z.lernhalt && z.status === 'gefangen') ereignisse.push({ typ: 'gelernt' }); // gleich merken
+    if (z.status === 'faehrt' || !ereignisse.length) return ereignisse;
+    if (z.lernhalt) {
+      if (z.status === 'gefangen') ereignisse.push({ typ: 'gelernt' }); // gleich merken
+      return ereignisse; // der Lernhalt wartet auf die nächste Eingabe
+    }
+    // der Halt ist zu Ende: Station erreicht, sofort der nächste oder das Ende der Schicht
+    z.entkommen += z.entkommenImHalt;
+    ereignisse.push({ typ: 'station', nr: z.halt, entkommen: z.entkommen });
+    if (z.entkommen >= ENTKOMMEN_HOECHSTENS) {
+      z.status = 'aus';
+      ereignisse.push({ typ: 'aus', station: z.halt });
+    } else {
+      beginneHalt(z, z.halt + 1);
+      ereignisse.push({ typ: 'neuerHalt', halt: z.halt });
+    }
     return ereignisse;
   }
-  // Nach dem Halt: Jede Eingabe führt zum nächsten Halt, nach dem dritten zum Schluss, danach neu.
   const ereignisse = [];
   if (z.lernhalt) {
     if (z.status === 'gefangen') {
       z.lernhalt = false;
-      z.halt = 0;
-      setzeHalt(z, z.ordnungen[0]);
-      ereignisse.push({ typ: 'neuerHalt', halt: 0 });
+      beginneSchicht(z);
     } else {
       setzeHalt(z, LERNHALT); // die Zeit ist abgelaufen: einfach noch einmal
-      ereignisse.push({ typ: 'neuerHalt', halt: -1 });
     }
-  } else if (z.status === 'aus') {
-    z.ergebnisse = [];
-    z.durchgang += 1;
-    z.ordnungen = neueOrdnungen(z);
-    z.halt = 0;
-    setzeHalt(z, z.ordnungen[0]);
-    ereignisse.push({ typ: 'neuerHalt', halt: 0 });
-  } else if (z.halt < z.ordnungen.length - 1) {
-    z.halt += 1;
-    setzeHalt(z, z.ordnungen[z.halt]);
-    ereignisse.push({ typ: 'neuerHalt', halt: z.halt });
-  } else {
-    z.status = 'aus';
-    ereignisse.push({ typ: 'aus', erwischt: z.ergebnisse.filter(Boolean).length, von: z.ergebnisse.length });
+    ereignisse.push({ typ: 'neuerHalt', halt: z.lernhalt ? -1 : 0 });
+    return ereignisse;
   }
+  // nach dem Ende der Schicht: jede Eingabe beginnt sofort die nächste
+  beginneSchicht(z);
+  ereignisse.push({ typ: 'neuerHalt', halt: 0 });
   return ereignisse;
 }
 
@@ -1734,20 +1833,28 @@ function maleGelocht(stift, x, y, s, staerke) {
 
 // --- ../prototyp/kontrolle/src/texte.js
 // Alle Texte, die im Prototyp "Kontrolle" zu lesen sind. Mehr gibt es nicht, kein Tutorial.
-// Die zwei Hinweiswörter erscheinen nur im Lernhalt.
+// Die zwei Hinweiswörter erscheinen nur im Lernhalt. Die Stationsnamen sind erfunden.
 
 const KONTROLLTEXTE = {
   warten: 'Warten',
-  schluss: '{n} von {m} erwischt', // nach dem dritten Halt
   // nur im Lernhalt, je erst im passenden Moment
   hinweis: {
     wischen: 'Wischen', // am Anfang, bis zum ersten Zug
     antippen: 'Antippen', // wenn man in seiner Reihe steht
   },
+  // Stationsnamen setzen sich aus einem Anfang und einem Ende zusammen, höchstens zehn Zeichen
+  station: {
+    anfang: ['Moos', 'Fern', 'Eulen', 'Nebel', 'Grau', 'Still', 'Laub', 'Kalt', 'Spät', 'Erlen', 'Kies', 'Asch'],
+    ende: ['grund', 'bach', 'hain', 'feld', 'brück', 'au', 'heim', 'tal', 'wies', 'dorf'],
+  },
 };
 
-function setzeKontrollText(text, werte) {
-  return text.replace(/\{(\w+)\}/g, (ganz, name) => (werte[name] !== undefined ? String(werte[name]) : ganz));
+// Der Name der Station Nummer nr (ab 0). Für jede Schicht dieselbe Reihenfolge: So lässt sich die weiteste
+// je erreichte Station wiederfinden. 60 verschiedene Namen, dann beginnt die Linie von vorn.
+function stationsName(nr) {
+  const { anfang, ende } = KONTROLLTEXTE.station;
+  const i = Math.max(0, nr) % 60;
+  return anfang[i % anfang.length] + ende[(i * 7) % ende.length];
 }
 
 // --- ../prototyp/kontrolle/src/anzeige/buehne.js
@@ -1755,8 +1862,11 @@ function setzeKontrollText(text, werte) {
 // Geliehen aus "Der freie Platz": Aufteilung (masse.js), Wagenbild (abteilbild.js), Schaffner mit Zange
 // und Schlafender (gestalten.js), Punktmatrix. Die Bühne entscheidet nie über Regeln.
 //
-// Die Zuganzeige zeigt keine Zahl, sondern die Strecke bis zum Halt: Der Zug rückt mit jedem Zug näher.
-// An zwei Stellen hält das Bild kurz an (Leitsatz 5): beim Fang und wenn der Zug hält.
+// Die Zuganzeige zeigt keine Zahl, sondern die Strecke bis zur nächsten Station und ihren Namen: Der Zug
+// rückt mit jedem Zug näher. Rechts daneben drei Haken mit Mützen, für jeden Entkommenen verschwindet eine.
+// Unten links die Linie: erreichte Stationen, die nächste, und die weiteste je erreichte (gemerkt).
+// An zwei Stellen hält das Bild kurz an (Leitsatz 5): beim Fang und wenn der Zug hält. Danach schiebt sich
+// der nächste Halt von selbst herein, ohne Eingabe.
 
 
 
@@ -1782,10 +1892,11 @@ function erzeugeKontrollBuehne(leinwand) {
   let tonAn = true;
   let laeufer = []; // { start, dauer, schritt }
   let gesperrtBis = 0; // das Bild hält an
-  let schluss = null; // { zeilen, bild }
+  let schluss = null; // { zeilen, bild, start }
+  let weiteste = -1; // die weiteste je erreichte Station, aus dem Speicher
   const wirkung = { warten: -1e9, fang: -1e9, halt: -1e9 };
-  const melder = { klang: null };
-  const bild = { k: { py: 7, blick: 'hoch', zeigt: null, streck: 0, offen: 1 }, fg: [], strecke: ZUEGE_BIS_HALT };
+  const melder = { klang: null, station: null };
+  const bild = { k: { py: 7, blick: 'hoch', zeigt: null, streck: 0, offen: 1 }, fg: [], strecke: ZUEGE_BIS_HALT, gesamt: ZUEGE_BIS_HALT, station: 0, lernhalt: false, muetzen: [1, 1, 1], wc: 0 };
 
   function klinge(name) {
     if (melder.klang) melder.klang(name);
@@ -1810,7 +1921,14 @@ function erzeugeKontrollBuehne(leinwand) {
     bild.k.streck = 0;
     bild.k.offen = 1;
     bild.strecke = z.rest;
+    bild.gesamt = z.zuegeGesamt || ZUEGE_BIS_HALT;
+    bild.station = z.halt;
+    bild.lernhalt = !!z.lernhalt;
+    bild.muetzen = [0, 1, 2].map((i) => (i < 3 - (z.entkommen || 0) ? 1 : 0));
+    bild.wc = z.fahrgaeste.some((f) => f.ort === 'wc' && !f.gefangen) ? 1 : 0;
     bild.fg = z.fahrgaeste.map((f) => ({
+      farbe: f.farbe,
+      kopf: 0,
       px: f.x,
       py: f.y,
       steht: 0,
@@ -1818,8 +1936,8 @@ function erzeugeKontrollBuehne(leinwand) {
       karte: 0,
       gelocht: f.kontrolliert ? 1 : 0,
       wach: f.schlaeft ? 0 : 1,
-      da: z.status === 'entkommen' && f.schwarz ? 0 : 1,
-      gefangen: z.status === 'gefangen' && f.schwarz,
+      da: f.ort === 'wc' || (z.status === 'entkommen' && f.schwarz && !f.gefangen) ? 0 : 1,
+      gefangen: f.gefangen,
     }));
   }
 
@@ -1837,15 +1955,69 @@ function erzeugeKontrollBuehne(leinwand) {
   function zeige(e, t) {
     const k = bild.k;
     if (e.typ === 'neuerHalt') {
-      schluss = null;
-      laeufer = [];
-      gleicheAb();
+      // der nächste Halt schiebt sich herein, sobald das Bild nicht mehr anhält
+      bewege(Math.max(t, gesperrtBis), 1, () => {
+        schluss = null;
+        gleicheAb();
+      });
       return 0;
     }
     if (e.typ === 'gelernt') return 0;
-    if (e.typ === 'aus') {
-      schluss = { zeilen: [setzeKontrollText(KONTROLLTEXTE.schluss, { n: e.erwischt, m: e.von })], bild: null, start: t };
+    if (e.typ === 'station') {
+      // Station erreicht. Für jeden Entkommenen verschwindet eine Mütze.
+      bewege(t, 1, () => {
+        if (melder.station) melder.station(e.nr);
+      });
+      for (let i = 0; i < 3; i++) {
+        if (i < 3 - e.entkommen || bild.muetzen[i] < 1) continue;
+        bewege(t, 500, (p) => {
+          bild.muetzen[i] = 1 - sanft(p);
+        });
+      }
       return 0;
+    }
+    if (e.typ === 'aus') {
+      // Ende der Schicht: nur der Name der letzten erreichten Station
+      schluss = { zeilen: [stationsName(e.station)], bild: null, start: Math.max(t, gesperrtBis) };
+      return 0;
+    }
+    if (e.typ === 'kopfHoch') {
+      const f = bild.fg[e.nr];
+      bewege(t, 520, (p) => {
+        f.kopf = hinUndHer(p);
+      });
+      return 120;
+    }
+    if (e.typ === 'toilette' || e.typ === 'zurueck') {
+      const f = bild.fg[e.nr];
+      const pfad = e.pfad;
+      const weg = (pfad.length - 1) * FELDZEIT;
+      const hin = e.typ === 'toilette';
+      bewege(t, 1, () => {
+        f.da = 1;
+        if (!hin) bild.wc = 0;
+        f.px = pfad[0].x;
+        f.py = pfad[0].y;
+      });
+      bewege(t, 120, (p) => {
+        f.steht = hin ? sanft(p) : 1;
+      });
+      bewege(t + 120, weg, (p) => {
+        const stelle = p * (pfad.length - 1);
+        const i = Math.min(pfad.length - 2, Math.floor(stelle));
+        const q = stelle - i;
+        f.px = pfad[i].x + (pfad[i + 1].x - pfad[i].x) * q;
+        f.py = pfad[i].y + (pfad[i + 1].y - pfad[i].y) * q;
+      });
+      bewege(t + 120 + weg, 160, (p) => {
+        if (hin) {
+          f.da = 1 - p; // hinter der Tür
+          if (p >= 1) bild.wc = 1;
+        } else {
+          f.steht = 1 - sanft(p);
+        }
+      });
+      return 120 + weg + 160;
     }
     if (e.typ === 'schritt') {
       bewege(t, 140, (p) => {
@@ -1868,6 +2040,16 @@ function erzeugeKontrollBuehne(leinwand) {
     }
     if (e.typ === 'kontrolle' || e.typ === 'gefangen') {
       const f = bild.fg[e.nr];
+      if (e.tuer) {
+        // er kommt aus der Toilette, und der Kontrolleur steht davor
+        bewege(t, 1, () => {
+          bild.wc = 0;
+          f.da = 1;
+          f.steht = 1;
+          f.px = e.x;
+          f.py = e.y + 0.15;
+        });
+      }
       const ziel = feldMitte(masse, e.x, e.y);
       const zeigt = { x: ziel.x, y: ziel.y - masse.s * 0.12 };
       const gefangen = e.typ === 'gefangen';
@@ -1930,10 +2112,16 @@ function erzeugeKontrollBuehne(leinwand) {
     if (e.typ === 'halt') {
       // Türzischen, er steht auf und steigt aus, das Bild hält an
       const f = bild.fg[e.nr];
-      const pfad = [e.von, { x: KONTROLLGANG, y: e.von.y }];
-      const schritt = e.tuer.y < e.von.y ? -1 : 1;
-      for (let y = e.von.y + schritt; y !== e.tuer.y + schritt; y += schritt) pfad.push({ x: KONTROLLGANG, y });
+      const pfad = e.pfad.length > 1 ? e.pfad : [e.pfad[0], e.pfad[0]];
       const weg = (pfad.length - 1) * FELDZEIT;
+      if (e.ausWc) {
+        bewege(t, 1, () => {
+          bild.wc = 0;
+          f.da = 1;
+          f.px = pfad[0].x;
+          f.py = pfad[0].y;
+        });
+      }
       bewege(t, 1, () => {
         wirkung.halt = t;
         klinge('zischen');
@@ -1976,42 +2164,149 @@ function erzeugeKontrollBuehne(leinwand) {
 
   // ---------------------------------------------------------------- Zeichnen
 
-  // Die Strecke in der Zuganzeige: links der Zug, rechts der Bahnhof, dazwischen die Gleise, die übrig sind.
+  // Platz für die drei Haken rechts neben der Anzeige
+  function hakenBreite() {
+    return Math.round(masse.tafel.raster * 21);
+  }
+
+  // Die Strecke in der Zuganzeige: links der Zug, dann die Gleise, die übrig sind, der Mast der Station
+  // und ihr Name. Im Lernhalt ohne Namen.
   function maleStrecke() {
     const { tafel } = masse;
-    const feld = neuesPunktfeld(tafel.spalten, tafel.zeilen);
+    const b = tafel.b - hakenBreite();
+    const spalten = Math.floor((b - 2 * tafel.polster) / tafel.raster);
+    const feld = neuesPunktfeld(spalten, tafel.zeilen);
     const an = (x, y) => {
       if (x >= 0 && x < feld.spalten && y >= 0 && y < feld.zeilen) feld.an[y * feld.spalten + x] = 1;
     };
-    const bahnhof = feld.spalten - 4;
+    const name = bild.lernhalt ? '' : stationsName(bild.station);
+    const nameBreit = name ? textBreite(name) : 0;
+    const mast = feld.spalten - nameBreit - (name ? 4 : 3);
     const gleis = feld.zeilen - 3;
-    // der Bahnhof: ein Mast mit Schild
-    for (let y = 1; y <= gleis; y++) an(bahnhof, y);
-    for (let x = bahnhof - 2; x <= bahnhof + 2; x++) {
-      an(x, 1);
-      an(x, 3);
-    }
-    an(bahnhof - 2, 2);
-    an(bahnhof + 2, 2);
+    for (let y = 1; y <= gleis; y++) an(mast, y);
+    an(mast - 1, 1);
+    an(mast + 1, 1);
+    if (name) schreibe(feld, name, mast + 3, 1);
     // der Zug rückt vor
-    const weit = bahnhof - 12;
-    const gesamt = z.zuegeGesamt || ZUEGE_BIS_HALT;
-    const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, gesamt) / gesamt));
+    const weit = Math.max(0, mast - 12);
+    const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, bild.gesamt) / bild.gesamt));
     for (let x = vorn - 7; x <= vorn; x++) for (let y = gleis - 3; y <= gleis; y++) an(x, y);
-    an(vorn - 5, gleis - 2);
-    an(vorn - 2, gleis - 2);
     feld.an[(gleis - 2) * feld.spalten + vorn - 5] = 0;
     feld.an[(gleis - 2) * feld.spalten + vorn - 2] = 0;
-    // die übrigen Gleise bis zum Bahnhof
-    for (let x = vorn + 2; x < bahnhof; x += 2) an(x, gleis + 1);
+    for (let x = vorn + 2; x < mast; x += 2) an(x, gleis + 1);
     stift.fillStyle = FARBE.tafel;
-    rundesRechteck(stift, tafel.x, tafel.y, tafel.b, tafel.h, 5);
+    rundesRechteck(stift, tafel.x, tafel.y, b, tafel.h, 5);
     stift.fill();
     stift.strokeStyle = FARBE.tafelRand;
     stift.lineWidth = 1;
-    rundesRechteck(stift, tafel.x + 0.5, tafel.y + 0.5, tafel.b - 1, tafel.h - 1, 5);
+    rundesRechteck(stift, tafel.x + 0.5, tafel.y + 0.5, b - 1, tafel.h - 1, 5);
     stift.stroke();
     zeichnePunktfeld(stift, feld, tafel.x + tafel.polster, tafel.y + tafel.polster, tafel.raster, FARBE.bernstein, FARBE.bernsteinAus);
+  }
+
+  // Drei Haken neben der Anzeige, an jedem eine Mütze. Für jeden Entkommenen verschwindet eine.
+  function maleHaken() {
+    const { tafel } = masse;
+    const breit = hakenBreite();
+    const x0 = tafel.x + tafel.b - breit + 6;
+    const abstand = (breit - 8) / 3;
+    const oben = tafel.y + 4;
+    stift.strokeStyle = '#5b6680';
+    stift.lineWidth = 2;
+    stift.lineCap = 'round';
+    stift.beginPath();
+    stift.moveTo(x0, oben);
+    stift.lineTo(x0 + abstand * 3 - 4, oben);
+    stift.stroke();
+    for (let i = 0; i < 3; i++) {
+      const cx = x0 + abstand * (i + 0.5) - 2;
+      stift.strokeStyle = '#5b6680';
+      stift.beginPath();
+      stift.moveTo(cx, oben);
+      stift.lineTo(cx, oben + 5);
+      stift.arc(cx + 2.5, oben + 5, 2.5, Math.PI, 0, true);
+      stift.stroke();
+      const da = bild.muetzen[i];
+      if (da <= 0.01) continue;
+      // die Mütze des Kontrolleurs: Kuppe, rotes Band, Schirm
+      const r = Math.min(abstand * 0.42, tafel.h * 0.32);
+      const my = oben + 8 + r + (1 - da) * 8;
+      stift.save();
+      stift.globalAlpha = da;
+      stift.fillStyle = '#1f2e5e';
+      stift.beginPath();
+      stift.arc(cx, my, r, Math.PI, 0);
+      stift.closePath();
+      stift.fill();
+      stift.fillStyle = '#d2553f';
+      rundesRechteck(stift, cx - r * 1.02, my - r * 0.12, r * 2.04, r * 0.36, r * 0.1);
+      stift.fill();
+      stift.fillStyle = '#0d1322';
+      rundesRechteck(stift, cx - r * 0.85, my + r * 0.22, r * 1.7, r * 0.26, r * 0.12);
+      stift.fill();
+      stift.restore();
+    }
+  }
+
+  // Die Linie unten links: Stationen als Punkte, erreichte hell, die nächste als Ring,
+  // über der weitesten je erreichten eine kleine Fahne. Liegt sie weiter rechts, steht die Fahne am Ende.
+  function maleLinie() {
+    if (bild.lernhalt) return;
+    const kasten = masse.karte;
+    const anzahl = 6;
+    const erste = Math.max(0, bild.station - 2);
+    const y = kasten.y + kasten.h * 0.62;
+    const x0 = kasten.x + 10;
+    const abstand = (kasten.b - 20) / (anzahl - 1);
+    stift.strokeStyle = FARBE.bernsteinAus;
+    stift.lineWidth = 3;
+    stift.lineCap = 'round';
+    stift.beginPath();
+    stift.moveTo(x0, y);
+    stift.lineTo(x0 + abstand * (anzahl - 1), y);
+    stift.stroke();
+    stift.strokeStyle = FARBE.bernstein;
+    stift.beginPath();
+    stift.moveTo(x0, y);
+    stift.lineTo(x0 + abstand * Math.max(0, bild.station - erste), y);
+    stift.stroke();
+    for (let i = 0; i < anzahl; i++) {
+      const nr = erste + i;
+      const x = x0 + abstand * i;
+      stift.beginPath();
+      stift.arc(x, y, nr === bild.station ? 6 : 4.5, 0, Math.PI * 2);
+      if (nr < bild.station) {
+        stift.fillStyle = FARBE.bernstein;
+        stift.fill();
+      } else if (nr === bild.station) {
+        stift.fillStyle = FARBE.nacht;
+        stift.fill();
+        stift.strokeStyle = FARBE.bernstein;
+        stift.lineWidth = 2.5;
+        stift.stroke();
+      } else {
+        stift.fillStyle = FARBE.bernsteinAus;
+        stift.fill();
+      }
+    }
+    if (weiteste < 0) return;
+    const fahneNr = Math.min(weiteste, erste + anzahl - 1);
+    if (weiteste < erste) return;
+    const fx = x0 + abstand * (fahneNr - erste);
+    const fy = y - 9;
+    stift.strokeStyle = FARBE.bernstein;
+    stift.lineWidth = 1.5;
+    stift.beginPath();
+    stift.moveTo(fx, fy);
+    stift.lineTo(fx, fy - 14);
+    stift.stroke();
+    stift.fillStyle = FARBE.bernstein;
+    stift.beginPath();
+    stift.moveTo(fx, fy - 14);
+    stift.lineTo(fx + (weiteste > fahneNr ? 10 : 8), fy - 10.5);
+    stift.lineTo(fx, fy - 7);
+    stift.closePath();
+    stift.fill();
   }
 
   function maleKnopf(kasten, text, gedrueckt) {
@@ -2045,6 +2340,11 @@ function erzeugeKontrollBuehne(leinwand) {
   function maleWelt(jetzt) {
     const { s, boden, rumpf } = masse;
     stift.drawImage(abteil, rumpf.x, rumpf.y, rumpf.b, rumpf.h);
+    // die Toilette vorn: eine kleine Lampe über der Tür, grün frei, rot besetzt
+    stift.fillStyle = bild.wc > 0.5 ? '#e8402f' : '#2f6b45';
+    stift.beginPath();
+    stift.arc(boden.x + (KONTROLLGANG + 0.82) * s, boden.y + s * 0.16, Math.max(3, s * 0.06), 0, Math.PI * 2);
+    stift.fill();
     // Türzischen am Halt: die Türen leuchten kurz auf
     const tuer = begrenze(1 - (jetzt - wirkung.halt) / 900, 0, 1);
     if (tuer > 0) {
@@ -2063,16 +2363,16 @@ function erzeugeKontrollBuehne(leinwand) {
   function maleFahrgast(nr, f, jetzt) {
     if (f.da <= 0.01 || !z) return;
     const { s, boden } = masse;
-    const echt = z.fahrgaeste[nr];
     const cx = boden.x + (f.px + 0.5) * s;
     const sitzt = f.steht < 0.5;
     const fy = boden.y + (f.py + (sitzt ? 0.86 : 0.9)) * s - f.zuck * s * 0.12;
     stift.save();
     stift.globalAlpha = f.da;
-    if (echt.farbe === 'z') {
-      maleSchlaefer(stift, cx, fy, s, { wach: f.wach, atem: ruhig ? 0 : Math.sin(jetzt / 900) });
+    if (f.farbe === 'z' && f.steht < 0.5) {
+      // Schlafende und Scheinschläfer sehen gleich aus. Nur der Scheinschläfer hebt manchmal den Kopf.
+      maleSchlaefer(stift, cx, fy, s, { wach: Math.max(f.wach, f.kopf * 0.8), atem: ruhig ? 0 : Math.sin(jetzt / 900) });
     } else {
-      const k = maleFahrgastKoerper(stift, cx, fy, s, { farben: FAHRGASTFARBEN[echt.farbe], steht: Math.max(f.steht, f.zuck * 0.6) });
+      const k = maleFahrgastKoerper(stift, cx, fy, s, { farben: FAHRGASTFARBEN[f.farbe] || FAHRGASTFARBEN.d, steht: Math.max(f.steht, f.zuck * 0.6) });
       maleHochgehalten(stift, cx, k.schulterY + s * 0.16, s, f.karte);
       // gefangen: Er bleibt sitzen, die Zange hält seine Hand
       if (f.gefangen) {
@@ -2095,8 +2395,8 @@ function erzeugeKontrollBuehne(leinwand) {
   function welcherHinweis() {
     if (!z || !z.lernhalt || z.status !== 'faehrt' || laeufer.length) return null;
     if (z.zug === 0) return KONTROLLTEXTE.hinweis.wischen;
-    const s = z.fahrgaeste.find((f) => f.schwarz);
-    if (s.y === z.k.y) return KONTROLLTEXTE.hinweis.antippen;
+    const s = z.fahrgaeste.find((f) => f.schwarz && !f.gefangen);
+    if (s && s.y === z.k.y) return KONTROLLTEXTE.hinweis.antippen;
     return null;
   }
 
@@ -2150,6 +2450,8 @@ function erzeugeKontrollBuehne(leinwand) {
     stift.restore();
     maleHinweis();
     maleStrecke();
+    maleHaken();
+    maleLinie();
     maleTonschalter(stift, masse.ton, tonAn);
     maleKnopf(masse.warten, KONTROLLTEXTE.warten, begrenze(1 - (jetzt - wirkung.warten) / 140, 0, 1));
     if (schluss) {
@@ -2187,6 +2489,9 @@ function erzeugeKontrollBuehne(leinwand) {
     },
     masse: () => masse,
     hinweis: () => welcherHinweis(),
+    setzeWeiteste: (nr) => {
+      weiteste = nr;
+    },
   };
 }
 
@@ -2390,19 +2695,21 @@ function erzeugeKontrollTon() {
 }
 
 // --- ../prototyp/kontrolle/src/speicher.js
-// Was sich der Prototyp "Kontrolle" merkt: nur, ob der Lernhalt auf diesem Gerät schon geschafft ist.
-// Eigener Schlüssel. Der Speicher darf fehlen, leer, gesperrt oder kaputt sein: Dann kommt der Lernhalt
-// eben noch einmal, und das Spiel läuft ohne Speichern weiter.
+// Was sich der Prototyp "Kontrolle" merkt: ob der Lernhalt auf diesem Gerät schon geschafft ist, und die
+// weiteste je erreichte Station. Eigener Schlüssel. Der Speicher darf fehlen, leer, gesperrt oder kaputt
+// sein: Dann kommt der Lernhalt eben noch einmal, keine Station ist markiert, und das Spiel läuft weiter.
 
 const KONTROLLSCHLUESSEL = 'endstation.kontrolle.1';
 
 function leererKontrollStand() {
-  return { gelernt: false };
+  return { gelernt: false, weiteste: -1 };
 }
 
 function bereinigeKontrollStand(roh) {
   const stand = leererKontrollStand();
-  if (roh && typeof roh === 'object' && roh.gelernt === true) stand.gelernt = true;
+  if (!roh || typeof roh !== 'object') return stand;
+  if (roh.gelernt === true) stand.gelernt = true;
+  if (Number.isInteger(roh.weiteste) && roh.weiteste >= 0 && roh.weiteste < 100000) stand.weiteste = roh.weiteste;
   return stand;
 }
 
@@ -2425,7 +2732,8 @@ function sichereKontrollStand(stand) {
 
 // --- ../prototyp/kontrolle/src/main.js
 // Einstieg des Prototyps "Kontrolle": verbindet Kern, Bühne, Eingabe und Ton.
-// Kein Menü: Beim Öffnen steht man sofort im Gang. Gemerkt wird nur, ob der Lernhalt geschafft ist.
+// Kein Menü: Beim Öffnen steht man sofort im Gang. Gemerkt wird, ob der Lernhalt geschafft ist, und die
+// weiteste je erreichte Station.
 
 
 
@@ -2436,9 +2744,9 @@ function sichereKontrollStand(stand) {
 const leinwand = document.getElementById('bild');
 const buehne = erzeugeKontrollBuehne(leinwand);
 const ton = erzeugeKontrollTon();
-// Der Seed bestimmt nur, welche Sitzordnungen ein Neustart auslost. Der erste Durchgang ist immer gleich.
-// Mit #seed=Zahl an der Adresse ist auch jeder Neustart gleich (für die Prüfwerkzeuge).
-function seedFuerNeustart() {
+// Der Seed bestimmt, welche Halte ausgelost werden. Mit #seed=Zahl an der Adresse verläuft alles gleich
+// (für die Prüfwerkzeuge).
+function seedFuerSchicht() {
   const fest = /[#&]seed=(\d+)/.exec(window.location.hash);
   if (fest) return Number(fest[1]);
   try {
@@ -2448,7 +2756,7 @@ function seedFuerNeustart() {
   }
 }
 const stand = ladeKontrollStand();
-const spiel = erzeugeKontrolle(seedFuerNeustart(), { lernhalt: !stand.gelernt });
+const spiel = erzeugeKontrolle(seedFuerSchicht(), { lernhalt: !stand.gelernt });
 let tonAn = true;
 
 function gibEin(handlung) {
@@ -2489,6 +2797,14 @@ function schleife(jetzt) {
 if (/[#&]probe\b/.test(window.location.hash)) window.kontrollZustand = () => JSON.stringify(spiel.zustand);
 
 buehne.melder.klang = (name) => ton.spiele(name);
+// eine Station erreicht: Ist sie weiter als je zuvor, wird sie auf der Linie markiert und gemerkt
+buehne.melder.station = (nr) => {
+  if (spiel.zustand.lernhalt || nr <= stand.weiteste) return;
+  stand.weiteste = nr;
+  buehne.setzeWeiteste(nr);
+  sichereKontrollStand(stand);
+};
+buehne.setzeWeiteste(stand.weiteste);
 buehne.passeAn();
 buehne.neu(spiel.zustand);
 verbindeEingabe(leinwand, { aktion: (name) => gibEin(name), tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => spiel.zustand.status !== 'faehrt' });

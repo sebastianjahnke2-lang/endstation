@@ -1,36 +1,38 @@
-// Prüft eine Sitzordnung, bevor sie gespielt wird. Reine Logik, auch für die Tests.
-// Eine Ordnung taugt, wenn sie
-//   - innerhalb der Züge lösbar ist, mit etwas Spielraum (vollständige Suche über alle Zustände),
-//   - nicht durch Durchkontrollieren der Reihe nach zu schaffen ist (von unten nach oben, jede Reihe
-//     von links nach rechts oder von rechts nach links),
-//   - für den zu schaffen ist, der hinsieht: wer aufsteht oder zuckt, dem folgt er,
-//   - und nicht alle Fahrgäste in den Zügen kontrolliert werden können.
+// Prüft einen Halt, bevor er gespielt wird. Reine Logik, auch für die Tests.
+// Ein Halt taugt, wenn
+//   - alle Fahrgäste ohne Fahrkarte innerhalb der Züge zu erwischen sind (vollständige Suche),
+//   - Durchkontrollieren der Reihe nach es nicht schafft (von unten nach oben, jede Reihe von links
+//     nach rechts oder von rechts nach links),
+//   - wer hinsieht, es schafft: Er folgt nur dem, der sich durch sein Verhalten verrät (aufstehen,
+//     zucken, Kopf heben, zur Toilette gehen). So ist jede Masche allein durch Beobachten erkennbar.
 
-import { setzeHalt, haltZug, kopiereKontrolle } from './kontrolle.js';
-import { ZUEGE_BIS_HALT } from './halte.js';
+import { setzeHalt, haltZug, kopiereKontrolle, TOILETTE } from './kontrolle.js';
 
-export const KUERZESTE_HOECHSTENS = ZUEGE_BIS_HALT - 2; // wer einen Fehler macht, kann es noch schaffen
 export const KUERZESTE_MINDESTENS = 3;
+export const VERRAETERISCH = ['wechselt', 'zuckt', 'kopfHoch', 'toilette', 'zurueck'];
 
 export function haltNach(ordnung) {
-  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
+  const z = { halt: 0, status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
   setzeHalt(z, ordnung);
   return z;
 }
 
 function moeglicheHandlungen(z) {
   const liste = ['hoch', 'runter', 'warten'];
-  for (const f of z.fahrgaeste) if (f.y === z.k.y) liste.push({ tipp: 'feld', x: f.x, y: f.y });
+  for (const f of z.fahrgaeste) if (f.y === z.k.y && f.ort === 'sitz' && !f.gefangen) liste.push({ tipp: 'feld', x: f.x, y: f.y });
   return liste;
 }
 
-// Breitensuche: der kürzeste Weg zum Fang als Liste von Handlungen, oder null
+function schluessel(z) {
+  let text = `${z.k.y}${z.k.blick[0]}${z.rest}`;
+  for (const f of z.fahrgaeste) {
+    if (f.schwarz || f.schlaeft) text += `|${f.x}${f.y}${f.ruht}${f.schlaeft ? 1 : 0}${f.gefangen ? 1 : 0}${f.ort[0]}${f.wc}`;
+  }
+  return text;
+}
+
+// Breitensuche: der kürzeste Weg, bis alle erwischt sind, als Liste von Handlungen, oder null
 export function kuerzesterFang(start) {
-  const schluessel = (z) => {
-    let text = `${z.k.y},${z.rest}`;
-    for (const f of z.fahrgaeste) if (f.schwarz || f.schlaeft) text += `|${f.x}${f.y}${f.ruht}${f.schlaeft ? 1 : 0}`;
-    return text;
-  };
   let schicht = [{ z: start, weg: [] }];
   const gesehen = new Set([schluessel(start)]);
   while (schicht.length) {
@@ -53,38 +55,42 @@ export function kuerzesterFang(start) {
 }
 
 // Blind: von unten nach oben, jeden Fahrgast der Reihe nach kontrollieren. richtung: 'links' oder 'rechts'
-export function durchkontrollieren(start, richtung) {
+// Gibt den Zustand am Ende zurück: status, und in zug, wie viele Züge es gebraucht hat.
+export function durchkontrolliert(start, richtung) {
   const z = kopiereKontrolle(start);
   for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
-    const offen = z.fahrgaeste.filter((f) => f.y === z.k.y && !f.kontrolliert).sort((a, b) => (richtung === 'links' ? a.x - b.x : b.x - a.x))[0];
-    haltZug(z, offen ? { tipp: 'feld', x: offen.x, y: offen.y } : 'hoch');
+    const offen = z.fahrgaeste.filter((f) => f.y === z.k.y && f.ort === 'sitz' && !f.gefangen && !f.kontrolliert).sort((a, b) => (richtung === 'links' ? a.x - b.x : b.x - a.x))[0];
+    if (!haltZug(z, offen ? { tipp: 'feld', x: offen.x, y: offen.y } : 'hoch').length) break; // vorn, niemand mehr übrig
   }
-  return z.status;
+  return z;
 }
 
-// Wer hinsieht: geht nach vorn, merkt sich, wer aufsteht oder zuckt, und folgt ihm.
+export function durchkontrollieren(start, richtung) {
+  return durchkontrolliert(start, richtung).status;
+}
+
+// Wer hinsieht: geht nach vorn, merkt sich jeden, der sich verrät, und folgt ihm.
+// Ist der auf der Toilette, wartet er vor der Tür.
 export function hinsehen(start) {
   const z = kopiereKontrolle(start);
-  let verdacht = null;
+  const verdacht = [];
   for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
+    const ziel = verdacht.map((nr) => z.fahrgaeste[nr]).find((f) => !f.gefangen);
     let h = 'hoch';
-    if (verdacht !== null) {
-      const f = z.fahrgaeste[verdacht];
-      if (f.y === z.k.y) h = { tipp: 'feld', x: f.x, y: f.y };
-      else h = f.y < z.k.y ? 'hoch' : 'runter';
+    if (ziel) {
+      const reihe = ziel.ort === 'wc' ? TOILETTE.y + 1 : ziel.y;
+      if (ziel.ort === 'sitz' && ziel.y === z.k.y) h = { tipp: 'feld', x: ziel.x, y: ziel.y };
+      else if (reihe === z.k.y) h = 'warten';
+      else h = reihe < z.k.y ? 'hoch' : 'runter';
+    } else if (z.k.y === 1) {
+      h = 'warten'; // vorn angekommen, noch niemand hat sich verraten
     }
-    for (const e of haltZug(z, h)) if (e.typ === 'wechselt' || e.typ === 'zuckt') verdacht = e.nr;
+    for (const e of haltZug(z, h)) if (VERRAETERISCH.includes(e.typ) && !verdacht.includes(e.nr)) verdacht.push(e.nr);
   }
   return z.status;
 }
 
-// Was es kostet, alle zu kontrollieren: jeder einen Zug, der Schlafende zwei, dazu der Weg nach vorn.
-export function alleKontrollierenKostet(start) {
-  const vorderste = Math.min(...start.fahrgaeste.map((f) => f.y));
-  return start.fahrgaeste.reduce((summe, f) => summe + (f.schlaeft ? 2 : 1), 0) + (start.k.y - vorderste);
-}
-
-export function pruefeOrdnung(ordnung) {
+export function pruefeHalt(ordnung) {
   const z = haltNach(ordnung);
   const weg = kuerzesterFang(z);
   return {
@@ -92,12 +98,12 @@ export function pruefeOrdnung(ordnung) {
     blindLinks: durchkontrollieren(z, 'links'),
     blindRechts: durchkontrollieren(z, 'rechts'),
     hinsehen: hinsehen(z),
-    alleKosten: alleKontrollierenKostet(z),
   };
 }
 
-export function ordnungTaugt(ordnung) {
-  const p = pruefeOrdnung(ordnung);
-  return p.kuerzeste !== null && p.kuerzeste >= KUERZESTE_MINDESTENS && p.kuerzeste <= KUERZESTE_HOECHSTENS &&
-    p.blindLinks !== 'gefangen' && p.blindRechts !== 'gefangen' && p.hinsehen === 'gefangen' && p.alleKosten > ZUEGE_BIS_HALT;
+export function haltTaugt(ordnung) {
+  const p = pruefeHalt(ordnung);
+  return p.kuerzeste !== null && p.kuerzeste >= KUERZESTE_MINDESTENS && p.kuerzeste <= (ordnung.zuege || 12) &&
+    p.blindLinks !== 'gefangen' && p.blindRechts !== 'gefangen' && p.hinsehen === 'gefangen';
 }
+

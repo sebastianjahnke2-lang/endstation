@@ -2,18 +2,29 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { KONTROLLTEXTE, setzeKontrollText } from '../src/texte.js';
+import { KONTROLLTEXTE, stationsName } from '../src/texte.js';
 import { berechneMasse, FREI_UNTEN } from '../../freier-platz/src/anzeige/masse.js';
 import { textBreite, ZEILENHOEHE } from '../../../src/anzeige/matrix.js';
 
-test('nur diese Texte, keine Erklärung, kein Lob, keine Wertung. Zwei Hinweiswörter, je ein Wort', () => {
-  assert.deepEqual(Object.keys(KONTROLLTEXTE), ['warten', 'schluss', 'hinweis']);
+test('nur diese Texte, keine Erklärung, kein Lob, keine Wertung, keine Punktzahl', () => {
+  assert.deepEqual(Object.keys(KONTROLLTEXTE), ['warten', 'hinweis', 'station']);
   assert.deepEqual(KONTROLLTEXTE.hinweis, { wischen: 'Wischen', antippen: 'Antippen' });
-  const alle = [KONTROLLTEXTE.warten, KONTROLLTEXTE.schluss, ...Object.values(KONTROLLTEXTE.hinweis)].join(' ').toLowerCase();
-  for (const wort of ['gut', 'super', 'toll', 'punkte', 'geschafft', 'gewonnen', 'verloren', 'leider', 'bravo', 'schwarz']) {
+  const woerter = [KONTROLLTEXTE.warten, ...Object.values(KONTROLLTEXTE.hinweis)];
+  for (let i = 0; i < 60; i++) woerter.push(stationsName(i));
+  const alle = woerter.join(' ').toLowerCase();
+  for (const wort of ['gut', 'super', 'toll', 'punkte', 'geschafft', 'gewonnen', 'verloren', 'leider', 'bravo', 'schwarz', 'rekord']) {
     assert.ok(!new RegExp(`\\b${wort}\\b`).test(alle), wort);
   }
-  assert.equal(setzeKontrollText(KONTROLLTEXTE.schluss, { n: 2, m: 3 }), '2 von 3 erwischt');
+  assert.ok(!/\d/.test(alle), 'keine Zahl');
+});
+
+test('Stationsnamen: erfunden, 60 verschiedene, höchstens zehn Zeichen, immer dieselbe Reihenfolge', () => {
+  const namen = [];
+  for (let i = 0; i < 60; i++) namen.push(stationsName(i));
+  assert.equal(new Set(namen).size, 60);
+  for (const n of namen) assert.ok([...n].length <= 10, n);
+  assert.equal(stationsName(3), stationsName(3));
+  assert.equal(stationsName(60), stationsName(0), 'danach beginnt die Linie von vorn');
 });
 
 for (const [b, h] of [[360, 600], [375, 548], [390, 664], [390, 844], [430, 739]]) {
@@ -28,9 +39,18 @@ for (const [b, h] of [[360, 600], [375, 548], [390, 664], [390, 844], [430, 739]
     // die Strecke braucht Zug (8 Punkte), Weg und Bahnhof
     assert.ok(m.tafel.spalten >= 40);
     assert.ok(m.tafel.zeilen >= ZEILENHOEHE);
-    // die längste Schlusszeile passt in die Breite
-    const breit = (textBreite(setzeKontrollText(KONTROLLTEXTE.schluss, { n: 3, m: 3 })) + 8) * m.tafel.raster + 12;
-    assert.ok(breit <= b - 20, `Schlusszeile ${breit} Pixel`);
+    // die Anzeige neben den drei Haken: Zug, etwas Gleis, Mast und der längste Stationsname passen hinein
+    const haken = Math.round(m.tafel.raster * 21);
+    const spalten = Math.floor((m.tafel.b - haken - 2 * m.tafel.polster) / m.tafel.raster);
+    let laengster = 0;
+    for (let i = 0; i < 60; i++) laengster = Math.max(laengster, textBreite(stationsName(i)));
+    assert.ok(spalten - laengster - 4 >= 8 + 10, `Anzeige zu schmal: ${spalten} Punkte, Name ${laengster}`);
+    assert.ok(haken >= 50, 'drei Haken brauchen Platz');
+    assert.ok(m.tafel.x + m.tafel.b <= m.ton.x - m.ton.r + 4, 'Haken und Lautsprecher überlappen');
+    // die Schlusszeile mit dem längsten Namen passt in die Breite
+    assert.ok((laengster + 8) * m.tafel.raster + 12 <= b - 20);
+    // die Linie unten links hat Platz für sechs Stationen
+    assert.ok(m.karte.b >= 6 * 14, `Linie zu schmal: ${m.karte.b}`);
     // das längste Hinweisschild passt neben den Gang, ohne aus dem Bild zu ragen
     for (const wort of Object.values(KONTROLLTEXTE.hinweis)) assert.ok(textBreite(wort) * m.tafel.raster + 16 <= b - 8, wort);
   });
