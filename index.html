@@ -1388,6 +1388,88 @@ function optionenFuerFahrt(stand, vorige) {
   return optionen;
 }
 
+// --- kern/fortsetzen.js
+// Fahrt fortsetzen (Leitsatz 10: jederzeit unterbrechbar, nach der Pause weiß man sofort, wo man ist).
+// Gesichert werden Seed, Optionen und die Eingaben der laufenden Fahrt. Beim Öffnen spielt der Kern
+// sie nach und steht im selben Wagen in derselben Lage. Reine Logik ohne Browser.
+//
+// Eine Aufzeichnung: { seed, optionen, eingaben, pruefsumme }
+//   eingaben: ein Zeichen je Zug, der etwas bewirkt hat
+//   pruefsumme: Fingerabdruck des Zustands nach der letzten Eingabe. Passt er nach dem Nachspielen
+//   nicht (anderer Stand des Spiels, verfälschter Speicher), gilt die Aufzeichnung als kaputt.
+// Jeder Fehler beim Nachspielen ergibt null: Dann beginnt still eine neue Fahrt.
+
+
+
+const EINGABEN_HOECHSTENS = 4000; // längere Fahrten werden nicht mehr aufgezeichnet
+
+const EINGABEZEICHEN = {
+  hoch: 'h',
+  rechts: 'r',
+  runter: 'u',
+  links: 'l',
+  warten: 'w',
+  'sprint-hoch': 'H',
+  'sprint-rechts': 'R',
+  'sprint-runter': 'U',
+  'sprint-links': 'L',
+};
+const AKTION_FUER_ZEICHEN = {};
+for (const name of Object.keys(EINGABEZEICHEN)) AKTION_FUER_ZEICHEN[EINGABEZEICHEN[name]] = name;
+
+// FNV-1a über den Zustand als Text. Kein Schutz gegen Absicht, nur gegen Versehen.
+function pruefsummeVon(zustand) {
+  const text = JSON.stringify(zustand);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
+
+// Zu Beginn einer Fahrt, bevor erzeugeSpiel() die Optionen sieht.
+function neueAufzeichnung(seed, optionen, zustand) {
+  return { seed: seed >>> 0, optionen: JSON.parse(JSON.stringify(optionen)), eingaben: '', pruefsumme: pruefsummeVon(zustand) };
+}
+
+// Nach jedem Zug, der etwas bewirkt hat. Gibt null zurück, wenn nichts mehr aufgezeichnet wird.
+function zeichneAuf(aufzeichnung, aktion, zustand) {
+  if (!aufzeichnung) return null;
+  const zeichen = EINGABEZEICHEN[aktion];
+  if (!zeichen || aufzeichnung.eingaben.length >= EINGABEN_HOECHSTENS) return null;
+  aufzeichnung.eingaben += zeichen;
+  aufzeichnung.pruefsumme = pruefsummeVon(zustand);
+  return aufzeichnung;
+}
+
+// Nimmt aus dem Speicher nur, was die erwartete Form hat. Sonst null.
+function bereinigeAufzeichnung(roh) {
+  if (!roh || typeof roh !== 'object') return null;
+  if (!Number.isInteger(roh.seed) || roh.seed < 0 || roh.seed > 0xffffffff) return null;
+  if (!roh.optionen || typeof roh.optionen !== 'object' || Array.isArray(roh.optionen)) return null;
+  if (typeof roh.eingaben !== 'string' || roh.eingaben.length > EINGABEN_HOECHSTENS || !/^[hrulwHRUL]*$/.test(roh.eingaben)) return null;
+  if (typeof roh.pruefsumme !== 'string' || !/^[0-9a-f]{1,8}$/.test(roh.pruefsumme)) return null;
+  return { seed: roh.seed, optionen: roh.optionen, eingaben: roh.eingaben, pruefsumme: roh.pruefsumme };
+}
+
+// Spielt eine Aufzeichnung nach. Ergebnis: das Spiel in genau dem gesicherten Zustand, sonst null.
+function spieleNach(roh) {
+  const aufzeichnung = bereinigeAufzeichnung(roh);
+  if (!aufzeichnung) return null;
+  try {
+    const spiel = erzeugeSpiel(aufzeichnung.seed, JSON.parse(JSON.stringify(aufzeichnung.optionen)));
+    for (const zeichen of aufzeichnung.eingaben) {
+      // eine Eingabe, die nichts bewirkt, wurde nie aufgezeichnet: Dann passt etwas nicht
+      if (!spiel.act(AKTION_FUER_ZEICHEN[zeichen]).length) return null;
+    }
+    if (pruefsummeVon(spiel.zustand) !== aufzeichnung.pruefsumme) return null;
+    return spiel;
+  } catch (fehler) {
+    return null;
+  }
+}
+
 // --- texte.js
 // Alle Texte, die im Spiel zu lesen sind. Einzige Quelle, damit der Ton-Test
 // (tests/ton.test.js) nichts übersieht. Nur Zeichenketten, keine Funktionen.
@@ -4060,7 +4142,8 @@ const SCHLUESSEL = 'endstation.1';
 function leererStand() {
   // mehrAmTisch: so viele sitzen nach dem Gönnen später zusätzlich im Speisewagen
   // fahrkarte: die Lochungen der laufenden Reise, bis zum Halt
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte() };
+  // fahrt: Seed und Eingaben der letzten Fahrt, zum Fortsetzen nach dem Öffnen (kern/fortsetzen.js)
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte(), fahrt: null };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -4076,6 +4159,7 @@ function bereinigeStand(roh) {
   }
   if (Number.isInteger(roh.mehrAmTisch) && roh.mehrAmTisch >= 0) stand.mehrAmTisch = Math.min(5, roh.mehrAmTisch);
   stand.fahrkarte = bereinigeFahrkarte(roh.fahrkarte);
+  stand.fahrt = bereinigeAufzeichnung(roh.fahrt);
   return stand;
 }
 
@@ -4263,6 +4347,7 @@ function erzeugeTon() {
 
 
 
+
 const leinwand = document.getElementById('bild');
 const anzeige = erzeugeAnzeige(leinwand);
 const ton = erzeugeTon();
@@ -4299,14 +4384,36 @@ function starteFahrt(jetzt) {
     stand.fahrkarte = optionen.fahrkarte; // nach dem Halt beginnt eine neue Reise
     sichereStand(stand);
   }
+  // Für das Fortsetzen: die Optionen sichern, bevor das Spiel sie sieht. Mit festem Seed nicht,
+  // damit Nachstellen und Prüfwerkzeuge die Fahrt eines Spielers nicht überschreiben.
+  const vorher = JSON.parse(JSON.stringify(optionen));
   spiel = erzeugeSpiel(seed, optionen);
+  stand.fahrt = fest === null ? neueAufzeichnung(seed, vorher, spiel.zustand) : null;
+  if (fest === null) sichereStand(stand);
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
-function merke(ereignisse) {
+// Beim Öffnen: die gesicherte Fahrt nachspielen. Lief sie noch, steht man im selben Wagen in derselben
+// Lage. War sie zu Ende, beginnt wie bisher eine neue, mit allem, was die alte mitgibt (Begleiter, Karte).
+// Jeder Fehler beim Laden beginnt still eine neue Fahrt.
+function beginne(jetzt) {
+  const alt = festerSeed() === null ? spieleNach(stand.fahrt) : null;
+  if (alt && alt.zustand.status === 'faehrt') {
+    spiel = alt;
+    fahrten = 1;
+    anzeige.neueFahrt(spiel.zustand, jetzt);
+    zeigeHinweise();
+    return;
+  }
+  if (alt) spiel = alt;
+  starteFahrt(jetzt);
+}
+
+function merke(ereignisse, aktion) {
   const g = stand.gelernt;
   const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]);
+  stand.fahrt = zeichneAuf(stand.fahrt, aktion, spiel.zustand);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
@@ -4315,10 +4422,10 @@ function merke(ereignisse) {
     if (e.typ === 'gegoennt') stand.mehrAmTisch = e.mehrAmTisch; // zeigt sich erst bei einer späteren Fahrt
     if (e.typ === 'gelocht' || e.typ === 'aufgehellt') stand.fahrkarte = JSON.parse(JSON.stringify(spiel.zustand.fahrkarte));
   }
-  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher) {
-    sichereStand(stand);
-    zeigeHinweise();
-  }
+  const anders = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher;
+  // nach jedem Zug sichern: Das Handy kann die Seite jederzeit schließen
+  if (anders || stand.fahrt) sichereStand(stand);
+  if (anders) zeigeHinweise();
 }
 
 function gibEin(aktion, quelle) {
@@ -4337,7 +4444,7 @@ function gibEin(aktion, quelle) {
   if (!ereignisse.length) return;
   anzeige.spiele(ereignisse, jetzt);
   ton.spiele(ereignisse);
-  merke(ereignisse);
+  merke(ereignisse, aktion);
 }
 
 function tippe(x, y) {
@@ -4373,14 +4480,14 @@ function schleife(jetzt) {
   window.requestAnimationFrame(schleife);
 }
 
-// Nur beim Nachstellen mit festem Seed: Der Zustand lässt sich von außen ablesen, nicht ändern.
-if (festerSeed() !== null) window.endstationZustand = () => JSON.stringify(spiel.zustand);
+// Nur beim Nachstellen mit festem Seed oder mit #probe: Der Zustand lässt sich von außen ablesen, nicht ändern.
+if (festerSeed() !== null || /[#&]probe\b/.test(window.location.hash)) window.endstationZustand = () => JSON.stringify(spiel.zustand);
 
 ton.setze(stand.ton);
 anzeige.setzeTon(stand.ton);
 anzeige.melder.takt = () => ton.takt();
 anzeige.passeAn();
-starteFahrt(performance.now());
+beginne(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
 verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());

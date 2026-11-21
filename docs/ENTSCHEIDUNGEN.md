@@ -57,6 +57,14 @@ Von Claude beim Prüfen gefunden:
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
 
+### Fahrt fortsetzen (21.11., Schritt 3 aus `docs/auftraege/leitsaetze.md`, Leitsatz 10)
+
+- Gesichert werden Seed, die Optionen zu Beginn der Fahrt und je Zug ein Zeichen, dazu ein Fingerabdruck des Zustands. Beim Öffnen spielt der Kern alles nach (`src/kern/fortsetzen.js`). Passt der Fingerabdruck nicht, etwa nach einer Regeländerung oder bei verfälschtem Speicher, beginnt still eine neue Fahrt. Warum der Fingerabdruck: Ohne ihn würde eine alte Aufzeichnung nach einer Regeländerung in eine falsche Lage führen, ohne dass jemand es merkt.
+- Gesichert wird nach jedem Zug, der etwas bewirkt. Grund: Safari schließt Seiten im Hintergrund ohne Vorwarnung.
+- War die letzte Fahrt beim Schließen zu Ende (Tod oder Halt), beginnt beim Öffnen wie bisher sofort eine neue. Sie nimmt mit, was die alte mitgibt: nach einem Tod den Begleiter und die Szene für „Noch mal". Die Endkarte der alten Fahrt erscheint nicht noch einmal. Es beginnt keine Fahrt von selbst, die vorher nicht auch begonnen hätte.
+- Mit `#seed=` an der Adresse wird weder fortgesetzt noch aufgezeichnet, damit Nachstellen und Prüfwerkzeuge die Fahrt eines Spielers nicht überschreiben. Mit `#probe` ist der Zustand von außen lesbar, für `werkzeug/fortsetzen.mjs`.
+- Ab 4000 Zügen in einer Fahrt wird nicht mehr aufgezeichnet. Kommt im Spiel nicht vor (eine Fahrt hat etwa 150 Züge), schützt nur den Speicher.
+
 ### Musik als Echo (Prototyp, 21.11., Abschnitt 18)
 
 - Tonleiter: a-Moll pentatonisch (a c d e g), leicht melancholisch, ohne Halbtöne. Alle Töne weich, nur Sinus.
