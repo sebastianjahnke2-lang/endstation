@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.js && node prototyp/freier-platz/build.js",
+    "build": "node build.js && node prototyp/freier-platz/build.js && node prototyp/kontrolle/build.js",
     "test": "node --test",
     "balance": "node tests/balance.js"
   }

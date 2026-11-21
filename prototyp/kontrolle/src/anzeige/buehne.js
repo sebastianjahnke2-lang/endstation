@@ -1,0 +1,401 @@
+// Die Bühne des Prototyps "Kontrolle": zeichnet den Wagen und spielt die Ereignisse des Kerns ab.
+// Geliehen aus "Der freie Platz": Aufteilung (masse.js), Wagenbild (abteilbild.js), Schaffner mit Zange
+// und Schlafender (gestalten.js), Punktmatrix. Die Bühne entscheidet nie über Regeln.
+//
+// Die Zuganzeige zeigt keine Zahl, sondern die Strecke bis zum Halt: Der Zug rückt mit jedem Zug näher.
+// An zwei Stellen hält das Bild kurz an (Leitsatz 5): beim Fang und wenn der Zug hält.
+
+import { berechneMasse, feldAn, feldMitte, imKasten } from '../../../freier-platz/src/anzeige/masse.js';
+import { maleAbteil, malePunkttafel } from '../../../freier-platz/src/anzeige/abteilbild.js';
+import { maleSchaffner, maleSchlaefer, maleTonschalter } from '../../../freier-platz/src/anzeige/gestalten.js';
+import { FARBE, rundesRechteck, begrenze, sanft, hinUndHer } from '../../../../src/anzeige/formen.js';
+import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } from '../../../../src/anzeige/matrix.js';
+import { maleFahrgastKoerper, maleHochgehalten, maleGelocht, FAHRGASTFARBEN } from './figuren.js';
+import { KONTROLLGANG } from '../kern/kontrolle.js';
+import { ZUEGE_BIS_HALT } from '../kern/halte.js';
+import { KONTROLLTEXTE, setzeKontrollText } from '../texte.js';
+
+export const FANG_PAUSE = 650; // so lange steht das Bild nach dem Fang still und nimmt nichts an
+export const HALT_PAUSE = 700; // ebenso, wenn der Zug hält und er ausgestiegen ist
+const FELDZEIT = 95; // ein Feld Weg für einen Fahrgast, der den Platz wechselt
+
+export function erzeugeKontrollBuehne(leinwand) {
+  const stift = leinwand.getContext('2d');
+  const ruhig = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let masse = null;
+  let dichte = 1;
+  let z = null;
+  let abteil = null;
+  let tonAn = true;
+  let laeufer = []; // { start, dauer, schritt }
+  let gesperrtBis = 0; // das Bild hält an
+  let schluss = null; // { zeilen, bild }
+  const wirkung = { warten: -1e9, fang: -1e9, halt: -1e9 };
+  const melder = { klang: null };
+  const bild = { k: { py: 7, blick: 'hoch', zeigt: null, streck: 0, offen: 1 }, fg: [], strecke: ZUEGE_BIS_HALT };
+
+  function klinge(name) {
+    if (melder.klang) melder.klang(name);
+  }
+
+  function passeAn() {
+    const breite = Math.max(200, leinwand.clientWidth || window.innerWidth);
+    const hoehe = Math.max(240, leinwand.clientHeight || window.innerHeight);
+    dichte = Math.min(window.devicePixelRatio || 1, 2.5);
+    leinwand.width = Math.round(breite * dichte);
+    leinwand.height = Math.round(hoehe * dichte);
+    masse = berechneMasse(breite, hoehe);
+    abteil = maleAbteil(masse, dichte);
+    if (schluss) schluss.bild = null;
+  }
+
+  // Bild und Zustand in Deckung bringen
+  function gleicheAb() {
+    bild.k.py = z.k.y;
+    bild.k.blick = z.k.blick;
+    bild.k.zeigt = null;
+    bild.k.streck = 0;
+    bild.k.offen = 1;
+    bild.strecke = z.rest;
+    bild.fg = z.fahrgaeste.map((f) => ({
+      px: f.x,
+      py: f.y,
+      steht: 0,
+      zuck: 0,
+      karte: 0,
+      gelocht: f.kontrolliert ? 1 : 0,
+      wach: f.schlaeft ? 0 : 1,
+      da: z.status === 'entkommen' && f.schwarz ? 0 : 1,
+      gefangen: z.status === 'gefangen' && f.schwarz,
+    }));
+  }
+
+  function bewege(start, dauer, schritt) {
+    laeufer.push({ start, dauer, schritt });
+  }
+
+  // Zeigt eine Liste von Ereignissen nacheinander. Gibt zurück, wie lange es dauert.
+  function spiele(ereignisse, zustand, jetzt) {
+    z = zustand;
+    let t = jetzt;
+    for (const e of ereignisse) t += zeige(e, t);
+  }
+
+  function zeige(e, t) {
+    const k = bild.k;
+    if (e.typ === 'neuerHalt') {
+      schluss = null;
+      laeufer = [];
+      gleicheAb();
+      return 0;
+    }
+    if (e.typ === 'aus') {
+      schluss = { zeilen: [setzeKontrollText(KONTROLLTEXTE.schluss, { n: e.erwischt, m: e.von })], bild: null, start: t };
+      return 0;
+    }
+    if (e.typ === 'schritt') {
+      bewege(t, 140, (p) => {
+        k.py = e.von + (e.nach - e.von) * sanft(p);
+        if (p > 0) k.blick = e.nach < e.von ? 'hoch' : 'runter';
+      });
+      bewege(t, 1, () => klinge('schritt'));
+      return 140;
+    }
+    if (e.typ === 'warten') {
+      wirkung.warten = t;
+      return 60;
+    }
+    if (e.typ === 'strecke') {
+      const von = e.rest + 1;
+      bewege(t, 220, (p) => {
+        bild.strecke = von - sanft(p);
+      });
+      return 0;
+    }
+    if (e.typ === 'kontrolle' || e.typ === 'gefangen') {
+      const f = bild.fg[e.nr];
+      const ziel = feldMitte(masse, e.x, e.y);
+      const zeigt = { x: ziel.x, y: ziel.y - masse.s * 0.12 };
+      const gefangen = e.typ === 'gefangen';
+      const weck = e.schlief ? 320 : 0;
+      if (e.schlief) {
+        bewege(t, weck, (p) => {
+          f.wach = sanft(p);
+        });
+      }
+      const dauer = gefangen ? 260 : 380;
+      bewege(t + weck, dauer, (p) => {
+        k.zeigt = zeigt;
+        k.blick = e.x < KONTROLLGANG ? 'links' : 'rechts';
+        k.streck = p < 0.4 ? sanft(p / 0.4) : gefangen ? 1 : 1 - sanft((p - 0.7) / 0.3) * (p > 0.7 ? 1 : 0);
+        k.offen = p < 0.45 ? 1 : gefangen ? 0 : p < 0.65 ? 0 : 1;
+        if (!gefangen) f.karte = p < 0.2 ? p / 0.2 : p > 0.75 ? 1 - (p - 0.75) / 0.25 : 1;
+        if (!gefangen && p >= 0.55) f.gelocht = 1;
+        if (p >= 1 && !gefangen) {
+          k.zeigt = null;
+          k.streck = 0;
+        }
+      });
+      bewege(t + weck + dauer * 0.45, 1, () => klinge(gefangen ? 'fang' : 'knips'));
+      if (gefangen) {
+        // die Zange schnappt zu, das Bild hält an
+        bewege(t + weck + dauer * 0.45, 1, () => {
+          wirkung.fang = t + weck + dauer * 0.45;
+          f.gefangen = true;
+        });
+        gesperrtBis = Math.max(gesperrtBis, t + weck + dauer + FANG_PAUSE);
+      }
+      return weck + dauer;
+    }
+    if (e.typ === 'zuckt') {
+      const f = bild.fg[e.nr];
+      bewege(t, 320, (p) => {
+        f.zuck = hinUndHer(p);
+      });
+      return 160;
+    }
+    if (e.typ === 'wechselt') {
+      const f = bild.fg[e.nr];
+      const pfad = e.pfad;
+      const weg = (pfad.length - 1) * FELDZEIT;
+      bewege(t, 120, (p) => {
+        f.steht = sanft(p);
+      });
+      bewege(t + 120, weg, (p) => {
+        const stelle = p * (pfad.length - 1);
+        const i = Math.min(pfad.length - 2, Math.floor(stelle));
+        const q = stelle - i;
+        f.px = pfad[i].x + (pfad[i + 1].x - pfad[i].x) * q;
+        f.py = pfad[i].y + (pfad[i + 1].y - pfad[i].y) * q;
+      });
+      bewege(t + 120 + weg, 120, (p) => {
+        f.steht = 1 - sanft(p);
+      });
+      return 120 + weg + 120;
+    }
+    if (e.typ === 'halt') {
+      // Türzischen, er steht auf und steigt aus, das Bild hält an
+      const f = bild.fg[e.nr];
+      const pfad = [e.von, { x: KONTROLLGANG, y: e.von.y }];
+      const schritt = e.tuer.y < e.von.y ? -1 : 1;
+      for (let y = e.von.y + schritt; y !== e.tuer.y + schritt; y += schritt) pfad.push({ x: KONTROLLGANG, y });
+      const weg = (pfad.length - 1) * FELDZEIT;
+      bewege(t, 1, () => {
+        wirkung.halt = t;
+        klinge('zischen');
+      });
+      bewege(t + 150, 140, (p) => {
+        f.steht = sanft(p);
+      });
+      bewege(t + 290, weg, (p) => {
+        const stelle = p * (pfad.length - 1);
+        const i = Math.min(pfad.length - 2, Math.floor(stelle));
+        const q = stelle - i;
+        f.px = pfad[i].x + (pfad[i + 1].x - pfad[i].x) * q;
+        f.py = pfad[i].y + (pfad[i + 1].y - pfad[i].y) * q;
+      });
+      bewege(t + 290 + weg, 220, (p) => {
+        f.da = 1 - p;
+      });
+      gesperrtBis = Math.max(gesperrtBis, t + 510 + weg + HALT_PAUSE);
+      return 510 + weg;
+    }
+    return 0;
+  }
+
+  // Eine Eingabe kürzt alles ab, was noch läuft. Während das Bild anhält, geht das nicht.
+  function beschleunige(jetzt) {
+    if (jetzt < gesperrtBis) return false;
+    for (const l of laeufer) l.schritt(1);
+    laeufer = [];
+    if (z) gleicheAb();
+    if (schluss) schluss.start = Math.min(schluss.start, jetzt);
+    return true;
+  }
+
+  function neu(zustand) {
+    z = zustand;
+    laeufer = [];
+    schluss = null;
+    gleicheAb();
+  }
+
+  // ---------------------------------------------------------------- Zeichnen
+
+  // Die Strecke in der Zuganzeige: links der Zug, rechts der Bahnhof, dazwischen die Gleise, die übrig sind.
+  function maleStrecke() {
+    const { tafel } = masse;
+    const feld = neuesPunktfeld(tafel.spalten, tafel.zeilen);
+    const an = (x, y) => {
+      if (x >= 0 && x < feld.spalten && y >= 0 && y < feld.zeilen) feld.an[y * feld.spalten + x] = 1;
+    };
+    const bahnhof = feld.spalten - 4;
+    const gleis = feld.zeilen - 3;
+    // der Bahnhof: ein Mast mit Schild
+    for (let y = 1; y <= gleis; y++) an(bahnhof, y);
+    for (let x = bahnhof - 2; x <= bahnhof + 2; x++) {
+      an(x, 1);
+      an(x, 3);
+    }
+    an(bahnhof - 2, 2);
+    an(bahnhof + 2, 2);
+    // der Zug rückt vor
+    const weit = bahnhof - 12;
+    const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, ZUEGE_BIS_HALT) / ZUEGE_BIS_HALT));
+    for (let x = vorn - 7; x <= vorn; x++) for (let y = gleis - 3; y <= gleis; y++) an(x, y);
+    an(vorn - 5, gleis - 2);
+    an(vorn - 2, gleis - 2);
+    feld.an[(gleis - 2) * feld.spalten + vorn - 5] = 0;
+    feld.an[(gleis - 2) * feld.spalten + vorn - 2] = 0;
+    // die übrigen Gleise bis zum Bahnhof
+    for (let x = vorn + 2; x < bahnhof; x += 2) an(x, gleis + 1);
+    stift.fillStyle = FARBE.tafel;
+    rundesRechteck(stift, tafel.x, tafel.y, tafel.b, tafel.h, 5);
+    stift.fill();
+    stift.strokeStyle = FARBE.tafelRand;
+    stift.lineWidth = 1;
+    rundesRechteck(stift, tafel.x + 0.5, tafel.y + 0.5, tafel.b - 1, tafel.h - 1, 5);
+    stift.stroke();
+    zeichnePunktfeld(stift, feld, tafel.x + tafel.polster, tafel.y + tafel.polster, tafel.raster, FARBE.bernstein, FARBE.bernsteinAus);
+  }
+
+  function maleKnopf(kasten, text, gedrueckt) {
+    const d = gedrueckt * 2;
+    stift.fillStyle = '#0b0e15';
+    rundesRechteck(stift, kasten.x, kasten.y + 3, kasten.b, kasten.h - 3, 12);
+    stift.fill();
+    stift.fillStyle = gedrueckt > 0.01 ? '#2a3550' : '#1c2437';
+    rundesRechteck(stift, kasten.x, kasten.y + d, kasten.b, kasten.h - 4, 12);
+    stift.fill();
+    stift.strokeStyle = '#3a4666';
+    stift.lineWidth = 1;
+    rundesRechteck(stift, kasten.x + 0.5, kasten.y + d + 0.5, kasten.b - 1, kasten.h - 5, 12);
+    stift.stroke();
+    const breit = textBreite(text);
+    const feld = neuesPunktfeld(breit, ZEILENHOEHE);
+    schreibe(feld, text, 0, 0);
+    zeichnePunktfeld(stift, feld, kasten.x + (kasten.b - breit * kasten.raster) / 2, kasten.y + d + (kasten.h - 4 - 7 * kasten.raster) / 2, kasten.raster, FARBE.bernstein, null);
+  }
+
+  // Wo die Schlusszeile steht: eine Tafel in der Mitte des Wagens
+  function schlussKasten() {
+    const raster = masse.tafel.raster;
+    const spalten = Math.max(...schluss.zeilen.map(textBreite)) + 8;
+    const zeilen = ZEILENHOEHE + 4;
+    const b = spalten * raster + 12;
+    const h = zeilen * raster + 12;
+    return { x: Math.round((masse.breite - b) / 2), y: Math.round(masse.boden.y + masse.boden.h / 2 - h / 2), b, h, raster, spalten, zeilen, polster: 6 };
+  }
+
+  function maleWelt(jetzt) {
+    const { s, boden, rumpf } = masse;
+    stift.drawImage(abteil, rumpf.x, rumpf.y, rumpf.b, rumpf.h);
+    // Türzischen am Halt: die Türen leuchten kurz auf
+    const tuer = begrenze(1 - (jetzt - wirkung.halt) / 900, 0, 1);
+    if (tuer > 0) {
+      stift.fillStyle = `rgba(255, 217, 160, ${0.28 * tuer})`;
+      stift.fillRect(boden.x + KONTROLLGANG * s, boden.y, s, s * 0.35);
+      stift.fillRect(boden.x + KONTROLLGANG * s, boden.y + 7.65 * s, s, s * 0.35);
+    }
+    // von oben nach unten malen, damit Weiter-unten-Sitzende davor stehen
+    const figuren = [];
+    bild.fg.forEach((f, nr) => figuren.push({ y: f.py + (f.steht > 0.5 ? 0.04 : 0), mal: () => maleFahrgast(nr, f, jetzt) }));
+    figuren.push({ y: bild.k.py + 0.05, mal: () => maleKontrolleur() });
+    figuren.sort((a, b) => a.y - b.y);
+    for (const f of figuren) f.mal();
+  }
+
+  function maleFahrgast(nr, f, jetzt) {
+    if (f.da <= 0.01 || !z) return;
+    const { s, boden } = masse;
+    const echt = z.fahrgaeste[nr];
+    const cx = boden.x + (f.px + 0.5) * s;
+    const sitzt = f.steht < 0.5;
+    const fy = boden.y + (f.py + (sitzt ? 0.86 : 0.9)) * s - f.zuck * s * 0.12;
+    stift.save();
+    stift.globalAlpha = f.da;
+    if (echt.farbe === 'z') {
+      maleSchlaefer(stift, cx, fy, s, { wach: f.wach, atem: ruhig ? 0 : Math.sin(jetzt / 900) });
+    } else {
+      const k = maleFahrgastKoerper(stift, cx, fy, s, { farben: FAHRGASTFARBEN[echt.farbe], steht: Math.max(f.steht, f.zuck * 0.6) });
+      maleHochgehalten(stift, cx, k.schulterY + s * 0.16, s, f.karte);
+      // gefangen: Er bleibt sitzen, die Zange hält seine Hand
+      if (f.gefangen) {
+        const glanz = begrenze(1 - (jetzt - wirkung.fang) / 700, 0, 1);
+        if (glanz > 0) {
+          stift.strokeStyle = `rgba(255, 179, 71, ${glanz})`;
+          stift.lineWidth = 2;
+          stift.beginPath();
+          stift.arc(cx, fy - s * 0.35, s * (0.42 + 0.1 * (1 - glanz)), 0, Math.PI * 2);
+          stift.stroke();
+        }
+      }
+    }
+    maleGelocht(stift, cx, fy - s * 0.82, s, f.gelocht);
+    stift.restore();
+  }
+
+  function maleKontrolleur() {
+    const { s, boden } = masse;
+    const k = bild.k;
+    maleSchaffner(stift, boden.x + (KONTROLLGANG + 0.5) * s, boden.y + (k.py + 0.9) * s, s, { blick: k.blick, zeigt: k.zeigt, streck: k.streck, offen: k.offen });
+  }
+
+  function zeichne(jetzt) {
+    if (!masse || !z) return;
+    if (leinwand.clientWidth && (leinwand.clientWidth !== masse.breite || leinwand.clientHeight !== masse.hoehe)) passeAn();
+    for (const l of laeufer.slice()) {
+      if (jetzt < l.start) continue;
+      const p = l.dauer <= 0 ? 1 : (jetzt - l.start) / l.dauer;
+      l.schritt(begrenze(p, 0, 1));
+      if (p >= 1) laeufer = laeufer.filter((x) => x !== l);
+    }
+    stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+    stift.globalAlpha = 1;
+    stift.fillStyle = FARBE.nacht;
+    stift.fillRect(0, 0, masse.breite, masse.hoehe);
+    stift.save();
+    // beim Fang ruckt nichts, das Bild steht. Am Halt ruckt der Zug einmal.
+    const ruck = begrenze(1 - (jetzt - wirkung.halt) / 260, 0, 1);
+    if (!ruhig && ruck > 0) stift.translate(0, Math.round(Math.sin(ruck * Math.PI) * 3));
+    maleWelt(jetzt);
+    stift.restore();
+    maleStrecke();
+    maleTonschalter(stift, masse.ton, tonAn);
+    maleKnopf(masse.warten, KONTROLLTEXTE.warten, begrenze(1 - (jetzt - wirkung.warten) / 140, 0, 1));
+    if (schluss) {
+      const ein = begrenze((jetzt - schluss.start) / 250, 0, 1);
+      stift.fillStyle = `rgba(5, 7, 12, ${0.72 * ein})`;
+      stift.fillRect(0, 0, masse.breite, masse.hoehe);
+      const kasten = schlussKasten();
+      if (!schluss.bild) schluss.bild = malePunkttafel(kasten, schluss.zeilen.map((text) => ({ text, spalte: 4, zeile: 2 })), dichte, true);
+      stift.globalAlpha = ein;
+      stift.drawImage(schluss.bild, kasten.x, kasten.y, kasten.b, kasten.h);
+      stift.globalAlpha = 1;
+    }
+  }
+
+  // Was liegt an diesem Bildschirmpunkt?
+  function wasLiegtBei(px, py) {
+    if (Math.hypot(px - masse.ton.x, py - masse.ton.y) <= masse.ton.r) return { art: 'ton' };
+    if (imKasten(masse.warten, px, py)) return { art: 'warten' };
+    const feld = feldAn(masse, px, py);
+    if (feld) return { art: 'feld', x: feld.x, y: feld.y };
+    return { art: 'leer' };
+  }
+
+  return {
+    passeAn,
+    neu,
+    spiele,
+    beschleunige,
+    zeichne,
+    wasLiegtBei,
+    melder,
+    bereit: (jetzt) => jetzt >= gesperrtBis,
+    setzeTon: (an) => {
+      tonAn = an;
+    },
+    masse: () => masse,
+  };
+}

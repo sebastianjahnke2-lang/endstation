@@ -38,6 +38,12 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
 - **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
 
+### Prototyp „Kontrolle" (Auftrag vom 21.11., `docs/auftraege/kontrolle.md`)
+
+- **„2 von 3 erwischt" und Leitsatz 7 („nie ein Punktestand").** Die Zeile steht so im Auftrag und ist gebaut. Sie zählt, gespeichert wird sie nirgends.
+- **Immer dieselben drei Sitzordnungen.** Kein Zufall innerhalb eines Halts, so steht es im Auftrag. Gebaut sind drei feste Ordnungen, die bei jedem Neustart gleich sind. Wer noch einmal spielt, kennt die Lösung. Offen: ob beim Neustart neue Ordnungen kommen sollen (dann Zufall zwischen den Durchgängen).
+- **Wer spielt den Kontrolleur?** Im Hauptspiel ist der Kontrolleur ein Gegner („innerer Kritiker" in der Vision), hier ist er die Spielfigur. Für den Prototyp ohne Belang, fürs Hauptspiel offen.
+
 ### Leitsätze und die ersten zehn Minuten (Auftrag vom 21.11., `docs/auftraege/leitsaetze.md`)
 
 Vom Auftraggeber als offen benannt:
@@ -56,6 +62,22 @@ Von Claude beim Prüfen gefunden:
 ## Prototyp „Der freie Platz"
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
+
+### Prototyp „Kontrolle" (21.11.)
+
+- **Raster, Wagenbild, Schaffner mit Zange, Schlafender, Aufteilung und Eingabe** sind aus „Der freie Platz" und dem Hauptspiel geliehen, nicht kopiert. Nur der Körper der Fahrgäste ist nachgebaut, weil er dort nicht exportiert ist und jener Prototyp unangetastet bleibt.
+- **Der Gang ist versperrt** (eigene Ergänzung, Leitsatz 1 und 6): Steht der Kontrolleur in seiner Reihe, kommt der Fahrgast ohne Fahrkarte nicht hinaus. Ohne diese Regel ließe er sich nie stellen. So entsteht die Jagd: Er setzt sich zwei Reihen weg, der Abstand wächst, der Spieler baut ihn ab.
+- **„Das kostet ihn einen Zug":** Im Zug nach dem Umsetzen bleibt er sitzen, auch wenn der Kontrolleur in die Reihe daneben tritt. Genau das macht ihn fangbar: hinterher, solange er sitzen bleiben muss (Leitsatz 1: Abwarten kostet, wer trödelt, verpasst den Augenblick).
+- **Er setzt sich auf den nächsten freien Sitz,** der mindestens zwei Reihen vom Kontrolleur entfernt ist, auf der Seite weg vom Kontrolleur. Am Kontrolleur vorbei kann er nicht.
+- **Er zuckt** (eigene Ergänzung, Leitsatz 2): Findet er keinen Platz oder ist der Gang versperrt, steht er halb auf und setzt sich wieder. Sonst gäbe es in Halt 3 kein Verhalten, an dem man ihn erkennt.
+- **Seine Farbe wechselt je Halt** und kommt in anderen Halten bei Fahrgästen mit Fahrkarte vor. Sonst würde man ihn ab dem zweiten Halt am Aussehen erkennen statt am Verhalten.
+- **Kontrollieren:** zur Seite wischen kontrolliert den Fahrgast am Gang, sonst den am Fenster. Den am Fenster neben einem besetzten Gangplatz erreicht man durch Antippen. Den Schlafenden zu kontrollieren kostet zwei Züge, danach ist er wach.
+- **Wer kontrolliert ist,** hat eine kleine Sichel über dem Kopf, damit die Lage in fünf Sekunden lesbar bleibt (Leitsatz 4). Es wird nie eine Fahrkarte gelesen: Man sieht nur Papier.
+- **Die Strecke** steht als Punktmatrix in der Zuganzeige: links der Zug, rechts der Bahnhof, dazwischen die Gleise, die übrig sind. Keine Zahl.
+- **Das Bild hält an** (Leitsatz 5): 0,65 Sekunden nach dem Fang, 0,7 Sekunden, nachdem er am Halt ausgestiegen ist. In dieser Zeit wird keine Eingabe angenommen. Sonst kürzt jede Eingabe alles ab, was läuft.
+- **Nach einem Halt** beginnt der nächste mit der nächsten Eingabe, nicht von selbst. Nach dem dritten kommt die Zeile, ein Tipp beginnt neu.
+- **Kein Speicher, kein Testprotokoll:** Der Auftrag fragt nur, ob man von selbst noch einmal startet. Das sieht man beim Zuschauen.
+- **Die drei Halte:** 1. Er sitzt nah und weicht beim ersten Schritt eine Reihe aus. 2. Vor ihm ist eine Reihe voll, er springt weiter und wird erst vorn gestellt. 3. Er sitzt schon ganz vorn und kann nur zucken. Kürzeste Lösung je Halt laut Test: 4, 7 und 7 Züge von 12.
 
 ### Fahrt fortsetzen (21.11., Schritt 3 aus `docs/auftraege/leitsaetze.md`, Leitsatz 10)
 

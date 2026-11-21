@@ -3,13 +3,16 @@
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
+- **Prototyp „Kontrolle"** (21.11.), wörtlich in `docs/auftraege/kontrolle.md`: gebaut in `prototyp/kontrolle/`, wartet auf den Test am iPhone. Danach nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen und offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Prototyp Kontrolle"). Die Frage zur Musik im freien Platz ist laut Auftraggeber erledigt.
+
+Davor:
 - „Leitsätze und die ersten zehn Minuten", wörtlich in `docs/auftraege/leitsaetze.md`. Leitsätze in `docs/PRINZIPIEN.md`.
 - Schritt 1 bis 3 sind gebaut: Leitsätze abgelegt (auch in CLAUDE.md und im Skill `neue-szene`), `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen (`src/kern/fortsetzen.js`). Alles liegt in Pull Request #4, zusammen mit der Musik im Prototyp (nur ein Arbeitszweig).
 - Dazu eingetragen: offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Leitsätze und die ersten zehn Minuten"), zwei Ideen in `docs/IDEEN.md`, Spieltestplan `docs/SPIELTEST-hauptspiel.md`.
 - Vorher am 21.11.: Prototyp „Der freie Platz" mit Musik, ebenfalls in Pull Request #4.
 
 ## Nächster Schritt
-Nichts bauen, bis der Auftraggeber sich zu Schritt 1 bis 3 meldet. Danach Schritt 4 bis 7 in dieser Reihenfolge:
+Nichts bauen, bis der Auftraggeber sich zum Prototyp „Kontrolle" und zu Schritt 1 bis 3 der Leitsätze meldet. Danach Schritt 4 bis 7 in dieser Reihenfolge:
 4. Halt ohne Sperre, Verstehen locht (Entscheidung vom 19.11. ändern, in ENTSCHEIDUNGEN und FAHRPLAN eintragen).
 5. Augenblick des Verstehens (Stillstand unter 150 ms, Reaktion der Figur, eigener Ton, kein Text).
 6. Leerlauf vor der Tür, zwei umschaltbare Varianten, nur im gefahrlosen Wagen.
@@ -28,8 +31,9 @@ Vorher und nachher `npm run balance`, Zahlen in den Bericht.
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests, mit Musik
 
 ## Tests
-- `npm run build`, dann `npm test`: 266 Tests, alle grün.
+- `npm run build`, dann `npm test`: 293 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
 - `npm run balance` vorher und nachher gleich: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
+- Kontrolle im Browser: `prototyp/kontrolle/werkzeug/fotos.mjs` bei 390x844, 360x600 und 375x548 ohne Mängel.
 - Browser (nur Chromium mit iPhone-Profil): `bedienung.mjs` bei sechs Größen 0 Mängel, `begleiter.mjs` 0 Mängel, `fortsetzen.mjs` bei 390x844 und 360x600 0 Mängel.
 
 ## Abweichungen vom Auftrag (Gründe in `docs/ENTSCHEIDUNGEN.md`)
@@ -51,3 +55,4 @@ Vorher und nachher `npm run balance`, Zahlen in den Bericht.
 ## Am iPhone testen
 - Hauptspiel: https://sebastianjahnke2-lang.github.io/endstation/ zeigt `main`. Fortsetzen erst nach Übernahme von Pull Request #4.
 - Prototyp: https://sebastianjahnke2-lang.github.io/endstation/prototyp/freier-platz/ (Musik nach Übernahme von Pull Request #4).
+- Kontrolle: https://sebastianjahnke2-lang.github.io/endstation/prototyp/kontrolle/ (nach Übernahme von Pull Request #4).
