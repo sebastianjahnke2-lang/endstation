@@ -1,98 +1,75 @@
-// Jede Sitzordnung, die gespielt werden kann, ist innerhalb der Züge lösbar und nicht durch
-// Durchkontrollieren der Reihe nach zu schaffen: die drei festen und jede ausgeloste.
+// Jeder ausgeloste Halt ist lösbar, und jede Masche ist allein durch Beobachten von den Unschuldigen
+// zu unterscheiden. Geprüft über viele Schichten und Halte.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HALTE, ZUEGE_BIS_HALT } from '../src/kern/halte.js';
-import { pruefeOrdnung, ordnungTaugt, haltNach, kuerzesterFang, KUERZESTE_HOECHSTENS } from '../src/kern/pruefung.js';
-import { losOrdnungAus, roheOrdnung, FAHRGAESTE_JE_HALT } from '../src/kern/auslosen.js';
-import { erzeugeKontrolle, neueOrdnungen } from '../src/kern/durchgang.js';
-import { haltZug } from '../src/kern/kontrolle.js';
+import { losHaltAus, FAHRGAESTE_JE_HALT } from '../src/kern/auslosen.js';
+import { pruefeHalt, haltNach, kuerzesterFang, VERRAETERISCH } from '../src/kern/pruefung.js';
+import { haltZug, kopiereKontrolle } from '../src/kern/kontrolle.js';
 
-function pruefeStreng(ordnung, wo) {
-  const p = pruefeOrdnung(ordnung);
-  assert.ok(p.kuerzeste !== null, `${wo}: nicht lösbar`);
-  assert.ok(p.kuerzeste <= KUERZESTE_HOECHSTENS && p.kuerzeste <= ZUEGE_BIS_HALT, `${wo}: kürzester Weg ${p.kuerzeste} Züge`);
-  assert.notEqual(p.blindLinks, 'gefangen', `${wo}: der Reihe nach (links zuerst) geschafft`);
-  assert.notEqual(p.blindRechts, 'gefangen', `${wo}: der Reihe nach (rechts zuerst) geschafft`);
-  assert.equal(p.hinsehen, 'gefangen', `${wo}: wer hinsieht, schafft es nicht`);
-  assert.ok(p.alleKosten > ZUEGE_BIS_HALT, `${wo}: alle zu kontrollieren kostet nur ${p.alleKosten}`);
-  // der gefundene Weg führt wirklich zum Fang
-  const z = haltNach(ordnung);
-  for (const h of kuerzesterFang(haltNach(ordnung))) haltZug(z, h);
-  assert.equal(z.status, 'gefangen', `${wo}: Weg nachgespielt`);
+const SCHICHTEN = 120;
+const HALTE = 16;
+const alle = [];
+for (let seed = 1; seed <= SCHICHTEN; seed++) {
+  const z = { zufall: seed };
+  for (let h = 0; h < HALTE; h++) alle.push({ wo: `Seed ${seed}, Halt ${h + 1}`, h, ordnung: losHaltAus(z, h) });
 }
 
-function pruefeForm(ordnung, wo) {
-  const zeichen = ordnung.sitze.join('').replace(/[.|]/g, '');
-  assert.equal(zeichen.length, FAHRGAESTE_JE_HALT, wo);
-  assert.equal(zeichen.split('S').length - 1, 1, `${wo}: genau einer ohne Fahrkarte`);
-  assert.equal(zeichen.split('Z').length - 1, 1, `${wo}: genau ein Schlafender`);
-  const farben = zeichen.replace(/[SZ]/g, '').split('');
-  assert.equal(new Set(farben).size, farben.length, `${wo}: zwei Fahrgäste in derselben Farbe`);
-  assert.ok(!farben.includes(ordnung.farbe), `${wo}: seine Farbe trägt noch jemand`);
-}
+test(`jeder ausgeloste Halt ist lösbar (${SCHICHTEN * HALTE} Halte)`, () => {
+  for (const { wo, ordnung } of alle) {
+    assert.ok(ordnung, `${wo}: kein Halt gefunden`);
+    const p = pruefeHalt(ordnung);
+    assert.ok(p.kuerzeste !== null && p.kuerzeste < ordnung.zuege, `${wo}: nötig ${p.kuerzeste}, Zeit ${ordnung.zuege}`);
+    assert.notEqual(p.blindLinks, 'gefangen', `${wo}: der Reihe nach (links zuerst) geschafft`);
+    assert.notEqual(p.blindRechts, 'gefangen', `${wo}: der Reihe nach (rechts zuerst) geschafft`);
+    // der gefundene Weg führt wirklich zum Ziel
+    const z = haltNach(ordnung);
+    for (const h of kuerzesterFang(haltNach(ordnung))) haltZug(z, h);
+    assert.equal(z.status, 'gefangen', wo);
+  }
+});
 
-test('die drei festen Sitzordnungen taugen', () => {
-  HALTE.forEach((ordnung, i) => {
-    pruefeStreng(ordnung, `fester Halt ${i + 1}`);
-    assert.ok(ordnungTaugt(ordnung));
+test('jede Masche ist allein durch Beobachten erkennbar: Wer nur dem folgt, der sich verrät, schafft jeden Halt', () => {
+  for (const { wo, ordnung } of alle) assert.equal(pruefeHalt(ordnung).hinsehen, 'gefangen', wo);
+});
+
+test('Unschuldige verraten sich nie: Jedes auffällige Verhalten kommt von einem ohne Fahrkarte', () => {
+  let auffaellig = 0;
+  alle.slice(0, 400).forEach(({ wo, ordnung }, i) => {
+    let wurf = i + 1;
+    const z = haltNach(ordnung);
+    for (let n = 0; n < 40 && z.status === 'faehrt'; n++) {
+      wurf = (Math.imul(wurf, 1664525) + 1013904223) >>> 0;
+      const wahl = ['hoch', 'hoch', 'runter', 'warten', 'links', 'rechts'][wurf % 6];
+      for (const e of haltZug(z, wahl)) {
+        if (!VERRAETERISCH.includes(e.typ)) continue;
+        auffaellig += 1;
+        assert.ok(z.fahrgaeste[e.nr].schwarz, `${wo}: ${e.typ} von einem mit Fahrkarte`);
+      }
+    }
   });
+  assert.ok(auffaellig > 200);
 });
 
-test('jede ausgeloste Sitzordnung ist lösbar und nicht der Reihe nach zu schaffen (3000 Auslosungen)', () => {
-  for (let seed = 1; seed <= 1000; seed++) {
-    const z = { zufall: seed };
-    for (let halt = 0; halt < 3; halt++) {
-      const ordnung = losOrdnungAus(z);
-      assert.ok(ordnung, `Seed ${seed}: keine taugliche Ordnung gefunden`);
-      pruefeForm(ordnung, `Seed ${seed}, Halt ${halt + 1}`);
-      pruefeStreng(ordnung, `Seed ${seed}, Halt ${halt + 1}`);
-    }
+test('am Aussehen ist niemand zu erkennen', () => {
+  let zweiSchlafendeOhneSchein = 0;
+  for (const { wo, ordnung } of alle) {
+    const z = haltNach(ordnung);
+    assert.equal(z.fahrgaeste.length, FAHRGAESTE_JE_HALT, wo);
+    const farben = z.fahrgaeste.filter((f) => f.farbe !== 'z').map((f) => f.farbe);
+    assert.equal(new Set(farben).size, farben.length, `${wo}: zwei in derselben Farbe`);
+    for (const f of z.fahrgaeste) if (f.masche === 'schein') assert.equal(f.farbe, 'z', `${wo}: Scheinschläfer sieht anders aus`);
+    const schlafend = z.fahrgaeste.filter((f) => f.farbe === 'z').length;
+    if (!z.fahrgaeste.some((f) => f.masche === 'schein') && schlafend === 2) zweiSchlafendeOhneSchein += 1;
+    if (z.fahrgaeste.some((f) => f.masche === 'schein')) assert.ok(z.fahrgaeste.some((f) => f.schlaeft), `${wo}: Scheinschläfer ohne echten Schlafenden`);
   }
+  assert.ok(zweiSchlafendeOhneSchein > 50, 'zwei Schlafende dürfen nicht verraten, dass einer nur so tut');
 });
 
-test('die Prüfung verwirft, was nicht taugt', () => {
-  const z = { zufall: 99 };
-  let verworfen = 0;
-  for (let i = 0; i < 300; i++) if (!ordnungTaugt(roheOrdnung(z))) verworfen += 1;
-  assert.ok(verworfen > 0, 'die Prüfung lässt alles durch');
-  // ein Fahrgast ohne Fahrkarte ganz unten, alle anderen weit weg: blind der Reihe nach sofort gefangen
-  assert.equal(ordnungTaugt({ farbe: 'a', sitze: ['bc|de', 'fg|Z.', '..|..', '..|..', '..|..', '..|.S'] }), false);
-});
-
-test('beim Neustart: neue Plätze, neuer Schlafender, neue Farben', () => {
-  const plaetzeS = new Set();
-  const plaetzeZ = new Set();
-  const farbenS = new Set();
-  for (let seed = 1; seed <= 60; seed++) {
-    const spiel = erzeugeKontrolle(seed);
-    for (let halt = 0; halt < 3; halt++) {
-      for (let i = 0; i < ZUEGE_BIS_HALT; i++) spiel.act('warten');
-      spiel.act('weiter');
-    }
-    spiel.act('weiter'); // Neustart
-    const z = spiel.zustand;
-    assert.equal(z.durchgang, 1);
-    assert.equal(z.status, 'faehrt');
-    assert.notDeepEqual(z.ordnungen, HALTE, `Seed ${seed}: dieselben Ordnungen wie beim ersten Mal`);
-    for (const o of z.ordnungen) {
-      const zeilen = o.sitze;
-      zeilen.forEach((zeile, i) => {
-        for (const x of [0, 1, 3, 4]) {
-          if (zeile[x] === 'S') plaetzeS.add(`${x},${i + 1}`);
-          if (zeile[x] === 'Z') plaetzeZ.add(`${x},${i + 1}`);
-        }
-      });
-      farbenS.add(o.farbe);
-    }
-  }
-  assert.ok(plaetzeS.size >= 12, `nur ${plaetzeS.size} verschiedene Plätze für ihn`);
-  assert.ok(plaetzeZ.size >= 12, `nur ${plaetzeZ.size} verschiedene Plätze für den Schlafenden`);
-  assert.equal(farbenS.size, 7, 'jede Farbe kann ihn treffen');
-});
-
-test('zwei Neustarts mit demselben Zufallsstand ergeben dieselben Ordnungen, ein anderer Seed andere', () => {
-  assert.deepEqual(neueOrdnungen({ zufall: 5 }), neueOrdnungen({ zufall: 5 }));
-  assert.notDeepEqual(neueOrdnungen({ zufall: 5 }), neueOrdnungen({ zufall: 6 }));
+test('die Farbe der Fahrgäste ohne Fahrkarte wechselt von Halt zu Halt', () => {
+  const farben = new Set();
+  for (const { ordnung } of alle) for (const k of Object.keys(ordnung.farben)) farben.add(ordnung.farben[k]);
+  assert.equal(farben.size, 7);
+  const z = kopiereKontrolle(haltNach(alle[0].ordnung));
+  assert.ok(z.fahrgaeste.length > 0);
 });

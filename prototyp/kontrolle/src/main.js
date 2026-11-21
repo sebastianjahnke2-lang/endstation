@@ -1,5 +1,6 @@
 // Einstieg des Prototyps "Kontrolle": verbindet Kern, Bühne, Eingabe und Ton.
-// Kein Menü: Beim Öffnen steht man sofort im Gang. Gemerkt wird nur, ob der Lernhalt geschafft ist.
+// Kein Menü: Beim Öffnen steht man sofort im Gang. Gemerkt wird, ob der Lernhalt geschafft ist, und die
+// weiteste je erreichte Station.
 
 import { erzeugeKontrolle } from './kern/durchgang.js';
 import { erzeugeKontrollBuehne } from './anzeige/buehne.js';
@@ -10,9 +11,9 @@ import { ladeKontrollStand, sichereKontrollStand } from './speicher.js';
 const leinwand = document.getElementById('bild');
 const buehne = erzeugeKontrollBuehne(leinwand);
 const ton = erzeugeKontrollTon();
-// Der Seed bestimmt nur, welche Sitzordnungen ein Neustart auslost. Der erste Durchgang ist immer gleich.
-// Mit #seed=Zahl an der Adresse ist auch jeder Neustart gleich (für die Prüfwerkzeuge).
-function seedFuerNeustart() {
+// Der Seed bestimmt, welche Halte ausgelost werden. Mit #seed=Zahl an der Adresse verläuft alles gleich
+// (für die Prüfwerkzeuge).
+function seedFuerSchicht() {
   const fest = /[#&]seed=(\d+)/.exec(window.location.hash);
   if (fest) return Number(fest[1]);
   try {
@@ -22,7 +23,7 @@ function seedFuerNeustart() {
   }
 }
 const stand = ladeKontrollStand();
-const spiel = erzeugeKontrolle(seedFuerNeustart(), { lernhalt: !stand.gelernt });
+const spiel = erzeugeKontrolle(seedFuerSchicht(), { lernhalt: !stand.gelernt });
 let tonAn = true;
 
 function gibEin(handlung) {
@@ -60,9 +61,20 @@ function schleife(jetzt) {
 }
 
 // Nur für die Prüfwerkzeuge: Mit #probe lässt sich der Zustand von außen ablesen, nicht ändern.
-if (/[#&]probe\b/.test(window.location.hash)) window.kontrollZustand = () => JSON.stringify(spiel.zustand);
+if (/[#&]probe\b/.test(window.location.hash)) {
+  window.kontrollZustand = () => JSON.stringify(spiel.zustand);
+  window.kontrollBereit = () => buehne.bereit(performance.now()); // hält das Bild gerade nicht an?
+}
 
 buehne.melder.klang = (name) => ton.spiele(name);
+// eine Station erreicht: Ist sie weiter als je zuvor, wird sie auf der Linie markiert und gemerkt
+buehne.melder.station = (nr) => {
+  if (spiel.zustand.lernhalt || nr <= stand.weiteste) return;
+  stand.weiteste = nr;
+  buehne.setzeWeiteste(nr);
+  sichereKontrollStand(stand);
+};
+buehne.setzeWeiteste(stand.weiteste);
 buehne.passeAn();
 buehne.neu(spiel.zustand);
 verbindeEingabe(leinwand, { aktion: (name) => gibEin(name), tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => spiel.zustand.status !== 'faehrt' });

@@ -4,7 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { erzeugeKontrolle } from '../src/kern/durchgang.js';
-import { LERNHALT, HALTE, ZUEGE_BIS_HALT } from '../src/kern/halte.js';
+import { LERNHALT, ZUEGE_BIS_HALT } from '../src/kern/halte.js';
+import { ZEIT_ANFANG } from '../src/kern/auslosen.js';
 import { kuerzesterFang, hinsehen, haltNach } from '../src/kern/pruefung.js';
 import { haltZug, kopiereKontrolle } from '../src/kern/kontrolle.js';
 
@@ -15,7 +16,7 @@ test('drei Fahrgäste, keiner schläft, viel Zeit', () => {
   const z = haltNach(LERNHALT);
   assert.equal(z.fahrgaeste.length, 3);
   assert.ok(z.fahrgaeste.every((f) => !f.schlaeft));
-  assert.ok(LERNHALT.zuege > ZUEGE_BIS_HALT);
+  assert.ok(LERNHALT.zuege > ZUEGE_BIS_HALT && LERNHALT.zuege > ZEIT_ANFANG);
 });
 
 test('beim ersten Schritt steht er auf und setzt sich weg, nicht zu verfehlen', () => {
@@ -64,32 +65,33 @@ test('läuft die Zeit ab, steigt er aus, und der Lernhalt beginnt neu. Er zählt
   for (let i = 0; i < LERNHALT.zuege; i++) e = spiel.act('warten');
   assert.ok(typen(e).includes('halt'), 'er steigt aus');
   assert.equal(spiel.zustand.status, 'entkommen');
-  assert.deepEqual(spiel.zustand.ergebnisse, []);
+  assert.equal(spiel.zustand.entkommen, 0, 'zählt nicht als Entkommener');
   assert.deepEqual(spiel.act('hoch'), [{ typ: 'neuerHalt', halt: -1 }]);
   assert.equal(spiel.zustand.lernhalt, true);
   assert.equal(spiel.zustand.rest, LERNHALT.zuege);
   assert.equal(spiel.zustand.fahrgaeste.length, 3);
 });
 
-test('geschafft: beim Fang das Ereignis "gelernt", mit der nächsten Eingabe Halt 1', () => {
+test('geschafft: beim Fang das Ereignis "gelernt", mit der nächsten Eingabe beginnt die Schicht', () => {
   const spiel = erzeugeKontrolle(1, { lernhalt: true });
   spiel.act('hoch');
   spiel.act('hoch');
   spiel.act('hoch');
   const s = schwarz(spiel.zustand);
   assert.deepEqual(typen(spiel.act({ tipp: 'feld', x: s.x, y: s.y })), ['gefangen', 'gelernt']);
-  assert.equal(spiel.zustand.status, 'gefangen');
-  assert.deepEqual(spiel.zustand.ergebnisse, [], 'der Lernhalt zählt nicht');
+  assert.equal(spiel.zustand.status, 'gefangen', 'der Lernhalt wartet auf die nächste Eingabe');
   assert.deepEqual(spiel.act('hoch'), [{ typ: 'neuerHalt', halt: 0 }]);
   assert.equal(spiel.zustand.lernhalt, false);
-  assert.equal(spiel.zustand.rest, ZUEGE_BIS_HALT);
-  assert.equal(spiel.zustand.k.y, 7, 'in den drei Halten wieder unten im Gang');
-  assert.equal(spiel.zustand.fahrgaeste.length, HALTE[0].sitze.join('').replace(/[.|]/g, '').length);
+  assert.equal(spiel.zustand.halt, 0);
+  assert.equal(spiel.zustand.entkommen, 0);
+  assert.equal(spiel.zustand.k.y, 7, 'in der Schicht wieder unten im Gang');
+  assert.equal(spiel.zustand.fahrgaeste.length, 8);
 });
 
-test('ohne Lernhalt beginnt es direkt mit Halt 1', () => {
+test('ohne Lernhalt beginnt sofort die Schicht', () => {
   const spiel = erzeugeKontrolle(1, { lernhalt: false });
   assert.equal(spiel.zustand.lernhalt, false);
   assert.equal(spiel.zustand.k.y, 7);
-  assert.equal(spiel.zustand.rest, ZUEGE_BIS_HALT);
+  assert.ok(spiel.zustand.rest <= ZEIT_ANFANG && spiel.zustand.rest >= 8, 'die Zeit des ersten Halts der Schicht');
+  assert.equal(spiel.zustand.fahrgaeste.filter((f) => f.schwarz).length, 1);
 });

@@ -63,6 +63,19 @@ Von Claude beim Prüfen gefunden:
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
 
+### Prototyp „Kontrolle": die Schicht (21.11., `docs/auftraege/kontrolle-schicht.md`)
+
+Leitsätze des Kontrolle-Auftrags in Klammern.
+- **Schicht** (6, 7): Halte ohne Ende, bis drei Fahrgäste ohne Fahrkarte entkommen sind. Nach dem Fang oder Halt hält das Bild kurz an, dann schiebt sich der nächste Halt von selbst herein. Am Ende steht nur der Name der letzten erreichten Station, ein Tipp beginnt sofort die nächste Schicht. Die drei festen Halte und „n von 3 erwischt" sind gestrichen. Der Lernhalt bleibt davor, zählt nicht mit und wartet nach dem Fang auf eine Eingabe.
+- **Zwei im Wagen:** Der erste Fang kostet einen Zug, die Zeit läuft weiter. Hält der Zug, steigt jeder Übrige aus und zählt einzeln.
+- **Scheinschläfer** (2, 4): sieht aus wie ein Schlafender. Er hebt den Kopf, wenn er höchstens drei Reihen hinter dem Kontrolleur sitzt, also in jedem Zug, in dem der Kontrolleur ihm den Rücken zudreht. Ihn zu kontrollieren kostet einen Zug. In Halten mit Scheinschläfer sitzt immer auch ein echter Schlafender, in anderen manchmal zwei echte: So verrät die Zahl der Schlafenden nichts.
+- **Toilettengänger** (1): Die Toilette ist vorn, wo bisher die Tür gezeichnet war. Über der Tür eine kleine Lampe, grün frei, rot besetzt. Er geht, wenn der Kontrolleur genau zwei Reihen **unter** ihm steht (der Auftrag sagt „zwei Reihen entfernt"; von oben käme er am Kontrolleur nicht vorbei zur Toilette). Er kommt zurück, wenn der Kontrolleur „vorbei" ist: umgedreht, mindestens drei Reihen von der Toilette weg und unterhalb seines Platzes. Nach vier Zügen kommt er auch so heraus. Steht der Kontrolleur dann vor der Tür, ist er erwischt. Sein Platz bleibt so lange frei, niemand setzt sich darauf.
+- **Reihenfolge** (3): Halt 1 und 2 ein Platzwechsler, Halt 3 ein Scheinschläfer allein, Halt 4 ein Toilettengänger allein, ab Halt 5 gemischt, ab Halt 6 in etwa jedem dritten Halt zwei verschiedene.
+- **Zeit** (1): Plan 14 Züge, alle zwei Halte einer weniger, bis 8. Ein Halt darf einen Zug unter Plan liegen. Nie weniger als der kürzeste Weg plus ein Zug, und immer weniger, als blindes Durchkontrollieren der Reihe nach braucht. Deshalb beginnt die Schicht mit 14 statt mehr Zügen: Mit 16 hätte man die ersten Halte oft auch ohne Hinsehen geschafft. Eine Auslosung mit Prüfung dauert etwa 4 Millisekunden.
+- **Strecke** (4): In der Zuganzeige links der Zug, der mit jedem Zug vorrückt, dann Gleis, Mast und der Name der nächsten Station. Die Namen sind aus Anfang und Ende zusammengesetzt (etwa „Nebelbach", „Eulenbrück"), höchstens zehn Zeichen, in jeder Schicht dieselbe Reihenfolge, 60 verschiedene, dann von vorn.
+- **Linie** unten links, wo sonst nichts ist: sechs Stationen, erreichte hell, die nächste als Ring, über der weitesten je erreichten eine kleine Fahne. Liegt sie weiter, steht die Fahne am rechten Ende. Gespeichert wird nur ihre Nummer, keine Punktzahl. Der Lernhalt erreicht keine Station.
+- **Haken** (4): Die Anzeige ist schmaler, rechts daneben drei Haken mit der Mütze des Kontrolleurs. Für jeden Entkommenen verschwindet eine.
+
 ### Prototyp „Kontrolle" (21.11.)
 
 - **Raster, Wagenbild, Schaffner mit Zange, Schlafender, Aufteilung und Eingabe** sind aus „Der freie Platz" und dem Hauptspiel geliehen, nicht kopiert. Nur der Körper der Fahrgäste ist nachgebaut, weil er dort nicht exportiert ist und jener Prototyp unangetastet bleibt.
