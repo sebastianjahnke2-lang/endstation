@@ -321,12 +321,12 @@ export function erzeugeKontrollBuehne(leinwand) {
     };
     const name = bild.lernhalt ? '' : stationsName(bild.station);
     const nameBreit = name ? textBreite(name) : 0;
-    const mast = feld.spalten - nameBreit - (name ? 4 : 3);
+    const mast = feld.spalten - nameBreit - (name ? 5 : 3);
     const gleis = feld.zeilen - 3;
     for (let y = 1; y <= gleis; y++) an(mast, y);
     an(mast - 1, 1);
     an(mast + 1, 1);
-    if (name) schreibe(feld, name, mast + 3, 1);
+    if (name) schreibe(feld, name, mast + 4, 1);
     // der Zug rückt vor
     const weit = Math.max(0, mast - 12);
     const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, bild.gesamt) / bild.gesamt));

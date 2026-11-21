@@ -61,7 +61,10 @@ function schleife(jetzt) {
 }
 
 // Nur für die Prüfwerkzeuge: Mit #probe lässt sich der Zustand von außen ablesen, nicht ändern.
-if (/[#&]probe\b/.test(window.location.hash)) window.kontrollZustand = () => JSON.stringify(spiel.zustand);
+if (/[#&]probe\b/.test(window.location.hash)) {
+  window.kontrollZustand = () => JSON.stringify(spiel.zustand);
+  window.kontrollBereit = () => buehne.bereit(performance.now()); // hält das Bild gerade nicht an?
+}
 
 buehne.melder.klang = (name) => ton.spiele(name);
 // eine Station erreicht: Ist sie weiter als je zuvor, wird sie auf der Linie markiert und gemerkt
