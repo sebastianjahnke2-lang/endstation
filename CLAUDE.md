@@ -6,10 +6,12 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Technik und Etappen: `docs/FAHRPLAN.md`
 - Eigene Detailentscheidungen: `docs/ENTSCHEIDUNGEN.md`
 - Ideen außerhalb des Fahrplans: `docs/IDEEN.md`
+- Leitsätze: `docs/PRINZIPIEN.md`
 
 ## Zu Beginn jeder Sitzung
 1. Diese Datei und `docs/FAHRPLAN.md` lesen.
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
+3. docs/PRINZIPIEN.md lesen. Jede Änderung nennt den Leitsatz, dem sie dient.
 
 ## Weiterarbeiten
 - Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.

@@ -14,6 +14,14 @@ Stand 19.11.: Es gibt fünf Kampfwagen, den Mittelwagen als Autoritätswagen, de
 - Steht sie in der **aktuellen** Etappe von `docs/FAHRPLAN.md`? Wenn nicht: ein Satz in `docs/IDEEN.md`, nichts bauen, fertig.
 - Dient sie dem Kernsatz, und löst sie mehr als ein Problem zugleich? Wenn nicht: streichen.
 
+## 1a. Auf Papier vorspielen (Leitsätze, `docs/PRINZIPIEN.md`)
+
+Vor jedem neuen Wagen, bevor Code entsteht: den Wagen auf Papier Zug für Zug vorspielen. Zwei Fragen schriftlich beantworten:
+- Was will der Spieler als Nächstes tun?
+- Was passiert, wenn er etwas anderes tut?
+
+Dazu: ein neuer Gedanke je Wagen (zeigen, ausbauen, drehen, abschließen) und die Lage in fünf Sekunden lesbar, ohne Sprache.
+
 ## 2. Steckbrief vor dem Code
 
 Als Kommentar über dem Eintrag in `src/kern/wagen.js` oder über dem Verhalten in `src/kern/gegner.js`:
