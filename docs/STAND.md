@@ -3,7 +3,7 @@
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
-- **Prototyp „Kontrolle"** (21.11.), wörtlich in `docs/auftraege/kontrolle.md`: gebaut in `prototyp/kontrolle/`, wartet auf den Test am iPhone. Nachtrag vom 21.11. gebaut: Beim Neustart werden neue, geprüfte Sitzordnungen ausgelost. Nachbesserung „Einstieg" gebaut (`docs/auftraege/kontrolle-einstieg.md`): Antippen kontrolliert, Lernhalt bei der allerersten Fahrt, zwei Hinweiswörter. Pull Request #5 ist in `main`. Start des Lernhalts mitten im Gang vom Auftraggeber bestätigt. Danach nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen und offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Prototyp Kontrolle"). Die Frage zur Musik im freien Platz ist laut Auftraggeber erledigt. Pull Request #4 ist in `main`.
+- **Prototyp „Kontrolle"** (21.11.), wörtlich in `docs/auftraege/kontrolle.md`: gebaut in `prototyp/kontrolle/`, wartet auf den Test am iPhone. Nachtrag vom 21.11. gebaut: Beim Neustart werden neue, geprüfte Sitzordnungen ausgelost. Nachbesserung „Einstieg" gebaut (`docs/auftraege/kontrolle-einstieg.md`): Antippen kontrolliert, Lernhalt bei der allerersten Fahrt, zwei Hinweiswörter. Danach nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen und offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Prototyp Kontrolle"). Die Frage zur Musik im freien Platz ist laut Auftraggeber erledigt. Pull Request #4 ist in `main`.
 
 Davor:
 - „Leitsätze und die ersten zehn Minuten", wörtlich in `docs/auftraege/leitsaetze.md`. Leitsätze in `docs/PRINZIPIEN.md`.
