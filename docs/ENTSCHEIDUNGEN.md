@@ -38,6 +38,21 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
 - **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
 
+### Leitsätze und die ersten zehn Minuten (Auftrag vom 21.11., `docs/auftraege/leitsaetze.md`)
+
+Vom Auftraggeber als offen benannt:
+- **Kämpfen als gleichwertiger Weg.** Der Kämpfer-Bot erreicht den Halt nie, er stirbt in jeder Fahrt am Kontrolleur in Wagen 3. Die Vision nennt drei gleichwertige Wege (kämpfen, verstehen, aufbrechen).
+- **Spielstil mitzählen.** Fahrplan Etappe 3 zählt Erstschläge, Ausweichen, Warten, Aufbrechen, Fluchten und gibt der Figur danach eine Haltung. Vorgabe des Auftraggebers: keine Persönlichkeitstests. Leitsatz 12: nie ein Punktestand.
+- **Rätsel oder Taktik.** Entscheidet der Spieltest des Prototyps (siehe „Entschieden am 19.11.").
+- **VISION.md unter der Spieladresse.** GitHub Pages liefert den ganzen Zweig aus, `docs/VISION.md` ist unter der Spieladresse lesbar. Idee dazu in `docs/IDEEN.md` („Nur das Spiel ausliefern").
+
+Von Claude beim Prüfen gefunden:
+- **Leitsatz 1 und Warten.** „Jede Lage hat einen Preis fürs Abwarten." Beim Kontrolleur ist Stillstehen die Lösung, beim Pendler gibt Warten neben ihm eine Stärke, die Stärke „Ruhe fürs Warten" belohnt es zusätzlich. Dort kostet Abwarten nichts.
+- **Leitsatz 8 und Belohnungen ohne Verwendung.** „Jede Belohnung hat sofort eine Verwendung." Rückhalt wirkt nur bei einem tödlichen Treffer und bleibt oft ungenutzt. Fahrkarte: Nach Schritt 4 (Halt ohne Sperre) sind Lochungen nur noch Spur für den Rückblick, ohne Verwendung in der Fahrt.
+- **Leitsatz 12 und Bestwerte.** Fahrplan Etappe 5: „Bestwerte nur gegen sich selbst". Leitsatz 12: nie ein Punktestand.
+- **Leitsatz 4 und Angebote.** Jeder Kampfwagen bekommt zusätzlich zu seinem Gedanken ein Angebot. Befund in `docs/WAGEN-PRUEFUNG.md`.
+- **Schritt 4 und die Entscheidung vom 19.11.** Der Auftraggeber hat angekündigt, „drei helle Lochungen am Halt" aufzuheben. Eingetragen wird es erst mit Schritt 4, nach seiner Rückmeldung.
+
 ## Prototyp „Der freie Platz"
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
