@@ -138,10 +138,12 @@ prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Haup
   werkzeug/         fotos.mjs, szene.mjs: Selbstkontrolle im Browser
 prototyp/kontrolle/      Prototyp „Kontrolle": ein Wagen, der Spieler ist der Kontrolleur
   build.js, index.html    wie beim freien Platz
-  src/kern/         halte.js (drei Sitzordnungen), kontrolle.js (Regeln ohne DOM)
+  src/kern/         halte.js (drei feste Sitzordnungen und der Lernhalt), kontrolle.js (Regeln ohne DOM),
+                    pruefung.js (lösbar, nicht blind zu schaffen), auslosen.js (neue Ordnungen beim Neustart),
+                    durchgang.js (drei Halte, Schluss, Neustart)
   src/anzeige/      buehne.js, figuren.js; leiht Aufteilung, Wagenbild und Figuren vom freien Platz
-  src/              texte.js, ton.js, main.js
-  tests/            Regeln, Lösbarkeit (vollständige Suche), Anzeige, Build
+  src/              texte.js, ton.js, speicher.js (nur: Lernhalt geschafft), main.js
+  tests/            Regeln, Lösbarkeit jeder festen und ausgelosten Ordnung, Lernhalt, Speicher, Anzeige, Build
   werkzeug/         fotos.mjs: alle drei Halte im Browser mit Bildern
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```

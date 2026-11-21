@@ -1,7 +1,8 @@
 // Prototyp "Kontrolle": Du bist der Kontrolleur. Finde den Fahrgast ohne Fahrkarte, bevor der Zug hält.
 // Reine Logik ohne Browser. erzeugeKontrolle() -> { zustand, act(handlung) }, act gibt Ereignisse zurück.
 //
-// Ein Zug: ein Feld im Gang gehen, einen Fahrgast in der eigenen Reihe kontrollieren, oder warten.
+// Ein Zug: ein Feld im Gang gehen (wischen), einen Fahrgast in der eigenen Reihe kontrollieren (antippen,
+// zur Seite wischen trifft den Gangplatz), oder warten.
 // Danach antwortet der Wagen: Die Strecke wird kürzer, und der Fahrgast ohne Fahrkarte reagiert.
 // Es wird nie eine Fahrkarte gelesen. Erkennbar ist er nur an seinem Verhalten:
 //   - Steht der Kontrolleur in der Reihe daneben, steht er auf und setzt sich weiter weg: auf den
@@ -12,7 +13,7 @@
 //     will er trotzdem aufstehen: Er zuckt hoch und setzt sich wieder.
 // Alle anderen bleiben sitzen. Jede Kontrolle kostet einen Zug, den Schlafenden zu kontrollieren zwei.
 
-import { HALTE, ZUEGE_BIS_HALT } from './halte.js';
+import { ZUEGE_BIS_HALT } from './halte.js';
 
 export const KONTROLLGANG = 2;
 export const KONTROLLSTART = 7; // Reihe des Kontrolleurs zu Beginn, unten im Gang
@@ -23,33 +24,27 @@ function sitztAuf(z, x, y) {
   return z.fahrgaeste.find((f) => f.x === x && f.y === y) || null;
 }
 
-function richteHaltEin(z, nr) {
-  z.halt = nr;
+// Richtet einen Halt nach einer Sitzordnung ein ({ farbe, sitze }, siehe halte.js).
+// Der Lernhalt gibt zusätzlich zuege (mehr Zeit) und start (Reihe des Kontrolleurs) an.
+export function setzeHalt(z, ordnung) {
   z.status = 'faehrt';
-  z.rest = ZUEGE_BIS_HALT;
-  z.k = { y: KONTROLLSTART, blick: 'hoch' };
+  z.rest = ordnung.zuege || ZUEGE_BIS_HALT;
+  z.zuegeGesamt = z.rest;
+  z.k = { y: ordnung.start || KONTROLLSTART, blick: 'hoch' };
   z.fahrgaeste = [];
-  HALTE[nr].sitze.forEach((zeile, i) => {
+  ordnung.sitze.forEach((zeile, i) => {
     for (const x of SITZSPALTEN) {
       const c = zeile[x];
       if (c === '.' || c === '|') continue;
-      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe: c === 'S' ? HALTE[nr].farbe : c === 'Z' ? 'z' : c, schlaeft: c === 'Z', schwarz: c === 'S', ruht: 0, kontrolliert: false });
+      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe: c === 'S' ? ordnung.farbe : c === 'Z' ? 'z' : c, schlaeft: c === 'Z', schwarz: c === 'S', ruht: 0, kontrolliert: false });
     }
   });
 }
 
-export function neueKontrolle() {
-  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
-  richteHaltEin(z, 0);
-  return z;
-}
-
-// Wen eine Wischbewegung zur Seite kontrolliert: den Fahrgast am Gang, sonst den am Fenster.
+// Wen eine Wischbewegung zur Seite kontrolliert: nur den Fahrgast am Gang. Wer am Fenster sitzt,
+// wird angetippt. Antippen kontrolliert jeden Fahrgast in der eigenen Reihe.
 export function nachbarAufSeite(z, seite) {
-  const reihe = z.k.y;
-  const gang = seite === 'links' ? 1 : 3;
-  const fenster = seite === 'links' ? 0 : 4;
-  return sitztAuf(z, gang, reihe) || sitztAuf(z, fenster, reihe);
+  return sitztAuf(z, seite === 'links' ? 1 : 3, z.k.y);
 }
 
 // Der Fahrgast ohne Fahrkarte nach dem Zug des Kontrolleurs.
@@ -151,31 +146,23 @@ function spielerZieht(z, handlung, ereignisse) {
   return -1;
 }
 
-export function kontrollZug(z, handlung) {
+// Ein Zug im laufenden Halt. Gibt die Ereignisse zurück, leer, wenn die Handlung nichts bewirkt.
+export function haltZug(z, handlung) {
   const ereignisse = [];
-  if (z.status === 'faehrt') {
-    const zuege = spielerZieht(z, handlung, ereignisse);
-    if (zuege < 0) return []; // geht nicht: kostet nichts
-    z.zug += 1;
-    for (let i = 0; i < zuege && z.status === 'faehrt'; i++) wagenZieht(z, ereignisse);
-    return ereignisse;
-  }
-  // Nach dem Halt: Jede Eingabe führt zum nächsten Halt, nach dem dritten zum Schluss, danach neu.
-  if (z.status === 'aus') {
-    z.ergebnisse = [];
-    richteHaltEin(z, 0);
-    ereignisse.push({ typ: 'neuerHalt', halt: 0 });
-  } else if (z.halt < HALTE.length - 1) {
-    richteHaltEin(z, z.halt + 1);
-    ereignisse.push({ typ: 'neuerHalt', halt: z.halt });
-  } else {
-    z.status = 'aus';
-    ereignisse.push({ typ: 'aus', erwischt: z.ergebnisse.filter(Boolean).length, von: z.ergebnisse.length });
-  }
+  if (z.status !== 'faehrt') return ereignisse;
+  const zuege = spielerZieht(z, handlung, ereignisse);
+  if (zuege < 0) return []; // geht nicht: kostet nichts
+  z.zug += 1;
+  for (let i = 0; i < zuege && z.status === 'faehrt'; i++) wagenZieht(z, ereignisse);
   return ereignisse;
 }
 
-export function erzeugeKontrolle() {
-  const zustand = neueKontrolle();
-  return { zustand, act: (handlung) => kontrollZug(zustand, handlung) };
+// Schnelle Kopie für die Suche in pruefung.js
+export function kopiereKontrolle(z) {
+  const kopie = {};
+  for (const name of Object.keys(z)) kopie[name] = z[name];
+  kopie.k = { y: z.k.y, blick: z.k.blick };
+  kopie.fahrgaeste = z.fahrgaeste.map((f) => ({ nr: f.nr, x: f.x, y: f.y, farbe: f.farbe, schlaeft: f.schlaeft, schwarz: f.schwarz, ruht: f.ruht, kontrolliert: f.kontrolliert }));
+  kopie.ergebnisse = z.ergebnisse.slice();
+  return kopie;
 }

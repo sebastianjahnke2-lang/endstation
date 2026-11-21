@@ -2,7 +2,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { erzeugeKontrolle, nachbarAufSeite, KONTROLLSTART } from '../src/kern/kontrolle.js';
+import { nachbarAufSeite, KONTROLLSTART } from '../src/kern/kontrolle.js';
+import { erzeugeKontrolle } from '../src/kern/durchgang.js';
 import { HALTE, ZUEGE_BIS_HALT } from '../src/kern/halte.js';
 
 const typen = (e) => e.map((x) => x.typ);
@@ -120,8 +121,9 @@ test('Eine Kontrolle kostet einen Zug, den Schlafenden zu kontrollieren zwei. Er
   const k = e.find((x) => x.typ === 'kontrolle');
   assert.equal(k.schlief, true);
   assert.equal(spiel.act('rechts').filter((x) => x.typ === 'strecke').length, 1, 'wach kostet er einen');
-  const b = spiel.act('links');
-  assert.equal(b.find((x) => x.typ === 'kontrolle').x, 0, 'links ist der Gangplatz frei: der am Fenster');
+  // links ist der Gangplatz frei: Wischen kontrolliert nur den Gangplatz, den am Fenster erreicht man durch Antippen
+  assert.deepEqual(spiel.act('links'), []);
+  assert.equal(spiel.act(tipp(0, 3)).find((x) => x.typ === 'kontrolle').x, 0);
 });
 
 test('Hält der Zug, steigt er aus. Das Ergebnis wird gemerkt, danach der nächste Halt', () => {
@@ -147,14 +149,32 @@ test('Nach drei Halten: wie viele erwischt. Eine Eingabe beginnt sofort neu', ()
   }
   assert.equal(spiel.zustand.status, 'aus');
   assert.deepEqual(spiel.act('hoch'), [{ typ: 'neuerHalt', halt: 0 }]);
+  assert.equal(spiel.zustand.durchgang, 1);
   assert.equal(spiel.zustand.rest, ZUEGE_BIS_HALT);
   assert.deepEqual(spiel.zustand.ergebnisse, []);
 });
 
+test('Eine Geste fürs Kontrollieren: Antippen trifft Gang und Fenster, Wischen zur Seite nur den Gang', () => {
+  const spiel = erzeugeKontrolle();
+  for (let i = 0; i < 4; i++) spiel.act('hoch'); // Reihe 3: links b am Fenster, rechts der Schlafende am Gang
+  assert.equal(nachbarAufSeite(spiel.zustand, 'links'), null);
+  assert.ok(nachbarAufSeite(spiel.zustand, 'rechts').schlaeft);
+  const am = spiel.act(tipp(0, 3));
+  assert.equal(am.find((x) => x.typ === 'kontrolle').x, 0, 'am Fenster');
+  const gang = spiel.act(tipp(3, 3));
+  assert.equal(gang.find((x) => x.typ === 'kontrolle').x, 3, 'am Gang');
+  assert.deepEqual(spiel.act(tipp(1, 2)), [], 'in einer anderen Reihe: nichts');
+});
+
 test('Gleiche Eingaben ergeben gleichen Verlauf', () => {
   const folge = ['hoch', 'warten', 'links', 'rechts', 'hoch', tipp(2, 4), 'runter', 'hoch', 'hoch', 'rechts', 'hoch', 'hoch', 'weiter', 'hoch', 'hoch', 'links'];
-  const a = erzeugeKontrolle();
-  const b = erzeugeKontrolle();
-  for (const h of folge) assert.deepEqual(a.act(h), b.act(h));
-  assert.deepEqual(a.zustand, b.zustand);
+  for (const seed of [0, 7, 123456]) {
+    const a = erzeugeKontrolle(seed);
+    const b = erzeugeKontrolle(seed);
+    for (const h of folge) assert.deepEqual(a.act(h), b.act(h));
+    // auch über den Neustart mit ausgelosten Ordnungen hinweg
+    for (let i = 0; i < 40; i++) assert.deepEqual(a.act('warten'), b.act('warten'));
+    assert.ok(a.zustand.durchgang >= 1);
+    assert.deepEqual(a.zustand, b.zustand);
+  }
 });

@@ -41,7 +41,7 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 ### Prototyp „Kontrolle" (Auftrag vom 21.11., `docs/auftraege/kontrolle.md`)
 
 - **„2 von 3 erwischt" und Leitsatz 7 („nie ein Punktestand").** Die Zeile steht so im Auftrag und ist gebaut. Sie zählt, gespeichert wird sie nirgends.
-- **Immer dieselben drei Sitzordnungen.** Kein Zufall innerhalb eines Halts, so steht es im Auftrag. Gebaut sind drei feste Ordnungen, die bei jedem Neustart gleich sind. Wer noch einmal spielt, kennt die Lösung. Offen: ob beim Neustart neue Ordnungen kommen sollen (dann Zufall zwischen den Durchgängen).
+- **Immer dieselben drei Sitzordnungen.** Entschieden am 21.11.: Beim Neustart werden neue Sitzordnungen ausgelost, innerhalb eines Halts bleibt es ohne Zufall. Siehe unten bei „Prototyp Kontrolle".
 - **Wer spielt den Kontrolleur?** Im Hauptspiel ist der Kontrolleur ein Gegner („innerer Kritiker" in der Vision), hier ist er die Spielfigur. Für den Prototyp ohne Belang, fürs Hauptspiel offen.
 
 ### Leitsätze und die ersten zehn Minuten (Auftrag vom 21.11., `docs/auftraege/leitsaetze.md`)
@@ -77,7 +77,16 @@ Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. W
 - **Das Bild hält an** (Leitsatz 5): 0,65 Sekunden nach dem Fang, 0,7 Sekunden, nachdem er am Halt ausgestiegen ist. In dieser Zeit wird keine Eingabe angenommen. Sonst kürzt jede Eingabe alles ab, was läuft.
 - **Nach einem Halt** beginnt der nächste mit der nächsten Eingabe, nicht von selbst. Nach dem dritten kommt die Zeile, ein Tipp beginnt neu.
 - **Kein Speicher, kein Testprotokoll:** Der Auftrag fragt nur, ob man von selbst noch einmal startet. Das sieht man beim Zuschauen.
-- **Die drei Halte:** 1. Er sitzt nah und weicht beim ersten Schritt eine Reihe aus. 2. Vor ihm ist eine Reihe voll, er springt weiter und wird erst vorn gestellt. 3. Er sitzt schon ganz vorn und kann nur zucken. Kürzeste Lösung je Halt laut Test: 4, 7 und 7 Züge von 12.
+- **Einstieg** (Nachbesserung vom 21.11., `docs/auftraege/kontrolle-einstieg.md`, Leitsatz 2 des Auftrags: gelernt wird im Spiel, das Wichtige ist nicht zu verfehlen):
+  - Antippen kontrolliert jeden Fahrgast in der eigenen Reihe. Zur Seite wischen kontrolliert nur noch den Gangplatz, nicht mehr den am Fenster.
+  - Der Lernhalt beginnt mit dem Kontrolleur mitten im Gang (Reihe 4), nicht unten. Grund: Mit den normalen Regeln setzt sich der Fahrgast nur zwei Reihen weg. Von unten aus säße er danach mitten im Wagen, nicht in einer Ecke. So springt er beim ersten Schritt nach vorn in die vorderste Reihe, neben einen anderen Fahrgast, und kommt nicht mehr weg. Die Regeln sind dieselben, nur der Start und die Zeit (20 statt 12 Züge) sind anders.
+  - „Wischen" steht vor dem ersten Zug unter dem Kontrolleur, „Antippen", solange er in der Reihe des Fahrgasts ohne Fahrkarte steht. Während etwas abläuft, verschwindet das Schild.
+  - Der Lernhalt zählt nicht für „n von 3 erwischt". Gemerkt wird er gleich beim Fang, nicht erst mit der nächsten Eingabe, damit er nach dem Schließen nicht wiederkommt. Speicher unter eigenem Schlüssel `endstation.kontrolle.1`, nur das eine Feld.
+  - Läuft die Zeit ab, steigt er aus, und mit der nächsten Eingabe beginnt der Lernhalt neu. „Wischen" erscheint dann nicht noch einmal.
+- **Auslosen beim Neustart** (Auftrag vom 21.11., Leitsatz 9 der Leitsätze: Wiederspielen zeigt Neues): Der erste Durchgang spielt immer die drei festen Ordnungen, weil sie nacheinander je einen Gedanken zeigen. Jeder Neustart lost drei neue aus: Plätze, Schlafender und Farben. Eine ausgeloste Ordnung wird nur genommen, wenn sie die Prüfung besteht (`prototyp/kontrolle/src/kern/pruefung.js`): lösbar in höchstens 10 von 12 Zügen und mindestens 3, nicht zu schaffen, wenn man von unten nach oben jede Reihe der Reihe nach kontrolliert (links zuerst oder rechts zuerst), zu schaffen für den, der dem folgt, der aufsteht oder zuckt, und alle zu kontrollieren kostet mehr als 12 Züge. Etwa 7 von 10 Auslosungen bestehen, eine Prüfung dauert 0,3 Millisekunden. Der Test prüft 3000 Auslosungen.
+- **Der Seed** kommt beim Öffnen aus dem Zufallsgenerator des Browsers und bestimmt nur die Ordnungen der Neustarts. Mit `#seed=Zahl` an der Adresse sind auch die Neustarts immer gleich (für die Prüfwerkzeuge).
+- **Halt 3 der festen Ordnungen umgestellt:** Die strengere Prüfung (auch rechts zuerst) zeigte, dass man ihn dort von rechts nach links sofort erwischt hätte. Er sitzt jetzt am Gang zwischen anderen.
+- **Die drei Halte:** 1. Er sitzt nah und weicht beim ersten Schritt eine Reihe aus. 2. Vor ihm ist eine Reihe voll, er springt weiter und wird erst vorn gestellt. 3. Er sitzt schon ganz vorn zwischen anderen und kann nur zucken. Kürzeste Lösung je Halt laut Test: 4, 7 und 7 Züge von 12.
 
 ### Fahrt fortsetzen (21.11., Schritt 3 aus `docs/auftraege/leitsaetze.md`, Leitsatz 10)
 

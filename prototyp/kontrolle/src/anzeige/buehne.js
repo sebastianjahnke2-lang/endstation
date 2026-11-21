@@ -89,6 +89,7 @@ export function erzeugeKontrollBuehne(leinwand) {
       gleicheAb();
       return 0;
     }
+    if (e.typ === 'gelernt') return 0;
     if (e.typ === 'aus') {
       schluss = { zeilen: [setzeKontrollText(KONTROLLTEXTE.schluss, { n: e.erwischt, m: e.von })], bild: null, start: t };
       return 0;
@@ -241,7 +242,8 @@ export function erzeugeKontrollBuehne(leinwand) {
     an(bahnhof + 2, 2);
     // der Zug rückt vor
     const weit = bahnhof - 12;
-    const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, ZUEGE_BIS_HALT) / ZUEGE_BIS_HALT));
+    const gesamt = z.zuegeGesamt || ZUEGE_BIS_HALT;
+    const vorn = Math.round(1 + 7 + weit * (1 - begrenze(bild.strecke, 0, gesamt) / gesamt));
     for (let x = vorn - 7; x <= vorn; x++) for (let y = gleis - 3; y <= gleis; y++) an(x, y);
     an(vorn - 5, gleis - 2);
     an(vorn - 2, gleis - 2);
@@ -335,6 +337,39 @@ export function erzeugeKontrollBuehne(leinwand) {
     stift.restore();
   }
 
+  // Im Lernhalt höchstens zwei Hinweiswörter, je im passenden Moment, als Schild unter dem Kontrolleur:
+  // "Wischen" vor dem ersten Zug, "Antippen", solange er in der Reihe des Fahrgasts ohne Fahrkarte steht.
+  function welcherHinweis() {
+    if (!z || !z.lernhalt || z.status !== 'faehrt' || laeufer.length) return null;
+    if (z.zug === 0) return KONTROLLTEXTE.hinweis.wischen;
+    const s = z.fahrgaeste.find((f) => f.schwarz);
+    if (s.y === z.k.y) return KONTROLLTEXTE.hinweis.antippen;
+    return null;
+  }
+
+  function maleHinweis() {
+    const text = welcherHinweis();
+    if (!text) return;
+    const { s, boden } = masse;
+    const raster = masse.tafel.raster;
+    const breit = textBreite(text);
+    const b = breit * raster + 16;
+    const h = ZEILENHOEHE * raster + 10; // mit Unterlängen, sonst wird aus dem p ein o
+    const x = Math.round(Math.max(4, Math.min(masse.breite - b - 4, boden.x + (KONTROLLGANG + 0.5) * s - b / 2)));
+    let y = Math.round(boden.y + (bild.k.py + 1.02) * s);
+    if (y + h > masse.warten.y - 4) y = Math.round(boden.y + bild.k.py * s - h - 4); // unten kein Platz: darüber
+    stift.fillStyle = 'rgba(12, 10, 6, 0.92)';
+    rundesRechteck(stift, x, y, b, h, 5);
+    stift.fill();
+    stift.strokeStyle = FARBE.tafelRand;
+    stift.lineWidth = 1;
+    rundesRechteck(stift, x + 0.5, y + 0.5, b - 1, h - 1, 5);
+    stift.stroke();
+    const feld = neuesPunktfeld(breit, ZEILENHOEHE);
+    schreibe(feld, text, 0, 0);
+    zeichnePunktfeld(stift, feld, x + 8, y + 5, raster, FARBE.bernstein, null);
+  }
+
   function maleKontrolleur() {
     const { s, boden } = masse;
     const k = bild.k;
@@ -360,6 +395,7 @@ export function erzeugeKontrollBuehne(leinwand) {
     if (!ruhig && ruck > 0) stift.translate(0, Math.round(Math.sin(ruck * Math.PI) * 3));
     maleWelt(jetzt);
     stift.restore();
+    maleHinweis();
     maleStrecke();
     maleTonschalter(stift, masse.ton, tonAn);
     maleKnopf(masse.warten, KONTROLLTEXTE.warten, begrenze(1 - (jetzt - wirkung.warten) / 140, 0, 1));
@@ -397,5 +433,6 @@ export function erzeugeKontrollBuehne(leinwand) {
       tonAn = an;
     },
     masse: () => masse,
+    hinweis: () => welcherHinweis(),
   };
 }

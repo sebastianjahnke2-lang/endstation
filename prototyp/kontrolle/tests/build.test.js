@@ -15,19 +15,21 @@ test('Kontrolle: index.html entspricht dem Stand der Quellen', () => {
   assert.ok(readFileSync(KONTROLLZIEL, 'utf8') === gebaut, 'prototyp/kontrolle/index.html ist veraltet: npm run build');
 });
 
-test('Kontrolle: lädt nichts nach, spricht mit keinem Netz, speichert nichts', () => {
+test('Kontrolle: lädt nichts nach, spricht mit keinem Netz, speichert nur unter eigenem Schlüssel', () => {
   const verboten = [
     [/https?:\/\//i, 'Adresse mit http'],
     [/\b(?:src|href)\s*=\s*["'](?!data:|#)/i, 'Verweis auf eine andere Datei'],
     [/@import|url\(/i, 'CSS lädt etwas nach'],
     [/\bfetch\s*\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|\bimport\s*\(/, 'Netzwerkzugriff'],
     [/serviceWorker/, 'Service Worker'],
-    [/localStorage/, 'Speicher: Der Prototyp merkt sich nichts'],
   ];
   for (const [muster, was] of verboten) {
     const treffer = gebaut.match(muster);
     assert.equal(treffer, null, `${was}: "${treffer && treffer[0]}"`);
   }
+  assert.ok(gebaut.includes("'endstation.kontrolle.1'"));
+  assert.ok(!gebaut.includes("'endstation.1'") && !gebaut.includes("'endstation.freier-platz.1'"), 'fremder Speicher');
+  assert.equal(gebaut.match(/localStorage/g).length, 2, 'nur Lesen und Schreiben in speicher.js');
 });
 
 test('Kontrolle: Schrift nur als Punktmatrix, iPhone-Vorgaben, Ton erst nach einer Eingabe', () => {
@@ -40,10 +42,12 @@ test('Kontrolle: Schrift nur als Punktmatrix, iPhone-Vorgaben, Ton erst nach ein
   assert.equal(skript.match(/new Klasse\(\)/g).length, 1);
 });
 
-test('Kontrolle: nur Sprachmittel, die Safari seit iOS 13 kennt, und kein Zufall', () => {
+test('Kontrolle: nur Sprachmittel, die Safari seit iOS 13 kennt, Zufall nur für den Neustart', () => {
   const zuNeu = [/\?\.[A-Za-z_(\[]/, /\?\?/, /\bstructuredClone\b/, /\.replaceAll\(/, /\.at\(/, /\bObject\.hasOwn\b/];
   for (const muster of zuNeu) assert.equal(skript.match(muster), null, String(muster));
   assert.equal(skript.match(/Math\.random|Date\.now|new Date/), null);
+  // der einzige Zufall von außen: ein Seed beim Öffnen, er wählt nur die Ordnungen der Neustarts
+  assert.equal(skript.match(/getRandomValues/g).length, 1);
 });
 
 test('Kontrolle: Hauptspiel und "Der freie Platz" bleiben unberührt', () => {

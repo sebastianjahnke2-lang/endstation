@@ -6,9 +6,10 @@ import { KONTROLLTEXTE, setzeKontrollText } from '../src/texte.js';
 import { berechneMasse, FREI_UNTEN } from '../../freier-platz/src/anzeige/masse.js';
 import { textBreite, ZEILENHOEHE } from '../../../src/anzeige/matrix.js';
 
-test('nur zwei Texte, keine Erklärung, kein Lob, keine Wertung', () => {
-  assert.deepEqual(Object.keys(KONTROLLTEXTE), ['warten', 'schluss']);
-  const alle = Object.values(KONTROLLTEXTE).join(' ').toLowerCase();
+test('nur diese Texte, keine Erklärung, kein Lob, keine Wertung. Zwei Hinweiswörter, je ein Wort', () => {
+  assert.deepEqual(Object.keys(KONTROLLTEXTE), ['warten', 'schluss', 'hinweis']);
+  assert.deepEqual(KONTROLLTEXTE.hinweis, { wischen: 'Wischen', antippen: 'Antippen' });
+  const alle = [KONTROLLTEXTE.warten, KONTROLLTEXTE.schluss, ...Object.values(KONTROLLTEXTE.hinweis)].join(' ').toLowerCase();
   for (const wort of ['gut', 'super', 'toll', 'punkte', 'geschafft', 'gewonnen', 'verloren', 'leider', 'bravo', 'schwarz']) {
     assert.ok(!new RegExp(`\\b${wort}\\b`).test(alle), wort);
   }
@@ -30,5 +31,7 @@ for (const [b, h] of [[360, 600], [375, 548], [390, 664], [390, 844], [430, 739]
     // die längste Schlusszeile passt in die Breite
     const breit = (textBreite(setzeKontrollText(KONTROLLTEXTE.schluss, { n: 3, m: 3 })) + 8) * m.tafel.raster + 12;
     assert.ok(breit <= b - 20, `Schlusszeile ${breit} Pixel`);
+    // das längste Hinweisschild passt neben den Gang, ohne aus dem Bild zu ragen
+    for (const wort of Object.values(KONTROLLTEXTE.hinweis)) assert.ok(textBreite(wort) * m.tafel.raster + 16 <= b - 8, wort);
   });
 }
