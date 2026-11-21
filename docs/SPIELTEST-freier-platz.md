@@ -1,12 +1,12 @@
 # Spieltest: „Der freie Platz"
 
-Der Prototyp soll eine Frage beantworten: Erschließen Spieler die Regel allein aus dem, was sie sehen, ohne Erklärung, ohne Zeitdruck, mit einem Daumen? Und ist das trocken-komisch statt mühsam?
+Der Prototyp soll eine Frage beantworten: Erschließen Spieler die Regel allein aus dem, was sie sehen, ohne Erklärung, ohne Zeitdruck, mit einem Daumen? Und ist das trocken-komisch statt mühsam? Seit dem 21.11. eine zweite: Fühlt sich der Wagen mit Musik geborgener und ruhiger an, sodass man ihn gern noch einmal spielt?
 
 ## Ablauf
 
 - Drei bis fünf Personen, die die Idee nicht kennen. Die Hälfte spielt ohne Ton.
 - Einziger Satz vorab: „Spiel mal."
-- Der Ton ist beim Start aus. Wer mit Ton spielen soll, tippt vorher oben rechts auf den Lautsprecher.
+- Der Ton ist beim Start an (seit dem 21.11.). Wer ohne Ton spielen soll, tippt vorher oben rechts auf den Lautsprecher. Am iPhone muss der Stummschalter an der Seite aus sein, sonst bleibt es still.
 - Nichts erklären, nichts zeigen, nicht nicken.
 
 ## Beobachten
@@ -17,10 +17,12 @@ Der Prototyp soll eine Frage beantworten: Erschließen Spieler die Regel allein 
 - **Wenn der Schatten auf den Schuhen des Schaffners landet:** Schmunzeln oder Stirnrunzeln?
 - **Erreicht der Daumen die Lampe in Reihe 2 bequem?**
 
-## Danach zwei Fragen
+## Danach vier Fragen
 
 - „Was wollte der Schaffner?" Gut: Der Schatten kommt in eigenen Worten vor.
 - „Hat dich das Spiel bewertet?" Gut: nein.
+- „Wolltest du den Wagen noch einmal spielen?"
+- „Mit Ton oder ohne schöner?" Wer ohne Ton gespielt hat, spielt danach einmal mit Ton und umgekehrt, erst dann diese Frage.
 
 ## Faustregel
 

@@ -1,11 +1,12 @@
-# Stand (19.11., abends)
+# Stand (21.11.)
 
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
 - Etappe 2 aus `docs/FAHRPLAN.md`. Freigaben und Antworten wörtlich: `docs/auftraege/etappe-2-anweisungen.md`. Entscheidungen: `docs/ENTSCHEIDUNGEN.md` („Entschieden am 19.11.", „Etappe 2").
 - Etappe 2 ist vollständig gebaut: Kontrolleur (Mittelwagen), Aufbrechen jeder Tür, Präsenz, Stärken aus Schatten, Speisewagen mit Gönnen und Gesichtern, Fahrkarte mit Angeboten und Lochungen, Begleiter, Halt mit Rückblick und Schlussbild, und zuletzt die Wiederholung beim Begleiter („Noch mal").
-- Pull Request #2 ist in `main` übernommen (alles außer der Wiederholung). Die Wiederholung liegt im Zweig `claude/exciting-brahmagupta-8qmtsg`, Pull Request #3 ist angelegt (20.11.) und wartet darauf, dass der Auftraggeber ihn übernimmt.
+- Pull Request #2 und #3 sind in `main` übernommen, Etappe 2 mit Wiederholung ist spielbar.
+- 21.11.: Prototyp-Nachtrag „18. MUSIK ALS ECHO" (wörtlich am Ende von `docs/auftraege/freier-platz.md`) ist gebaut: `prototyp/freier-platz/src/musik.js` (Partitur), `ton.js` (Klang), Abschluss erst nach Ausklang und 2 s Stille, Ton beim Start an. Neuer Pull Request für die Musik wartet auf Übernahme.
 - Wartet auf den Auftraggeber: Abnahme Etappe 1 (vier Prüffragen im Fahrplan), Rückmeldung Etappe 2, Spieltest des Prototyps.
 - Prototyp „Der freie Platz": fertig. Auftrag `docs/auftraege/freier-platz.md`, Spieltest `docs/SPIELTEST-freier-platz.md`.
 - Dauerhafte Arbeitsweise: `docs/auftraege/sichern-und-weiterarbeiten.md`.
@@ -23,12 +24,13 @@ Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt baue
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests
 
 ## Tests
-- `npm run build`, dann `npm test`: 250 Tests, alle grün, keiner schlägt fehl.
+- `npm run build`, dann `npm test`: 260 Tests, alle grün (neu: `prototyp/freier-platz/tests/musik.test.js`).
 - `npm run balance`: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
+- Prototyp im Browser: `fotos.mjs` bei 390x844, 360x600 und 390x844 mit Notch: 0 Mängel, hört jetzt mit (kein Ton vor der ersten Eingabe, Grundklang, Warteton, Stille an der Tür). Nur Chromium.
 - Browser: `node werkzeug/bedienung.mjs` bei den sechs Größen aus `CLAUDE.md` und `node werkzeug/begleiter.mjs` bei 390x844 und 360x600: 0 Mängel. Nur Chromium mit iPhone-Profil, kein WebKit, kein echtes iPhone.
 
 ## Nächster Schritt
-Nichts bauen. Auf die Rückmeldung des Auftraggebers warten. Etappe 3 erst, wenn er sie freigibt.
+Nichts bauen, nichts Neues, bis der Auftraggeber sich meldet (Auftrag vom 21.11.). Etappe 3 erst, wenn er sie freigibt.
 
 ## Abweichungen vom Auftrag (Gründe in `docs/ENTSCHEIDUNGEN.md`)
 - Tod vor dem Speisewagen: Die nächste Fahrt beginnt vorn, nicht im Speisewagen. Sonst würden Wagen übersprungen, die man nie geschafft hat.
@@ -44,9 +46,10 @@ Nichts bauen. Auf die Rückmeldung des Auftraggebers warten. Etappe 3 erst, wenn
 - Etappe 1: Versteht man es ohne Erklärung? Ist jeder Tod nachvollziehbar? Kommt man in einen Fluss? Will man noch eine Fahrt?
 - Etappe 2: Findet man heraus, dass der Kontrolleur Ruhige durchlässt? Fühlt sich der Speisewagen sicher an? Wirkt der Begleiter aufbauend? Erkennt man das Angebot als Prüfung? Hilft „Noch mal", den Tod zu verstehen?
 - Ist der Schaffner aus dem Prototyp dieselbe Figur wie Kontrolleur und Begleiter?
-- Ergebnis des Spieltests zum Prototyp.
+- Ergebnis des Spieltests zum Prototyp, auch: Mit Ton oder ohne schöner? Fühlt sich die Stille an der Tür ruhig an oder wie Warten?
 
 ## Am iPhone testen
-- Hauptspiel: https://sebastianjahnke2-lang.github.io/endstation/ zeigt `main`, also Etappe 2 ohne die Wiederholung. Die Wiederholung ist erst spielbar nach „Merge pull request" und „Confirm merge" unter https://github.com/sebastianjahnke2-lang/endstation/pull/3
+- Hauptspiel: https://sebastianjahnke2-lang.github.io/endstation/ zeigt `main`, also Etappe 2 mit Wiederholung.
+- Musik im Prototyp: erst nach Übernahme des neuen Pull Requests.
 - Prototyp: https://sebastianjahnke2-lang.github.io/endstation/prototyp/freier-platz/
 - GitHub Pages ist laut Auftraggeber aktiv. Von hier aus lässt sich die Adresse nicht prüfen.

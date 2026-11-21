@@ -8,6 +8,7 @@ import { ladePlatzStand, sicherePlatzStand, legeKarteAb } from './speicher.js';
 import { leeresProtokoll, schreibeMit, protokollZeilen } from './protokoll.js';
 import { tatsachenZeilen } from './texte.js';
 import { erzeugePlatzTon } from './ton.js';
+import { notenZu, mitlaufNoten } from './musik.js';
 
 const ANSTOSS_SPERRE = 320; // nach dem Anstoßen wird so lange keine Eingabe angenommen und keine vorgemerkt
 const LANGER_DRUCK = 650; // so lange auf die Zuganzeige drücken öffnet das Testprotokoll
@@ -27,6 +28,7 @@ let protokollBeginnt = true; // die erste Eingabe einer Fahrt beginnt ein neues 
 function beginneFahrt() {
   fahrt = erzeugeFahrt();
   protokollBeginnt = true;
+  klang.neueFahrt();
   buehne.neueFahrt(fahrt.zustand);
 }
 
@@ -45,9 +47,11 @@ function gibEin(handlung, quelle) {
   }
   if (jetzt < gesperrtBis) return;
   buehne.beschleunige(jetzt);
+  const rundeVorher = fahrt.zustand.runde;
   const ereignisse = fahrt.act(handlung);
   if (!ereignisse.length) return;
   buehne.spiele(ereignisse, fahrt.zustand, jetzt);
+  klang.spiele(mitlaufNoten(ereignisse, fahrt.zustand, rundeVorher));
   if (ereignisse[0].typ === 'anstoss') gesperrtBis = jetzt + ANSTOSS_SPERRE;
 
   // Testprotokoll der Fahrt, nach jeder Eingabe gesichert: So bleibt auch eine abgebrochene Fahrt lesbar.
@@ -76,10 +80,10 @@ function tippe(x, y) {
     klang.wecke();
     beginneFahrt();
   } else if (ziel.art === 'ton') {
-    stand.ton = !stand.ton;
-    klang.setze(stand.ton);
+    stand.musik = !stand.musik;
+    klang.setze(stand.musik);
     klang.wecke();
-    buehne.setzeTon(stand.ton);
+    buehne.setzeTon(stand.musik);
     sicherePlatzStand(stand);
   } else if (ziel.art === 'warten') {
     gibEin('warten', 'tipp');
@@ -129,9 +133,9 @@ if (/[#&]probe\b/.test(window.location.hash)) {
   window.platzStand = () => JSON.stringify(stand);
 }
 
-klang.setze(stand.ton);
-buehne.setzeTon(stand.ton);
-buehne.melder.klang = (name) => klang.spiele(name);
+klang.setze(stand.musik);
+buehne.setzeTon(stand.musik);
+buehne.melder.klang = (e) => klang.spiele(notenZu(e));
 buehne.passeAn();
 beginneFahrt();
 // Vor der Eingabe angemeldet, damit gibEin() weiß, welche Taste es war.

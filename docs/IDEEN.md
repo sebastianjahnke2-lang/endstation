@@ -8,6 +8,8 @@ Was nicht im Fahrplan steht, wird hier notiert und nicht gebaut. Jede Idee mit e
 - **Weg zur Tür abkürzen.** Ist der Wagen leer, sind es bis zu zehn Schritte ohne Entscheidung. Löst: Leerlauf. Offen ist, wie, ohne dem Spieler die Figur aus der Hand zu nehmen.
 - **Kämpfen belohnen.** Der Kämpfer-Bot erreicht den Halt in Etappe 1 nie. Falls das nach Etappe 2 (Speisewagen, Tür aufbrechen) so bleibt, braucht der Weg des Kämpfens etwas Eigenes.
 
+- **Parallelzug.** Vom Auftraggeber am 21.11., im Wortlaut: „Parallelzug: ein Wagen, durch dessen Fenster ein weiterentwickeltes Japan zu sehen ist. Nur Idee." Hinweis: Der Prototyp-Auftrag verbietet für den freien Platz ausdrücklich Landschaft vor den Fenstern. Das gilt dort, für einen eigenen Wagen wäre es neu zu entscheiden.
+
 ## Erster Eindruck (bauen frühestens nach Etappe 3)
 
 Vom Auftraggeber, im Wortlaut:

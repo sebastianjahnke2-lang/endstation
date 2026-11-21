@@ -6,6 +6,7 @@
 
 import { GANGSPALTE, LAMPEN, LAMPENNAMEN, SCHRITTE, TASCHENPLATZ, SCHLAEFERPLATZ, WACHERPLATZ, ZIELTUER, istSitz } from '../kern/abteil.js';
 import { lichtrichtung } from '../kern/licht.js';
+import { ABSCHLUSS_NACH } from '../musik.js';
 import { PLATZTEXTE, tatsachenZeilen } from '../texte.js';
 import { FARBE, rundesRechteck, begrenze, sanft, hinUndHer } from '../../../../src/anzeige/formen.js';
 import { neuesPunktfeld, schreibe, schreibeMittig, zeichnePunktfeld, textBreite, ZEILENHOEHE } from '../../../../src/anzeige/matrix.js';
@@ -151,8 +152,9 @@ export function erzeugeBuehne(leinwand) {
     laeufer.push({ start, dauer, schritt, bleibt: bleibt === true });
   }
 
-  function klinge(name) {
-    if (melder.klang) melder.klang(name);
+  // Die Musik hört jedes Ereignis in dem Augenblick, in dem es zu sehen ist, auch abgekürzt.
+  function klinge(e) {
+    if (melder.klang) melder.klang(e);
   }
 
   // ---------------------------------------------------------------- Ereignisse
@@ -180,6 +182,7 @@ export function erzeugeBuehne(leinwand) {
   // Zeigt ein Ereignis. sofort: ohne Bewegung, weil eine Eingabe das Abspielen abgekürzt hat.
   // Was dann zu sehen sein muss, stellt gleicheAb() aus dem Zustand her. Nur der Satz bliebe sonst ungesehen.
   function wendeAn(e, jetzt, sofort) {
+    klinge(e);
     if (sofort) {
       if ((e.typ === 'satz' || (e.typ === 'wartet' && e.satz)) && !ende) zeigeBlase();
       return;
@@ -191,7 +194,6 @@ export function erzeugeBuehne(leinwand) {
     if (e.typ === 'schritt') {
       s.x = e.nach.x;
       s.y = e.nach.y;
-      klinge('schritt');
       bewege(jetzt, DAUER.schritt, (p) => {
         const q = sanft(p);
         s.px = e.von.x + (e.nach.x - e.von.x) * q;
@@ -220,7 +222,6 @@ export function erzeugeBuehne(leinwand) {
       });
     } else if (e.typ === 'nimmt') {
       const t = bild.tasche;
-      klinge('nimmt');
       bewege(jetzt, DAUER.nimmt, (p) => {
         const q = sanft(p);
         t.px = e.von.x + (s.px - e.von.x) * q;
@@ -235,7 +236,6 @@ export function erzeugeBuehne(leinwand) {
       const l = bild.lampen[e.name];
       const von = l.w;
       const nach = e.stellung === 'gang' ? 1 : 0;
-      klinge('klick');
       bewege(jetzt, DAUER.lampe, (p) => {
         l.w = von + (nach - von) * sanft(p);
       });
@@ -315,7 +315,6 @@ export function erzeugeBuehne(leinwand) {
         k.zettel = p < 0.2 ? p / 0.2 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.2) : 1;
         if (p >= 0.34 && !geknipst) {
           geknipst = true;
-          klinge('knips');
           lasseSchnipselFallen(schein.x, schein.y, jetzt + DAUER.locht * 0.34);
           if (istSpieler) {
             // die Lochung entsteht auf der Fahrkarte
@@ -339,7 +338,6 @@ export function erzeugeBuehne(leinwand) {
       });
     } else if (e.typ === 'schaffnerSchritt') {
       k.blick = 'hoch';
-      klinge('schritt');
       bewege(jetzt, e.gross ? 320 : 200, (p) => {
         k.py = e.von.y + (e.nach.y - e.von.y) * sanft(p);
         // über einen Schatten im Gang macht er einen sichtbar großen Schritt
@@ -380,7 +378,6 @@ export function erzeugeBuehne(leinwand) {
       k.zeigt = null;
       k.streck = 0;
       k.blick = 'hoch';
-      klinge('schritt');
       bewege(jetzt, DAUER.draengt, (p) => {
         const q = sanft(p);
         s.px = e.von.x + (e.nach.x - e.von.x) * q;
@@ -416,9 +413,9 @@ export function erzeugeBuehne(leinwand) {
       // Schienenstoß: Das Bild ruckt, beide Lampen schwingen, ihre Schatten zucken. Ta-tack.
       wirkung.stoss = jetzt;
       wirkung.stossZange = e.zange;
-      klinge('tatack');
     } else if (e.typ === 'ende') {
-      zeigeEnde(e.tatsachen, e.lochung, e.runde, jetzt + 300);
+      // erst klingt alles aus, dann zwei Sekunden Stille, dann der Abschluss. Auch ohne Ton gleich lang.
+      zeigeEnde(e.tatsachen, e.lochung, e.runde, jetzt + ABSCHLUSS_NACH * 1000);
     }
   }
 

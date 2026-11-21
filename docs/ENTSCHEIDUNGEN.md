@@ -17,7 +17,9 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 
 - **Daumenzone unten oder Knöpfe oben.** Auftrag, Abschnitt 4: unten links die Fahrkarte, unten rechts der Knopf „Warten". Vorhanden (`CLAUDE.md`, „iPhone hat Vorrang"): „Nichts zum Antippen am unteren Rand", Uhr und Lautsprecher sitzen oben. Vorläufig gebaut: Die Daumenzone liegt unten, hält aber denselben Abstand zum Rand, den das Hauptspiel unter seinem untersten Feld freilässt (26 Pixel, dazu der Home-Balken). Der Lautsprecher sitzt wie im Hauptspiel oben rechts. Zu klären am Gerät: Kommt die Leiste von Safari dem Knopf in die Quere?
 - **Abspielen der Ereignisse.** Auftrag, Abschnitt 11: Ereignisse nacheinander, je 150 bis 350 ms, dabei höchstens eine Eingabe vormerken. Vorhanden (Fahrplan, Etappe 1): keine Bewegung über 150 ms, Eingaben schneiden Bewegungen ab, niemand wartet auf das Spiel. Vorläufig gebaut: Die Ereignisse laufen nacheinander mit den Zeiten des Auftrags, aber jede neue Eingabe springt sofort ans Ende, wie im Hauptspiel. Nur nach dem Anstoßen verfallen Eingaben für 0,3 Sekunden, damit ein doppelter Wisch nicht versehentlich drängt. Preis: Wer schnell tippt, sieht Übergänge nicht, nur ihr Ergebnis.
-- **Ton beim Start.** Auftrag: aus. Hauptspiel (eigene Entscheidung aus Etappe 1): an, aber leise. Vorläufig: Im Prototyp ist er aus, im Hauptspiel unverändert an. Offen ist, was später für das ganze Spiel gilt.
+- **Ton beim Start.** Auftrag vom 18.11.: aus. Nachtrag vom 21.11. (Abschnitt 18): für den Test mit Musik an. Hauptspiel (eigene Entscheidung aus Etappe 1): an, aber leise. Im Prototyp jetzt an, im Hauptspiel unverändert an. Offen ist, was später für das ganze Spiel gilt.
+- **Zwei Sekunden Stille an der Tür.** Abschnitt 18: An der Tür klingt alles aus, dann zwei Sekunden Stille, dann der Abschluss. Vorhanden (Fahrplan, Etappe 1, und „Reibung ist ein Fehler"): niemand wartet auf das Spiel. Gebaut wie im Nachtrag: Das Abschlussbild kommt 3,4 Sekunden nach dem Schritt durch die Tür (1,4 Ausklang, 2 Stille), auch ohne Ton, damit der Vergleich mit und ohne Ton fair bleibt. Zu klären im Spieltest: Fühlt sich die Pause ruhig an oder wie Warten?
+- **Musik und harte Regel „Ohne Ton fehlt keine Information".** Die Musik doppelt nur, was zu sehen ist. Einzige Grenze: Das Motiv läuft nach der Lochung leise mit, sichtbar ist die Lochung auf der Fahrkarte. Kein Widerspruch, nur vermerkt.
 - **Testprotokoll.** Auftrag, Abschnitt 12: Das Spiel schreibt mit, was in der letzten Fahrt geschah. Vorhanden (`CLAUDE.md`, „Nicht tun"): keine Analyse-Skripte, in Etappe 0 gedeutet als „Skripte, die im Spiel Nutzungsdaten sammeln". Vorläufig gebaut, weil der Spieltest es braucht: Das Protokoll liegt nur auf dem Gerät, wird nirgends hingeschickt und ist nur mit langem Druck auf die Zuganzeige zu sehen.
 - **Neustart.** Auftrag: Knopf „Neue Fahrt". Fahrplan, Etappe 1: Endkarte nach oben wegwischen. Etappe 2: Knöpfe „Aussteigen" und „Noch eine Fahrt". Vorläufig: nur der Knopf.
 - **Zuganzeige.** Auftrag: „Wagen 7". Hauptspiel: Wagennummer und Wagenname („1 | Sitzwagen"). Vorläufig: wie im Auftrag.
@@ -39,6 +41,19 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 ## Prototyp „Der freie Platz"
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
+
+### Musik als Echo (Prototyp, 21.11., Abschnitt 18)
+
+- Tonleiter: a-Moll pentatonisch (a c d e g), leicht melancholisch, ohne Halbtöne. Alle Töne weich, nur Sinus.
+- Grundklang: A2 (110 Hz) als Dreieck durch einen weichen Filter, leise Quinte darüber, atmet langsam. Tiefer nicht, weil ein iPhone-Lautsprecher darunter kaum etwas wiedergibt. Er beginnt mit der ersten Eingabe einer Fahrt und schwillt über 2,5 Sekunden an.
+- Schienenstoß: zwei weiche tiefe Pulse (ta-tack) statt des Rauschens, wie bisher jede dritte Runde.
+- Gehen: ein Ton je Schritt, je näher die Tür, desto höher. Vorbeidrängen ist auch Gehen. Benutzen: Tasche nehmen und Wecken je ein eigener Ton. Warten: ein tiefer Ton.
+- Stumm: gegen die Wand, zu weit, ins Leere, Anstoßen, den Schaffner antippen (er wiederholt den Satz, sein Warteton folgt ohnehin), seine Schritte, sein Nicken. Das Knipsen der Zange und das Rauschen der Schritte sind weg, das Motiv ersetzt sie.
+- Motiv des Schaffners: e – g – a – d. Wartet er, klingt nur das e. Locht er jemanden, klingt das ganze Motiv, auch beim wachen Fahrgast in Reihe 6. So hört man es einmal vollständig, bevor er beim Spieler nur noch das e hat. Leise mitlaufen in jeder Runde erst, wenn der Spieler gelocht ist.
+- Schlafender: Wartet der Schaffner in Reihe 2, klingt das e eine Oktave tiefer und leiser. Grüßt er (oder locht den Geweckten), das ganze Motiv tiefer und leiser, danach läuft es tiefer mit.
+- Lampe: Gleiten zwischen zwei Tönen, zum Gang hinauf, zum Fenster hinunter. Lampe B liegt einen Ton tiefer als A.
+- Die Partitur steht als reine Logik in `prototyp/freier-platz/src/musik.js` und ist in Node getestet, `ton.js` spielt sie nur.
+- Gespeichert wird „Musik an/aus" unter einem neuen Feld. Das alte Feld „Ton" (beim Start aus) wird nicht mehr gelesen, sonst bliebe es bei allen, die den Prototyp schon geöffnet hatten, still.
 
 ### Aufbau
 
