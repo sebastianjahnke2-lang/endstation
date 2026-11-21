@@ -2,7 +2,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { erzeugeKontrolle, nachbarAufSeite, KONTROLLSTART } from '../src/kern/kontrolle.js';
+import { nachbarAufSeite, KONTROLLSTART } from '../src/kern/kontrolle.js';
+import { erzeugeKontrolle } from '../src/kern/durchgang.js';
 import { HALTE, ZUEGE_BIS_HALT } from '../src/kern/halte.js';
 
 const typen = (e) => e.map((x) => x.typ);
@@ -147,14 +148,20 @@ test('Nach drei Halten: wie viele erwischt. Eine Eingabe beginnt sofort neu', ()
   }
   assert.equal(spiel.zustand.status, 'aus');
   assert.deepEqual(spiel.act('hoch'), [{ typ: 'neuerHalt', halt: 0 }]);
+  assert.equal(spiel.zustand.durchgang, 1);
   assert.equal(spiel.zustand.rest, ZUEGE_BIS_HALT);
   assert.deepEqual(spiel.zustand.ergebnisse, []);
 });
 
 test('Gleiche Eingaben ergeben gleichen Verlauf', () => {
   const folge = ['hoch', 'warten', 'links', 'rechts', 'hoch', tipp(2, 4), 'runter', 'hoch', 'hoch', 'rechts', 'hoch', 'hoch', 'weiter', 'hoch', 'hoch', 'links'];
-  const a = erzeugeKontrolle();
-  const b = erzeugeKontrolle();
-  for (const h of folge) assert.deepEqual(a.act(h), b.act(h));
-  assert.deepEqual(a.zustand, b.zustand);
+  for (const seed of [0, 7, 123456]) {
+    const a = erzeugeKontrolle(seed);
+    const b = erzeugeKontrolle(seed);
+    for (const h of folge) assert.deepEqual(a.act(h), b.act(h));
+    // auch über den Neustart mit ausgelosten Ordnungen hinweg
+    for (let i = 0; i < 40; i++) assert.deepEqual(a.act('warten'), b.act('warten'));
+    assert.ok(a.zustand.durchgang >= 1);
+    assert.deepEqual(a.zustand, b.zustand);
+  }
 });

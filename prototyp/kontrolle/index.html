@@ -78,7 +78,8 @@ canvas {
 // Gedanke je Halt (Leitsatz 2 und 3, ein neuer Gedanke, gelernt im Spiel):
 //   1. Er sitzt nah und weicht beim ersten Schritt sichtbar aus, eine Reihe weiter.
 //   2. Vor ihm ist eine Reihe voll: Er springt weiter, und man holt ihn erst am Ende des Wagens ein.
-//   3. Er sitzt schon ganz vorn und kann nicht weg: Man sieht nur, dass er aufstehen will.
+//   3. Er sitzt schon ganz vorn zwischen anderen und kann nicht weg: Man sieht nur, dass er aufstehen will.
+// Diese drei spielt der erste Durchgang. Jeder Neustart lost neue aus (auslosen.js).
 
 const HALTE = [
   {
@@ -106,9 +107,9 @@ const HALTE = [
   {
     farbe: 'a',
     sitze: [
-      '.g|ZS',
+      'cg|SZ',
       'b.|..',
-      '..|c.',
+      '..|..',
       '.d|..',
       '..|.e',
       'f.|..',
@@ -144,25 +145,19 @@ function sitztAuf(z, x, y) {
   return z.fahrgaeste.find((f) => f.x === x && f.y === y) || null;
 }
 
-function richteHaltEin(z, nr) {
-  z.halt = nr;
+// Richtet einen Halt nach einer Sitzordnung ein ({ farbe, sitze }, siehe halte.js).
+function setzeHalt(z, ordnung) {
   z.status = 'faehrt';
   z.rest = ZUEGE_BIS_HALT;
   z.k = { y: KONTROLLSTART, blick: 'hoch' };
   z.fahrgaeste = [];
-  HALTE[nr].sitze.forEach((zeile, i) => {
+  ordnung.sitze.forEach((zeile, i) => {
     for (const x of SITZSPALTEN) {
       const c = zeile[x];
       if (c === '.' || c === '|') continue;
-      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe: c === 'S' ? HALTE[nr].farbe : c === 'Z' ? 'z' : c, schlaeft: c === 'Z', schwarz: c === 'S', ruht: 0, kontrolliert: false });
+      z.fahrgaeste.push({ nr: z.fahrgaeste.length, x, y: i + 1, farbe: c === 'S' ? ordnung.farbe : c === 'Z' ? 'z' : c, schlaeft: c === 'Z', schwarz: c === 'S', ruht: 0, kontrolliert: false });
     }
   });
-}
-
-function neueKontrolle() {
-  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
-  richteHaltEin(z, 0);
-  return z;
 }
 
 // Wen eine Wischbewegung zur Seite kontrolliert: den Fahrgast am Gang, sonst den am Fenster.
@@ -272,22 +267,229 @@ function spielerZieht(z, handlung, ereignisse) {
   return -1;
 }
 
-function kontrollZug(z, handlung) {
+// Ein Zug im laufenden Halt. Gibt die Ereignisse zurück, leer, wenn die Handlung nichts bewirkt.
+function haltZug(z, handlung) {
   const ereignisse = [];
-  if (z.status === 'faehrt') {
-    const zuege = spielerZieht(z, handlung, ereignisse);
-    if (zuege < 0) return []; // geht nicht: kostet nichts
-    z.zug += 1;
-    for (let i = 0; i < zuege && z.status === 'faehrt'; i++) wagenZieht(z, ereignisse);
-    return ereignisse;
+  if (z.status !== 'faehrt') return ereignisse;
+  const zuege = spielerZieht(z, handlung, ereignisse);
+  if (zuege < 0) return []; // geht nicht: kostet nichts
+  z.zug += 1;
+  for (let i = 0; i < zuege && z.status === 'faehrt'; i++) wagenZieht(z, ereignisse);
+  return ereignisse;
+}
+
+// Schnelle Kopie für die Suche in pruefung.js
+function kopiereKontrolle(z) {
+  const kopie = {};
+  for (const name of Object.keys(z)) kopie[name] = z[name];
+  kopie.k = { y: z.k.y, blick: z.k.blick };
+  kopie.fahrgaeste = z.fahrgaeste.map((f) => ({ nr: f.nr, x: f.x, y: f.y, farbe: f.farbe, schlaeft: f.schlaeft, schwarz: f.schwarz, ruht: f.ruht, kontrolliert: f.kontrolliert }));
+  kopie.ergebnisse = z.ergebnisse.slice();
+  return kopie;
+}
+
+// --- kern/zufall.js
+// Zufall mit Seed. Der Stand liegt im Spielzustand, damit jede Fahrt
+// mit demselben Seed und denselben Eingaben gleich verläuft.
+
+function naechsteZufallszahl(z) {
+  z.zufall = (z.zufall + 0x6d2b79f5) >>> 0;
+  let t = z.zufall;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// ganze Zahl von 0 bis n - 1
+function wuerfle(z, n) {
+  return Math.floor(naechsteZufallszahl(z) * n);
+}
+
+// --- ../prototyp/kontrolle/src/kern/pruefung.js
+// Prüft eine Sitzordnung, bevor sie gespielt wird. Reine Logik, auch für die Tests.
+// Eine Ordnung taugt, wenn sie
+//   - innerhalb der Züge lösbar ist, mit etwas Spielraum (vollständige Suche über alle Zustände),
+//   - nicht durch Durchkontrollieren der Reihe nach zu schaffen ist (von unten nach oben, jede Reihe
+//     von links nach rechts oder von rechts nach links),
+//   - für den zu schaffen ist, der hinsieht: wer aufsteht oder zuckt, dem folgt er,
+//   - und nicht alle Fahrgäste in den Zügen kontrolliert werden können.
+
+
+
+
+const KUERZESTE_HOECHSTENS = ZUEGE_BIS_HALT - 2; // wer einen Fehler macht, kann es noch schaffen
+const KUERZESTE_MINDESTENS = 3;
+
+function haltNach(ordnung) {
+  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [] };
+  setzeHalt(z, ordnung);
+  return z;
+}
+
+function moeglicheHandlungen(z) {
+  const liste = ['hoch', 'runter', 'warten'];
+  for (const f of z.fahrgaeste) if (f.y === z.k.y) liste.push({ tipp: 'feld', x: f.x, y: f.y });
+  return liste;
+}
+
+// Breitensuche: der kürzeste Weg zum Fang als Liste von Handlungen, oder null
+function kuerzesterFang(start) {
+  const schluessel = (z) => {
+    let text = `${z.k.y},${z.rest}`;
+    for (const f of z.fahrgaeste) if (f.schwarz || f.schlaeft) text += `|${f.x}${f.y}${f.ruht}${f.schlaeft ? 1 : 0}`;
+    return text;
+  };
+  let schicht = [{ z: start, weg: [] }];
+  const gesehen = new Set([schluessel(start)]);
+  while (schicht.length) {
+    const naechste = [];
+    for (const { z, weg } of schicht) {
+      for (const h of moeglicheHandlungen(z)) {
+        const neu = kopiereKontrolle(z);
+        if (!haltZug(neu, h).length) continue;
+        if (neu.status === 'gefangen') return weg.concat([h]);
+        if (neu.status !== 'faehrt') continue;
+        const k = schluessel(neu);
+        if (gesehen.has(k)) continue;
+        gesehen.add(k);
+        naechste.push({ z: neu, weg: weg.concat([h]) });
+      }
+    }
+    schicht = naechste;
   }
+  return null;
+}
+
+// Blind: von unten nach oben, jeden Fahrgast der Reihe nach kontrollieren. richtung: 'links' oder 'rechts'
+function durchkontrollieren(start, richtung) {
+  const z = kopiereKontrolle(start);
+  for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
+    const offen = z.fahrgaeste.filter((f) => f.y === z.k.y && !f.kontrolliert).sort((a, b) => (richtung === 'links' ? a.x - b.x : b.x - a.x))[0];
+    haltZug(z, offen ? { tipp: 'feld', x: offen.x, y: offen.y } : 'hoch');
+  }
+  return z.status;
+}
+
+// Wer hinsieht: geht nach vorn, merkt sich, wer aufsteht oder zuckt, und folgt ihm.
+function hinsehen(start) {
+  const z = kopiereKontrolle(start);
+  let verdacht = null;
+  for (let i = 0; i < 100 && z.status === 'faehrt'; i++) {
+    let h = 'hoch';
+    if (verdacht !== null) {
+      const f = z.fahrgaeste[verdacht];
+      if (f.y === z.k.y) h = { tipp: 'feld', x: f.x, y: f.y };
+      else h = f.y < z.k.y ? 'hoch' : 'runter';
+    }
+    for (const e of haltZug(z, h)) if (e.typ === 'wechselt' || e.typ === 'zuckt') verdacht = e.nr;
+  }
+  return z.status;
+}
+
+// Was es kostet, alle zu kontrollieren: jeder einen Zug, der Schlafende zwei, dazu der Weg nach vorn.
+function alleKontrollierenKostet(start) {
+  const vorderste = Math.min(...start.fahrgaeste.map((f) => f.y));
+  return start.fahrgaeste.reduce((summe, f) => summe + (f.schlaeft ? 2 : 1), 0) + (start.k.y - vorderste);
+}
+
+function pruefeOrdnung(ordnung) {
+  const z = haltNach(ordnung);
+  const weg = kuerzesterFang(z);
+  return {
+    kuerzeste: weg ? weg.length : null,
+    blindLinks: durchkontrollieren(z, 'links'),
+    blindRechts: durchkontrollieren(z, 'rechts'),
+    hinsehen: hinsehen(z),
+    alleKosten: alleKontrollierenKostet(z),
+  };
+}
+
+function ordnungTaugt(ordnung) {
+  const p = pruefeOrdnung(ordnung);
+  return p.kuerzeste !== null && p.kuerzeste >= KUERZESTE_MINDESTENS && p.kuerzeste <= KUERZESTE_HOECHSTENS &&
+    p.blindLinks !== 'gefangen' && p.blindRechts !== 'gefangen' && p.hinsehen === 'gefangen' && p.alleKosten > ZUEGE_BIS_HALT;
+}
+
+// --- ../prototyp/kontrolle/src/kern/auslosen.js
+// Neue Sitzordnungen für einen Neustart. Ausgelost wird nur zwischen den Halten, nie während eines Halts.
+// Jede Ordnung wird geprüft (pruefung.js): Wer nicht taugt, wird verworfen und neu gelost.
+// Neu verteilt werden die Plätze, der Schlafende und die Farben. Der Zufall kommt aus dem Zufallsmodul
+// des Hauptspiels, sein Stand liegt im Zustand: Gleicher Seed, gleiche Ordnungen.
+
+
+
+
+const ALLE_SITZE = [];
+for (let y = 1; y <= 6; y++) for (const x of [0, 1, 3, 4]) ALLE_SITZE.push({ x, y });
+const FARBEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+const FAHRGAESTE_JE_HALT = 8;
+const VERSUCHE_HOECHSTENS = 400;
+
+function mische(z, liste) {
+  const kopie = liste.slice();
+  for (let i = kopie.length - 1; i > 0; i--) {
+    const j = wuerfle(z, i + 1);
+    const t = kopie[i];
+    kopie[i] = kopie[j];
+    kopie[j] = t;
+  }
+  return kopie;
+}
+
+// Eine Ordnung ohne Prüfung: acht Plätze, der erste für ihn, der zweite für den Schlafenden.
+function roheOrdnung(z) {
+  const plaetze = mische(z, ALLE_SITZE).slice(0, FAHRGAESTE_JE_HALT);
+  const farben = mische(z, FARBEN);
+  const zeilen = [];
+  for (let y = 1; y <= 6; y++) zeilen.push(['.', '.', '|', '.', '.']);
+  plaetze.forEach((p, i) => {
+    zeilen[p.y - 1][p.x] = i === 0 ? 'S' : i === 1 ? 'Z' : farben[i - 1];
+  });
+  return { farbe: farben[0], sitze: zeilen.map((zeile) => zeile.join('')) };
+}
+
+// Lost eine taugliche Ordnung aus. z trägt den Zufallsstand.
+function losOrdnungAus(z) {
+  for (let i = 0; i < VERSUCHE_HOECHSTENS; i++) {
+    const ordnung = roheOrdnung(z);
+    if (ordnungTaugt(ordnung)) return ordnung;
+  }
+  return null; // kommt nicht vor (Test), dann nimmt der Durchgang die festen Ordnungen
+}
+
+// --- ../prototyp/kontrolle/src/kern/durchgang.js
+// Drei Halte hintereinander. Der erste Durchgang spielt die drei festen Sitzordnungen aus halte.js,
+// die nacheinander je einen Gedanken zeigen. Jeder Neustart lost drei neue aus (auslosen.js).
+// erzeugeKontrolle(seed) -> { zustand, act(handlung) }, act gibt Ereignisse zurück.
+
+
+
+
+
+function neueKontrolle(seed) {
+  const z = { halt: 0, ergebnisse: [], status: 'faehrt', rest: 0, zug: 0, k: null, fahrgaeste: [], zufall: (seed || 0) >>> 0, durchgang: 0, ordnungen: HALTE.slice() };
+  setzeHalt(z, z.ordnungen[0]);
+  return z;
+}
+
+function neueOrdnungen(z) {
+  return HALTE.map((fest) => losOrdnungAus(z) || fest);
+}
+
+function kontrollZug(z, handlung) {
+  if (z.status === 'faehrt') return haltZug(z, handlung);
   // Nach dem Halt: Jede Eingabe führt zum nächsten Halt, nach dem dritten zum Schluss, danach neu.
+  const ereignisse = [];
   if (z.status === 'aus') {
     z.ergebnisse = [];
-    richteHaltEin(z, 0);
+    z.durchgang += 1;
+    z.ordnungen = neueOrdnungen(z);
+    z.halt = 0;
+    setzeHalt(z, z.ordnungen[0]);
     ereignisse.push({ typ: 'neuerHalt', halt: 0 });
-  } else if (z.halt < HALTE.length - 1) {
-    richteHaltEin(z, z.halt + 1);
+  } else if (z.halt < z.ordnungen.length - 1) {
+    z.halt += 1;
+    setzeHalt(z, z.ordnungen[z.halt]);
     ereignisse.push({ typ: 'neuerHalt', halt: z.halt });
   } else {
     z.status = 'aus';
@@ -296,8 +498,8 @@ function kontrollZug(z, handlung) {
   return ereignisse;
 }
 
-function erzeugeKontrolle() {
-  const zustand = neueKontrolle();
+function erzeugeKontrolle(seed) {
+  const zustand = neueKontrolle(seed);
   return { zustand, act: (handlung) => kontrollZug(zustand, handlung) };
 }
 
@@ -2117,7 +2319,18 @@ function erzeugeKontrollTon() {
 const leinwand = document.getElementById('bild');
 const buehne = erzeugeKontrollBuehne(leinwand);
 const ton = erzeugeKontrollTon();
-const spiel = erzeugeKontrolle();
+// Der Seed bestimmt nur, welche Sitzordnungen ein Neustart auslost. Der erste Durchgang ist immer gleich.
+// Mit #seed=Zahl an der Adresse ist auch jeder Neustart gleich (für die Prüfwerkzeuge).
+function seedFuerNeustart() {
+  const fest = /[#&]seed=(\d+)/.exec(window.location.hash);
+  if (fest) return Number(fest[1]);
+  try {
+    return window.crypto.getRandomValues(new Uint32Array(1))[0];
+  } catch (fehler) {
+    return Math.floor(performance.now() * 1000) >>> 0;
+  }
+}
+const spiel = erzeugeKontrolle(seedFuerNeustart());
 let tonAn = true;
 
 function gibEin(handlung) {

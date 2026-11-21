@@ -6,7 +6,7 @@
 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { erzeugeKontrolle } from '../src/kern/kontrolle.js';
+import { erzeugeKontrolle } from '../src/kern/durchgang.js';
 import { berechneMasse, feldMitte } from '../../freier-platz/src/anzeige/masse.js';
 import { oeffne, bilderOrdner } from '../../../werkzeug/browser.mjs';
 
@@ -14,13 +14,13 @@ const DATEI = join(dirname(fileURLToPath(import.meta.url)), '..', 'index.html');
 const [B, H] = (process.argv[2] || '390x844').split('x').map(Number);
 const ordner = bilderOrdner();
 const { browser, seite, motor, meldungen, wische, canvas } = await oeffne(B, H);
-await seite.goto(`file://${DATEI}#probe`);
+await seite.goto(`file://${DATEI}#probe&seed=4242`);
 await seite.waitForFunction(() => typeof window.kontrollZustand === 'function');
 await seite.waitForTimeout(200);
 
 const k = await canvas();
 const m = berechneMasse(k.b, k.h);
-const soll = erzeugeKontrolle();
+const soll = erzeugeKontrolle(4242);
 const maengel = [];
 let gleich = 0;
 const bild = (name) => seite.screenshot({ path: join(ordner, `kontrolle-${B}x${H}-${name}.png`) });
@@ -80,15 +80,17 @@ await seite.waitForTimeout(1500);
 await wisch('hoch', 300);
 for (let i = 0; i < 6; i++) await wisch("hoch", 200);
 await bild('8-halt-3-vorn');
-await tippFeld(4, 1, 1400);
+await tippFeld(3, 1, 1400);
 if (soll.zustand.status !== 'gefangen') maengel.push('Halt 3 müsste gefangen sein');
 
 // Schluss: eine Zeile, ein Tipp beginnt neu
 await tippFeld(2, 4, 600);
 await bild('9-schluss');
 if (soll.zustand.status !== 'aus') maengel.push('nach drei Halten müsste der Schluss kommen');
-await tippFeld(2, 4, 300);
+await tippFeld(2, 4, 400);
 if (soll.zustand.status !== 'faehrt' || soll.zustand.halt !== 0) maengel.push('ein Tipp müsste neu beginnen');
+await bild('10-neustart-ausgelost');
+if (JSON.stringify(soll.zustand.ordnungen[0]) === JSON.stringify(erzeugeKontrolle(4242).zustand.ordnungen[0])) maengel.push('beim Neustart müsste eine neue Sitzordnung kommen');
 
 for (const meldung of meldungen) maengel.push(`Konsole: ${meldung}`);
 console.log(`${B}x${H}: Engine ${motor}, Feld ${m.s} px, ${gleich} Eingaben stimmen mit dem Kern überein`);

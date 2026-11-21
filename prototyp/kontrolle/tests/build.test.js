@@ -40,10 +40,12 @@ test('Kontrolle: Schrift nur als Punktmatrix, iPhone-Vorgaben, Ton erst nach ein
   assert.equal(skript.match(/new Klasse\(\)/g).length, 1);
 });
 
-test('Kontrolle: nur Sprachmittel, die Safari seit iOS 13 kennt, und kein Zufall', () => {
+test('Kontrolle: nur Sprachmittel, die Safari seit iOS 13 kennt, Zufall nur für den Neustart', () => {
   const zuNeu = [/\?\.[A-Za-z_(\[]/, /\?\?/, /\bstructuredClone\b/, /\.replaceAll\(/, /\.at\(/, /\bObject\.hasOwn\b/];
   for (const muster of zuNeu) assert.equal(skript.match(muster), null, String(muster));
   assert.equal(skript.match(/Math\.random|Date\.now|new Date/), null);
+  // der einzige Zufall von außen: ein Seed beim Öffnen, er wählt nur die Ordnungen der Neustarts
+  assert.equal(skript.match(/getRandomValues/g).length, 1);
 });
 
 test('Kontrolle: Hauptspiel und "Der freie Platz" bleiben unberührt', () => {

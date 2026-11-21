@@ -1,7 +1,7 @@
 // Einstieg des Prototyps "Kontrolle": verbindet Kern, Bühne, Eingabe und Ton.
 // Kein Menü, kein Speicher: Beim Öffnen steht man sofort unten im Gang. Neu laden beginnt von vorn.
 
-import { erzeugeKontrolle } from './kern/kontrolle.js';
+import { erzeugeKontrolle } from './kern/durchgang.js';
 import { erzeugeKontrollBuehne } from './anzeige/buehne.js';
 import { verbindeEingabe } from '../../../src/eingabe.js';
 import { erzeugeKontrollTon } from './ton.js';
@@ -9,7 +9,18 @@ import { erzeugeKontrollTon } from './ton.js';
 const leinwand = document.getElementById('bild');
 const buehne = erzeugeKontrollBuehne(leinwand);
 const ton = erzeugeKontrollTon();
-const spiel = erzeugeKontrolle();
+// Der Seed bestimmt nur, welche Sitzordnungen ein Neustart auslost. Der erste Durchgang ist immer gleich.
+// Mit #seed=Zahl an der Adresse ist auch jeder Neustart gleich (für die Prüfwerkzeuge).
+function seedFuerNeustart() {
+  const fest = /[#&]seed=(\d+)/.exec(window.location.hash);
+  if (fest) return Number(fest[1]);
+  try {
+    return window.crypto.getRandomValues(new Uint32Array(1))[0];
+  } catch (fehler) {
+    return Math.floor(performance.now() * 1000) >>> 0;
+  }
+}
+const spiel = erzeugeKontrolle(seedFuerNeustart());
 let tonAn = true;
 
 function gibEin(handlung) {

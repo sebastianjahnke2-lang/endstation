@@ -43,3 +43,9 @@ TESTS
 
 ABGABE
 Pull Request, Adresse zum Testen am iPhone, fünf Zeilen Bericht. Danach nichts Neues, bis ich mich melde.
+
+---
+
+Nachtrag vom 21.11., wörtlich (Antwort auf die offene Frage zu festen Sitzordnungen):
+
+Zu Punkt 5: Ja. Beim Neustart neue Sitzordnungen auslosen, innerhalb eines Halts bleibt es ohne Zufall. Jede ausgeloste Ordnung muss lösbar sein und darf nicht durch Durchkontrollieren der Reihe nach zu schaffen sein, das prüft ein Test. Auch der schlafende Fahrgast und die Farben werden neu verteilt. Danach Pull Request und kurzer Bericht.
