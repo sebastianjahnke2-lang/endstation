@@ -6,10 +6,12 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Technik und Etappen: `docs/FAHRPLAN.md`
 - Eigene Detailentscheidungen: `docs/ENTSCHEIDUNGEN.md`
 - Ideen außerhalb des Fahrplans: `docs/IDEEN.md`
+- Leitsätze: `docs/PRINZIPIEN.md`
 
 ## Zu Beginn jeder Sitzung
 1. Diese Datei und `docs/FAHRPLAN.md` lesen.
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
+3. docs/PRINZIPIEN.md lesen. Jede Änderung nennt den Leitsatz, dem sie dient.
 
 ## Weiterarbeiten
 - Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
@@ -20,9 +22,11 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 ## Etappenstand
 - Etappe 0, Wissen ins Repo: **fertig**.
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
-- Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Danach gebaut, noch nicht in `main` (Pull Request #3): Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
+- Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Pull Request #3 ist ebenfalls in `main`: Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
+- Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
+- Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`): **gebaut, wartet auf den Test am iPhone.** Ein Wagen, der Spieler ist der Kontrolleur. Eigener Ordner `prototyp/kontrolle/`.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
-- Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
+- Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
 Stand der Zahlen (500 Fahrten je Bot, `npm run balance`, sieben Wagen): Der ausgewogene Bot erreicht den Halt in 55 % der Fahrten, wenn jeder zwölfte Zug zufällig ist, in 86 % ohne Fehler und in 73 % mit Fehlern und allen Stärken. Wagen 1 bis 4 schafft er immer. Der Ausweicher kommt auf 60 %, der Kämpfer auf 0 %.
 
@@ -101,6 +105,7 @@ src/
     fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen
     begleiter.js    der Begleiter im Speisewagen nach einem Tod, „Noch mal" (die Wiederholung selbst in spiel.js)
     reise.js        was eine neue Fahrt mitnimmt (für main.js und die Werkzeuge)
+    fortsetzen.js   Fahrt fortsetzen: Seed und Eingaben aufzeichnen, beim Öffnen nachspielen
     spiel.js        erzeugeSpiel(seed, optionen) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
     anzeige.js      Ablauf, Bewegungen, Flusszustand, Hinweise
@@ -118,6 +123,7 @@ tests/
   ton.test.js       verbotene Wörter, Schrift, Textlängen
   layout.test.js    passt auf jedes Handy, nichts zum Antippen am unteren Rand
   speicher.test.js  leerer, gesperrter und kaputter Speicher
+  fortsetzen.test.js gespeicherte Fahrt nachspielen, kaputte Aufzeichnung
   build.test.js     index.html aktuell, eine Datei, kein Netz, iPhone-Vorgaben, Build-Regeln
   bots.js           die drei Bots und fahre()
   balance.js        Balance-Bericht
@@ -127,9 +133,16 @@ prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Haup
   build.js          baut ihn mit buendle() aus dem Build-Skript des Hauptspiels
   src/kern/         Regeln ohne DOM: abteil.js, licht.js, schaffner.js, fahrt.js
   src/anzeige/      masse.js (Aufteilung), gestalten.js, abteilbild.js, buehne.js (Ablauf)
-  src/              texte.js, speicher.js, protokoll.js, ton.js, main.js
+  src/              texte.js, speicher.js, protokoll.js, musik.js (Partitur, ohne DOM), ton.js, main.js
   tests/            Regeln, Abläufe, vollständige Suche, Aufteilung, Speicher, Texte, Build
   werkzeug/         fotos.mjs, szene.mjs: Selbstkontrolle im Browser
+prototyp/kontrolle/      Prototyp „Kontrolle": ein Wagen, der Spieler ist der Kontrolleur
+  build.js, index.html    wie beim freien Platz
+  src/kern/         halte.js (drei Sitzordnungen), kontrolle.js (Regeln ohne DOM)
+  src/anzeige/      buehne.js, figuren.js; leiht Aufteilung, Wagenbild und Figuren vom freien Platz
+  src/              texte.js, ton.js, main.js
+  tests/            Regeln, Lösbarkeit (vollständige Suche), Anzeige, Build
+  werkzeug/         fotos.mjs: alle drei Halte im Browser mit Bildern
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
 
@@ -163,20 +176,22 @@ node werkzeug/bedienung.mjs 390x844    Wischen, Tippen, Tasten, Endkarte, Speich
 node werkzeug/bedienung.mjs 390x844 47,34    dasselbe mit Notch und Home-Balken
 node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
 node werkzeug/begleiter.mjs 390x844    Tod, Begleiter, „Noch mal", Wiederholung im Browser mit Bildern
+node werkzeug/fortsetzen.mjs 390x844   Fahrt fortsetzen nach dem Neuladen, kaputter Speicher
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
+node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: alle drei Halte im Browser mit Bildern
 ```
 
 `index.html` nie von Hand ändern. Nach jeder Änderung in `src/` bauen, sonst schlägt `npm test` fehl.
-Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich.
+Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich, dann wird nicht fortgesetzt. Ohne Seed setzt das Spiel beim Öffnen die letzte Fahrt fort.
 
 ## Abschluss einer Etappe
 1. `npm run build` und `npm test`, alles grün.
-2. Selbstkontrolle im Browser: `node werkzeug/bedienung.mjs` bei 390x844 (auch mit `47,34`), 390x664, 375x548, 360x600 und 390x700, dazu `node werkzeug/schau.mjs` und `node werkzeug/begleiter.mjs`, dann die Bilder ansehen. Die Werkzeuge nehmen WebKit, wenn es installiert ist, sonst Chromium mit iPhone-Profil. Welche Engine lief, steht in der Ausgabe und gehört in den Bericht. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
+2. Selbstkontrolle im Browser: `node werkzeug/bedienung.mjs` bei 390x844 (auch mit `47,34`), 390x664, 375x548, 360x600 und 390x700, dazu `node werkzeug/schau.mjs`, `node werkzeug/begleiter.mjs` und `node werkzeug/fortsetzen.mjs`, dann die Bilder ansehen. Die Werkzeuge nehmen WebKit, wenn es installiert ist, sonst Chromium mit iPhone-Profil. Welche Engine lief, steht in der Ausgabe und gehört in den Bericht. Playwright ist in der Cloud-Umgebung vorinstalliert und gehört nicht ins Repo.
 3. Skill `ton-check` über alle neuen Texte und Symbole, Skill `balance-pruefen` nach jeder Änderung an Zahlen.
 4. Etappenstand hier und in `docs/FAHRPLAN.md` aktualisieren, Entscheidungen notieren.
 5. Committen und pushen. Pull Request nur, wenn der Auftraggeber es sagt.
 6. Dem Auftraggeber melden: was neu ist, was er antippen muss, worauf er achten soll.
 
 ## Veröffentlichung
-GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. Der Prototyp liegt dann unter derselben Adresse mit `prototyp/freier-platz/` dahinter. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
+GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. Die Prototypen liegen dann unter derselben Adresse mit `prototyp/freier-platz/` und `prototyp/kontrolle/` dahinter. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.

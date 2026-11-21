@@ -4,6 +4,7 @@
 import { abstand } from './kern/feld.js';
 import { erzeugeSpiel } from './kern/spiel.js';
 import { optionenFuerFahrt } from './kern/reise.js';
+import { neueAufzeichnung, zeichneAuf, spieleNach } from './kern/fortsetzen.js';
 import { erzeugeAnzeige } from './anzeige/anzeige.js';
 import { verbindeEingabe } from './eingabe.js';
 import { ladeStand, sichereStand } from './speicher.js';
@@ -45,14 +46,36 @@ function starteFahrt(jetzt) {
     stand.fahrkarte = optionen.fahrkarte; // nach dem Halt beginnt eine neue Reise
     sichereStand(stand);
   }
+  // Für das Fortsetzen: die Optionen sichern, bevor das Spiel sie sieht. Mit festem Seed nicht,
+  // damit Nachstellen und Prüfwerkzeuge die Fahrt eines Spielers nicht überschreiben.
+  const vorher = JSON.parse(JSON.stringify(optionen));
   spiel = erzeugeSpiel(seed, optionen);
+  stand.fahrt = fest === null ? neueAufzeichnung(seed, vorher, spiel.zustand) : null;
+  if (fest === null) sichereStand(stand);
   anzeige.neueFahrt(spiel.zustand, jetzt);
   zeigeHinweise();
 }
 
-function merke(ereignisse) {
+// Beim Öffnen: die gesicherte Fahrt nachspielen. Lief sie noch, steht man im selben Wagen in derselben
+// Lage. War sie zu Ende, beginnt wie bisher eine neue, mit allem, was die alte mitgibt (Begleiter, Karte).
+// Jeder Fehler beim Laden beginnt still eine neue Fahrt.
+function beginne(jetzt) {
+  const alt = festerSeed() === null ? spieleNach(stand.fahrt) : null;
+  if (alt && alt.zustand.status === 'faehrt') {
+    spiel = alt;
+    fahrten = 1;
+    anzeige.neueFahrt(spiel.zustand, jetzt);
+    zeigeHinweise();
+    return;
+  }
+  if (alt) spiel = alt;
+  starteFahrt(jetzt);
+}
+
+function merke(ereignisse, aktion) {
   const g = stand.gelernt;
   const vorher = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]);
+  stand.fahrt = zeichneAuf(stand.fahrt, aktion, spiel.zustand);
   for (const e of ereignisse) {
     if (e.typ === 'schritt' || e.typ === 'schlag' || e.typ === 'warten') g.wischen = true;
     if (e.typ === 'ausgewichen') g.ausweichen = true;
@@ -61,10 +84,10 @@ function merke(ereignisse) {
     if (e.typ === 'gegoennt') stand.mehrAmTisch = e.mehrAmTisch; // zeigt sich erst bei einer späteren Fahrt
     if (e.typ === 'gelocht' || e.typ === 'aufgehellt') stand.fahrkarte = JSON.parse(JSON.stringify(spiel.zustand.fahrkarte));
   }
-  if (JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher) {
-    sichereStand(stand);
-    zeigeHinweise();
-  }
+  const anders = JSON.stringify([g, stand.staerken, stand.mehrAmTisch, stand.fahrkarte]) !== vorher;
+  // nach jedem Zug sichern: Das Handy kann die Seite jederzeit schließen
+  if (anders || stand.fahrt) sichereStand(stand);
+  if (anders) zeigeHinweise();
 }
 
 function gibEin(aktion, quelle) {
@@ -83,7 +106,7 @@ function gibEin(aktion, quelle) {
   if (!ereignisse.length) return;
   anzeige.spiele(ereignisse, jetzt);
   ton.spiele(ereignisse);
-  merke(ereignisse);
+  merke(ereignisse, aktion);
 }
 
 function tippe(x, y) {
@@ -119,14 +142,14 @@ function schleife(jetzt) {
   window.requestAnimationFrame(schleife);
 }
 
-// Nur beim Nachstellen mit festem Seed: Der Zustand lässt sich von außen ablesen, nicht ändern.
-if (festerSeed() !== null) window.endstationZustand = () => JSON.stringify(spiel.zustand);
+// Nur beim Nachstellen mit festem Seed oder mit #probe: Der Zustand lässt sich von außen ablesen, nicht ändern.
+if (festerSeed() !== null || /[#&]probe\b/.test(window.location.hash)) window.endstationZustand = () => JSON.stringify(spiel.zustand);
 
 ton.setze(stand.ton);
 anzeige.setzeTon(stand.ton);
 anzeige.melder.takt = () => ton.takt();
 anzeige.passeAn();
-starteFahrt(performance.now());
+beginne(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
 verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());

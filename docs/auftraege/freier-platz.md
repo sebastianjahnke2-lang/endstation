@@ -162,3 +162,20 @@ Weitere Wagen, Menüs, Einstellungen, Stärken, Kämpfe, Fortschritt, sichtbare 
 
 17. ABGABE
 Sag mir am Ende: die Adresse, unter der ich den Prototyp am iPhone öffne (falls GitHub Pages noch nicht aktiv ist: die nötigen Schritte einzeln), was gebaut ist, welche Tests laufen, wo du von diesem Auftrag abgewichen bist und warum.
+
+---
+
+Nachtrag vom 21.11., wörtlich. Der Auftrag oben bleibt unverändert gültig.
+
+18. MUSIK ALS ECHO
+Ziel: prüfen, ob sich der Wagen mit Musik geborgener anfühlt und man ihn lieber noch einmal spielt.
+- Grundklang: ein leiser, tiefer, langer Ton, der durchgehend klingt. Der Schienenstoß ist der Grundschlag, weich, kein Schlagzeug.
+- Gehen, Benutzen und Warten haben je einen weichen Ton aus einer festen Tonleiter, in der nichts schief klingt (z. B. Pentatonik). Unmögliche Eingaben bleiben stumm.
+- Schaffner: ein Motiv aus drei bis vier Tönen. Solange er wartet, nur der erste Ton, immer wieder. Sobald er locht, das ganze Motiv; danach läuft es leise in jeder Runde mit. Beim Schlafenden dasselbe, tiefer und leiser.
+- Lampe schwenken: ein kurzes Gleiten zwischen zwei Tönen.
+- An der Tür klingt alles aus, dann zwei Sekunden Stille, dann der Abschluss.
+- Keine Fehlertöne, kein Jubel, insgesamt leise. Ohne Ton fehlt keine Information.
+- Web Audio, alle Klänge erzeugt, keine Dateien. Für diesen Test steht der Tonschalter beim Start auf an; der Klang beginnt mit der ersten Eingabe.
+- Ergänze docs/SPIELTEST-freier-platz.md um: „Wolltest du den Wagen noch einmal spielen?" und „Mit Ton oder ohne schöner?"
+- Trage in docs/IDEEN.md ein: „Parallelzug: ein Wagen, durch dessen Fenster ein weiterentwickeltes Japan zu sehen ist. Nur Idee."
+Danach: Tests grün, Pull Request, kurzer Bericht mit dem, worauf ich am echten iPhone beim Ton achten soll. Nichts Neues, bis ich mich melde.

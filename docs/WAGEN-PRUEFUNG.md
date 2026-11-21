@@ -1,0 +1,22 @@
+# Wagenprüfung (21.11.)
+
+Prüft die sieben Wagen gegen Leitsatz 4 (ein neuer Gedanke je Wagen: zeigen, ausbauen, drehen, abschließen) und Leitsatz 5 (Lage in fünf Sekunden lesbar). Nur Befund und Vorschlag, nichts ist umgebaut. Grundlage: `src/kern/wagen.js`, `src/kern/gegner.js`, `src/texte.js` und `npm run balance` vom 21.11. (500 Fahrten je Bot, ausgewogener Bot ohne Fehler).
+
+„Neu" zählt, was ein Erstspieler dort zum ersten Mal sieht oder lernen muss. In jedem Wagen außer dem Speisewagen liegt zusätzlich ein Angebot (Prüfungssymbol) auf einem Feld. Es ist in der Zählung von Wagen 1 enthalten und kommt danach in jedem Kampfwagen wieder, jedes Mal mit einer anderen Prüfung.
+
+| Wagen | gezeigt | ausgebaut | gedreht | abgeschlossen | neu | Befund und Vorschlag |
+|---|---|---|---|---|---|---|
+| 1 Sitzwagen | ein langsamer Pendler kommt, kündigt rot an | – | – | Tür geht auf, wenn er weg ist | 8: Wischen, Raster, Herzen, Ruhe, Uhr (Warten), Pendler mit Ankündigung und Punkten, Tür, Angebot. Dazu drei Hinweiswörter | Zu viel auf einmal. Ausweichen ist nicht nötig: Der Bot weicht hier im Schnitt 0,0-mal aus, wer zuschlägt, gewinnt ohne Treffer. Damit bleibt die Ruhe leer, und „Ausweichen" wird erst in Wagen 2 gelernt. Vorschlag (Schritt 7): nur Pendler und Ausweichen. Angebot erst ab Wagen 2, das erste Ausweichen unvermeidbar und gefahrlos machen, Hinweis „Anrempeln" prüfen. |
+| 2 Fahrradabteil | drei Pendler, normal schnell | Engstellen zwischen Fahrrädern, mehrere Ankündigungen zugleich | – | Tür | 3: mehrere Gegner, Ruhe füllt sich (Fluss), Präsenz bei voller Ruhe. Verdeckt: Pendler verstehen (dreimal neben ihm warten) | Guter Ausbau von Wagen 1, hier passiert das eigentliche Lernen. Dreh fehlt: Dass Warten neben dem Pendler etwas bewirkt, zeigt nichts. Vorschlag: das Verstehen des Pendlers hier sichtbar beginnen lassen (Schritt 5 gibt ihm einen Augenblick). |
+| 3 Mittelwagen | Kontrolleur an der Tür, „Fahrkarte, bitte." | zwei Pendler daneben | Kämpfen hilft kaum (5 Punkte, Treffer kostet 2 Herzen), Stillstehen lässt durch | er geht, die Tür ist frei | 4: Kontrolleur, Satz, Doppeltreffer, Durchwinken. Dazu Aufbrechen als Ausweg | Der beste Dreh der Fahrt. Die zwei Pendler stören ihn: Wer vor dem Kontrolleur stillstehen will, wird von ihnen angegriffen, das verdeckt die Regel. Der Kämpfer stirbt hier in jeder Fahrt. Vorschlag: einen Pendler streichen oder weiter weg stellen, damit die Regel in fünf Sekunden lesbar ist. |
+| 4 Speisewagen | warmes Licht, kein Gegner, Tür offen | – | – | heilt 2 Herzen | 3: sicherer Ort, Heilen, Gönnen. Nach einem Tod dazu Begleiter und „Noch mal". Später Fahrgäste mit Gesicht | Erfüllt seinen Zweck als Pause und schließt die erste Hälfte ab. Gönnen ist ohne Hinweis kaum zu finden (gewollt). Leerlauf: acht Schritte ohne Entscheidung bis zur Tür (Schritt 6). |
+| 5 Großraumwagen | Reisegruppe: drei, zwei Felder je Zug, folgen dem Vordersten | zwei Pendler dazu | – | Tür | 2: Reisegruppe, Pulk. Verdeckt: Rückhalt (Wagen mit 1 Herz verlassen) | Eine klare neue Sache. Dreh fehlt. Die Stärke Rückhalt verlangt, fast zu sterben, das findet niemand absichtlich. |
+| 6 Liegewagen | Drängler: kündigt eine ganze Linie an, stürmt, ist danach erschöpft | drei Pendler, Wände machen Gänge | – | Tür | 3: Drängler, Linienangriff, Erschöpfung. Verdeckt: Sprint (dreimal ausweichen ohne Schlag) | Eine klare neue Sache, gut lesbar dank Wänden. Der Ausweicher zeigt den Dreh schon: Wer ausweicht statt schlägt, versteht ihn. |
+| 7 Gepäckwagen | alles zusammen: Drängler, Reisegruppe, zwei Pendler | sechs Gegner, verstreute Koffer | – | Halt | 0 Gegnerarten. Danach am Halt: Schaffner, Rückblick, Schlussbild | Kein neuer Gedanke, reine Prüfung. 14 % der fehlerfreien Fahrten enden hier, mit Fehlern 40 %. Sechs Gegner und ein Angebot sind kaum in fünf Sekunden lesbar. Als Abschluss vertretbar, der Sprung von Wagen 6 (1,1 Treffer) auf 7 (1,6 Treffer) ist der größte der Fahrt. |
+
+## Über die ganze Fahrt
+
+- Die Fahrt als Ganzes folgt den vier Schritten: Wagen 1 und 2 zeigen und bauen aus, Wagen 3 dreht, Wagen 4 schließt die erste Hälfte ab, Wagen 5 bis 7 wiederholen das mit neuen Gegnern, aber ohne eigenen Dreh.
+- Am meisten Neues trifft den Erstspieler in Wagen 1 und 3. Wagen 1 sollte laut Leitsatz 3 und Schritt 7 als Letztes neu gefasst werden.
+- Die drei Stärken sind verdeckt (Idee „Stärken auffindbar machen" in `docs/IDEEN.md`).
+- Angebote bringen in jeden Kampfwagen einen zweiten Gedanken. Das widerspricht Leitsatz 4 nicht direkt, macht die Wagen aber voller.

@@ -28,8 +28,17 @@ function speicherMit(inhalt) {
   };
 }
 
-test('Anfangswerte: Ton aus, keine Karten, kein Protokoll', () => {
-  assert.deepEqual(leererPlatzStand(), { ton: false, karten: [], protokoll: null });
+test('Anfangswerte: Musik an, keine Karten, kein Protokoll', () => {
+  assert.deepEqual(leererPlatzStand(), { musik: true, karten: [], protokoll: null });
+});
+
+test('das alte Feld "ton" aus der Fassung ohne Musik schaltet die Musik nicht ab', () => {
+  mitFenster({ localStorage: speicherMit({ [SCHLUESSEL]: '{"ton":false,"karten":[{"lochung":true,"zeilen":[]}]}' }) }, () => {
+    const stand = ladePlatzStand();
+    assert.equal(stand.musik, true);
+    assert.equal(stand.ton, undefined);
+    assert.equal(stand.karten.length, 1, 'die alten Karten bleiben');
+  });
 });
 
 test('ganz ohne Fenster und Speicher gibt es einen vollständigen leeren Stand', () => {
@@ -63,11 +72,11 @@ test('gesperrter Speicher: Lesen und Schreiben scheitern still', () => {
 });
 
 test('Unsinn im Speicher wird zu einem gültigen Stand', () => {
-  const faelle = ['', 'kein json', 'null', '42', '"text"', '[]', '{"ton":"laut","karten":"viele","protokoll":7}', '{"karten":[null,5,"x"]}', '{"protokoll":[]}'];
+  const faelle = ['', 'kein json', 'null', '42', '"text"', '[]', '{"musik":"laut","karten":"viele","protokoll":7}', '{"karten":[null,5,"x"]}', '{"protokoll":[]}'];
   for (const inhalt of faelle) {
     mitFenster({ localStorage: speicherMit({ [SCHLUESSEL]: inhalt }) }, () => {
       const stand = ladePlatzStand();
-      assert.equal(stand.ton, false, `Inhalt: ${inhalt}`);
+      assert.equal(stand.musik, true, `Inhalt: ${inhalt}`);
       assert.deepEqual(stand.karten, [], `Inhalt: ${inhalt}`);
       assert.ok(stand.protokoll === null || typeof stand.protokoll.folge === 'string', `Inhalt: ${inhalt}`);
     });
@@ -78,7 +87,7 @@ test('ein gesicherter Stand kommt genauso zurück', () => {
   const speicher = speicherMit({});
   mitFenster({ localStorage: speicher }, () => {
     const stand = leererPlatzStand();
-    stand.ton = true;
+    stand.musik = false;
     legeKarteAb(stand, { lochung: true, zeilen: ['Der Schaffner', 'wartet in Reihe 2.'] });
     legeKarteAb(stand, { lochung: false, zeilen: [] });
     stand.protokoll = leeresProtokoll();
@@ -115,12 +124,12 @@ test('aufgehoben werden die letzten 20 Karten, die neueste zuerst', () => {
 
 test('bereinigePlatzStand übernimmt nur Bekanntes', () => {
   const stand = bereinigePlatzStand({
-    ton: true,
+    musik: false,
     punkte: 99,
     karten: [{ lochung: 'ja', zeilen: ['x', 7], note: 1 }],
     protokoll: { runden: 5, lampe: -2, warten: 'oft', lochung: 4, folge: 'WW<script>', fremd: true },
   });
-  assert.equal(stand.ton, true);
+  assert.equal(stand.musik, false);
   assert.equal(stand.punkte, undefined);
   assert.deepEqual(stand.karten, [{ lochung: false, zeilen: ['x'] }]);
   assert.deepEqual(stand.protokoll, { ...leeresProtokoll(), runden: 5, lochung: 4, folge: 'WWscript' });

@@ -17,7 +17,9 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 
 - **Daumenzone unten oder Knöpfe oben.** Auftrag, Abschnitt 4: unten links die Fahrkarte, unten rechts der Knopf „Warten". Vorhanden (`CLAUDE.md`, „iPhone hat Vorrang"): „Nichts zum Antippen am unteren Rand", Uhr und Lautsprecher sitzen oben. Vorläufig gebaut: Die Daumenzone liegt unten, hält aber denselben Abstand zum Rand, den das Hauptspiel unter seinem untersten Feld freilässt (26 Pixel, dazu der Home-Balken). Der Lautsprecher sitzt wie im Hauptspiel oben rechts. Zu klären am Gerät: Kommt die Leiste von Safari dem Knopf in die Quere?
 - **Abspielen der Ereignisse.** Auftrag, Abschnitt 11: Ereignisse nacheinander, je 150 bis 350 ms, dabei höchstens eine Eingabe vormerken. Vorhanden (Fahrplan, Etappe 1): keine Bewegung über 150 ms, Eingaben schneiden Bewegungen ab, niemand wartet auf das Spiel. Vorläufig gebaut: Die Ereignisse laufen nacheinander mit den Zeiten des Auftrags, aber jede neue Eingabe springt sofort ans Ende, wie im Hauptspiel. Nur nach dem Anstoßen verfallen Eingaben für 0,3 Sekunden, damit ein doppelter Wisch nicht versehentlich drängt. Preis: Wer schnell tippt, sieht Übergänge nicht, nur ihr Ergebnis.
-- **Ton beim Start.** Auftrag: aus. Hauptspiel (eigene Entscheidung aus Etappe 1): an, aber leise. Vorläufig: Im Prototyp ist er aus, im Hauptspiel unverändert an. Offen ist, was später für das ganze Spiel gilt.
+- **Ton beim Start.** Auftrag vom 18.11.: aus. Nachtrag vom 21.11. (Abschnitt 18): für den Test mit Musik an. Hauptspiel (eigene Entscheidung aus Etappe 1): an, aber leise. Im Prototyp jetzt an, im Hauptspiel unverändert an. Offen ist, was später für das ganze Spiel gilt.
+- **Zwei Sekunden Stille an der Tür.** Abschnitt 18: An der Tür klingt alles aus, dann zwei Sekunden Stille, dann der Abschluss. Vorhanden (Fahrplan, Etappe 1, und „Reibung ist ein Fehler"): niemand wartet auf das Spiel. Gebaut wie im Nachtrag: Das Abschlussbild kommt 3,4 Sekunden nach dem Schritt durch die Tür (1,4 Ausklang, 2 Stille), auch ohne Ton, damit der Vergleich mit und ohne Ton fair bleibt. Zu klären im Spieltest: Fühlt sich die Pause ruhig an oder wie Warten?
+- **Musik und harte Regel „Ohne Ton fehlt keine Information".** Die Musik doppelt nur, was zu sehen ist. Einzige Grenze: Das Motiv läuft nach der Lochung leise mit, sichtbar ist die Lochung auf der Fahrkarte. Kein Widerspruch, nur vermerkt.
 - **Testprotokoll.** Auftrag, Abschnitt 12: Das Spiel schreibt mit, was in der letzten Fahrt geschah. Vorhanden (`CLAUDE.md`, „Nicht tun"): keine Analyse-Skripte, in Etappe 0 gedeutet als „Skripte, die im Spiel Nutzungsdaten sammeln". Vorläufig gebaut, weil der Spieltest es braucht: Das Protokoll liegt nur auf dem Gerät, wird nirgends hingeschickt und ist nur mit langem Druck auf die Zuganzeige zu sehen.
 - **Neustart.** Auftrag: Knopf „Neue Fahrt". Fahrplan, Etappe 1: Endkarte nach oben wegwischen. Etappe 2: Knöpfe „Aussteigen" und „Noch eine Fahrt". Vorläufig: nur der Knopf.
 - **Zuganzeige.** Auftrag: „Wagen 7". Hauptspiel: Wagennummer und Wagenname („1 | Sitzwagen"). Vorläufig: wie im Auftrag.
@@ -36,9 +38,67 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Schaffner, Kontrolleur, Begleiter.** Im Fahrplan gibt es den Kontrolleur („Fahrkarte, bitte.") und den Begleiter, der am Halt als Schaffner auftritt. Offen: ob der Schaffner aus Wagen 7 eine dieser Figuren ist.
 - **Ist „Schatten" als Motiv zu deutlich?** Offen laut Auftrag. Der Spieltest soll es zeigen.
 
+### Prototyp „Kontrolle" (Auftrag vom 21.11., `docs/auftraege/kontrolle.md`)
+
+- **„2 von 3 erwischt" und Leitsatz 7 („nie ein Punktestand").** Die Zeile steht so im Auftrag und ist gebaut. Sie zählt, gespeichert wird sie nirgends.
+- **Immer dieselben drei Sitzordnungen.** Kein Zufall innerhalb eines Halts, so steht es im Auftrag. Gebaut sind drei feste Ordnungen, die bei jedem Neustart gleich sind. Wer noch einmal spielt, kennt die Lösung. Offen: ob beim Neustart neue Ordnungen kommen sollen (dann Zufall zwischen den Durchgängen).
+- **Wer spielt den Kontrolleur?** Im Hauptspiel ist der Kontrolleur ein Gegner („innerer Kritiker" in der Vision), hier ist er die Spielfigur. Für den Prototyp ohne Belang, fürs Hauptspiel offen.
+
+### Leitsätze und die ersten zehn Minuten (Auftrag vom 21.11., `docs/auftraege/leitsaetze.md`)
+
+Vom Auftraggeber als offen benannt:
+- **Kämpfen als gleichwertiger Weg.** Der Kämpfer-Bot erreicht den Halt nie, er stirbt in jeder Fahrt am Kontrolleur in Wagen 3. Die Vision nennt drei gleichwertige Wege (kämpfen, verstehen, aufbrechen).
+- **Spielstil mitzählen.** Fahrplan Etappe 3 zählt Erstschläge, Ausweichen, Warten, Aufbrechen, Fluchten und gibt der Figur danach eine Haltung. Vorgabe des Auftraggebers: keine Persönlichkeitstests. Leitsatz 12: nie ein Punktestand.
+- **Rätsel oder Taktik.** Entscheidet der Spieltest des Prototyps (siehe „Entschieden am 19.11.").
+- **VISION.md unter der Spieladresse.** GitHub Pages liefert den ganzen Zweig aus, `docs/VISION.md` ist unter der Spieladresse lesbar. Idee dazu in `docs/IDEEN.md` („Nur das Spiel ausliefern").
+
+Von Claude beim Prüfen gefunden:
+- **Leitsatz 1 und Warten.** „Jede Lage hat einen Preis fürs Abwarten." Beim Kontrolleur ist Stillstehen die Lösung, beim Pendler gibt Warten neben ihm eine Stärke, die Stärke „Ruhe fürs Warten" belohnt es zusätzlich. Dort kostet Abwarten nichts.
+- **Leitsatz 8 und Belohnungen ohne Verwendung.** „Jede Belohnung hat sofort eine Verwendung." Rückhalt wirkt nur bei einem tödlichen Treffer und bleibt oft ungenutzt. Fahrkarte: Nach Schritt 4 (Halt ohne Sperre) sind Lochungen nur noch Spur für den Rückblick, ohne Verwendung in der Fahrt.
+- **Leitsatz 12 und Bestwerte.** Fahrplan Etappe 5: „Bestwerte nur gegen sich selbst". Leitsatz 12: nie ein Punktestand.
+- **Leitsatz 4 und Angebote.** Jeder Kampfwagen bekommt zusätzlich zu seinem Gedanken ein Angebot. Befund in `docs/WAGEN-PRUEFUNG.md`.
+- **Schritt 4 und die Entscheidung vom 19.11.** Der Auftraggeber hat angekündigt, „drei helle Lochungen am Halt" aufzuheben. Eingetragen wird es erst mit Schritt 4, nach seiner Rückmeldung.
+
 ## Prototyp „Der freie Platz"
 
 Eigene Detailentscheidungen beim Bau. Was der Auftrag offenlässt, steht hier. Was ihm oder den Dokumenten widerspricht, steht oben unter „Offen".
+
+### Prototyp „Kontrolle" (21.11.)
+
+- **Raster, Wagenbild, Schaffner mit Zange, Schlafender, Aufteilung und Eingabe** sind aus „Der freie Platz" und dem Hauptspiel geliehen, nicht kopiert. Nur der Körper der Fahrgäste ist nachgebaut, weil er dort nicht exportiert ist und jener Prototyp unangetastet bleibt.
+- **Der Gang ist versperrt** (eigene Ergänzung, Leitsatz 1 und 6): Steht der Kontrolleur in seiner Reihe, kommt der Fahrgast ohne Fahrkarte nicht hinaus. Ohne diese Regel ließe er sich nie stellen. So entsteht die Jagd: Er setzt sich zwei Reihen weg, der Abstand wächst, der Spieler baut ihn ab.
+- **„Das kostet ihn einen Zug":** Im Zug nach dem Umsetzen bleibt er sitzen, auch wenn der Kontrolleur in die Reihe daneben tritt. Genau das macht ihn fangbar: hinterher, solange er sitzen bleiben muss (Leitsatz 1: Abwarten kostet, wer trödelt, verpasst den Augenblick).
+- **Er setzt sich auf den nächsten freien Sitz,** der mindestens zwei Reihen vom Kontrolleur entfernt ist, auf der Seite weg vom Kontrolleur. Am Kontrolleur vorbei kann er nicht.
+- **Er zuckt** (eigene Ergänzung, Leitsatz 2): Findet er keinen Platz oder ist der Gang versperrt, steht er halb auf und setzt sich wieder. Sonst gäbe es in Halt 3 kein Verhalten, an dem man ihn erkennt.
+- **Seine Farbe wechselt je Halt** und kommt in anderen Halten bei Fahrgästen mit Fahrkarte vor. Sonst würde man ihn ab dem zweiten Halt am Aussehen erkennen statt am Verhalten.
+- **Kontrollieren:** zur Seite wischen kontrolliert den Fahrgast am Gang, sonst den am Fenster. Den am Fenster neben einem besetzten Gangplatz erreicht man durch Antippen. Den Schlafenden zu kontrollieren kostet zwei Züge, danach ist er wach.
+- **Wer kontrolliert ist,** hat eine kleine Sichel über dem Kopf, damit die Lage in fünf Sekunden lesbar bleibt (Leitsatz 4). Es wird nie eine Fahrkarte gelesen: Man sieht nur Papier.
+- **Die Strecke** steht als Punktmatrix in der Zuganzeige: links der Zug, rechts der Bahnhof, dazwischen die Gleise, die übrig sind. Keine Zahl.
+- **Das Bild hält an** (Leitsatz 5): 0,65 Sekunden nach dem Fang, 0,7 Sekunden, nachdem er am Halt ausgestiegen ist. In dieser Zeit wird keine Eingabe angenommen. Sonst kürzt jede Eingabe alles ab, was läuft.
+- **Nach einem Halt** beginnt der nächste mit der nächsten Eingabe, nicht von selbst. Nach dem dritten kommt die Zeile, ein Tipp beginnt neu.
+- **Kein Speicher, kein Testprotokoll:** Der Auftrag fragt nur, ob man von selbst noch einmal startet. Das sieht man beim Zuschauen.
+- **Die drei Halte:** 1. Er sitzt nah und weicht beim ersten Schritt eine Reihe aus. 2. Vor ihm ist eine Reihe voll, er springt weiter und wird erst vorn gestellt. 3. Er sitzt schon ganz vorn und kann nur zucken. Kürzeste Lösung je Halt laut Test: 4, 7 und 7 Züge von 12.
+
+### Fahrt fortsetzen (21.11., Schritt 3 aus `docs/auftraege/leitsaetze.md`, Leitsatz 10)
+
+- Gesichert werden Seed, die Optionen zu Beginn der Fahrt und je Zug ein Zeichen, dazu ein Fingerabdruck des Zustands. Beim Öffnen spielt der Kern alles nach (`src/kern/fortsetzen.js`). Passt der Fingerabdruck nicht, etwa nach einer Regeländerung oder bei verfälschtem Speicher, beginnt still eine neue Fahrt. Warum der Fingerabdruck: Ohne ihn würde eine alte Aufzeichnung nach einer Regeländerung in eine falsche Lage führen, ohne dass jemand es merkt.
+- Gesichert wird nach jedem Zug, der etwas bewirkt. Grund: Safari schließt Seiten im Hintergrund ohne Vorwarnung.
+- War die letzte Fahrt beim Schließen zu Ende (Tod oder Halt), beginnt beim Öffnen wie bisher sofort eine neue. Sie nimmt mit, was die alte mitgibt: nach einem Tod den Begleiter und die Szene für „Noch mal". Die Endkarte der alten Fahrt erscheint nicht noch einmal. Es beginnt keine Fahrt von selbst, die vorher nicht auch begonnen hätte.
+- Mit `#seed=` an der Adresse wird weder fortgesetzt noch aufgezeichnet, damit Nachstellen und Prüfwerkzeuge die Fahrt eines Spielers nicht überschreiben. Mit `#probe` ist der Zustand von außen lesbar, für `werkzeug/fortsetzen.mjs`.
+- Ab 4000 Zügen in einer Fahrt wird nicht mehr aufgezeichnet. Kommt im Spiel nicht vor (eine Fahrt hat etwa 150 Züge), schützt nur den Speicher.
+
+### Musik als Echo (Prototyp, 21.11., Abschnitt 18)
+
+- Tonleiter: a-Moll pentatonisch (a c d e g), leicht melancholisch, ohne Halbtöne. Alle Töne weich, nur Sinus.
+- Grundklang: A2 (110 Hz) als Dreieck durch einen weichen Filter, leise Quinte darüber, atmet langsam. Tiefer nicht, weil ein iPhone-Lautsprecher darunter kaum etwas wiedergibt. Er beginnt mit der ersten Eingabe einer Fahrt und schwillt über 2,5 Sekunden an.
+- Schienenstoß: zwei weiche tiefe Pulse (ta-tack) statt des Rauschens, wie bisher jede dritte Runde.
+- Gehen: ein Ton je Schritt, je näher die Tür, desto höher. Vorbeidrängen ist auch Gehen. Benutzen: Tasche nehmen und Wecken je ein eigener Ton. Warten: ein tiefer Ton.
+- Stumm: gegen die Wand, zu weit, ins Leere, Anstoßen, den Schaffner antippen (er wiederholt den Satz, sein Warteton folgt ohnehin), seine Schritte, sein Nicken. Das Knipsen der Zange und das Rauschen der Schritte sind weg, das Motiv ersetzt sie.
+- Motiv des Schaffners: e – g – a – d. Wartet er, klingt nur das e. Locht er jemanden, klingt das ganze Motiv, auch beim wachen Fahrgast in Reihe 6. So hört man es einmal vollständig, bevor er beim Spieler nur noch das e hat. Leise mitlaufen in jeder Runde erst, wenn der Spieler gelocht ist.
+- Schlafender: Wartet der Schaffner in Reihe 2, klingt das e eine Oktave tiefer und leiser. Grüßt er (oder locht den Geweckten), das ganze Motiv tiefer und leiser, danach läuft es tiefer mit.
+- Lampe: Gleiten zwischen zwei Tönen, zum Gang hinauf, zum Fenster hinunter. Lampe B liegt einen Ton tiefer als A.
+- Die Partitur steht als reine Logik in `prototyp/freier-platz/src/musik.js` und ist in Node getestet, `ton.js` spielt sie nur.
+- Gespeichert wird „Musik an/aus" unter einem neuen Feld. Das alte Feld „Ton" (beim Start aus) wird nicht mehr gelesen, sonst bliebe es bei allen, die den Prototyp schon geöffnet hatten, still.
 
 ### Aufbau
 

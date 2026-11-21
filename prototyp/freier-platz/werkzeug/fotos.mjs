@@ -21,6 +21,38 @@ const ordner = bilderOrdner();
 const marke = `${B}x${H}${oben || unten ? '-notch' : ''}`;
 const { browser, seite, motor, meldungen, wische, canvas, sicherGesetzt } = await oeffne(B, H, { sicher: oben || unten ? { top: oben, bottom: unten, left: 0, right: 0 } : null });
 
+// Mithören: Jeder erzeugte Ton wird mit seiner Höhe gezählt, damit sich prüfen lässt, ob und wann Musik entsteht.
+await seite.addInitScript(() => {
+  window.gehoert = { kontexte: 0, toene: [] };
+  const Klasse = window.AudioContext || window.webkitAudioContext;
+  if (!Klasse) return;
+  const neu = Klasse.prototype.createOscillator;
+  Klasse.prototype.createOscillator = function () {
+    const o = neu.call(this);
+    const start = o.start.bind(o);
+    const setze = o.frequency.setValueAtTime.bind(o.frequency);
+    let hz = null;
+    o.frequency.setValueAtTime = (wert, t) => {
+      if (hz === null) hz = wert;
+      return setze(wert, t);
+    };
+    o.start = (t) => {
+      window.gehoert.toene.push(Math.round(hz === null ? o.frequency.value : hz));
+      start(t);
+    };
+    return o;
+  };
+  const Ursprung = Klasse;
+  const Zaehler = function () {
+    window.gehoert.kontexte += 1;
+    return new Ursprung();
+  };
+  Zaehler.prototype = Ursprung.prototype;
+  window.AudioContext = Zaehler;
+  window.webkitAudioContext = Zaehler;
+});
+const gehoert = async () => seite.evaluate(() => window.gehoert);
+
 await seite.goto(`file://${DATEI}#probe`);
 await seite.waitForFunction(() => typeof window.platzZustand === 'function');
 await seite.waitForTimeout(200);
@@ -80,12 +112,19 @@ erwarte(await seite.evaluate(() => document.documentElement.scrollHeight <= wind
 
 // 1. Start
 await foto('1-start', 400);
+erwarte((await gehoert()).kontexte === 0, 'vor der ersten Eingabe darf kein Ton entstehen');
 
 // 2. nur warten: Der Schaffner kommt, locht den Fahrgast, sagt den Satz
 await warte();
 await warte();
 await warte();
 await warte('Warten bis zum Satz');
+{
+  const g = await gehoert();
+  erwarte(g.kontexte === 1, `nach der ersten Eingabe genau ein Tonkontext, nicht ${g.kontexte}`);
+  erwarte(g.toene.includes(110), 'der Grundklang (110 Hz) müsste klingen');
+  erwarte(g.toene.includes(330), 'der erste Ton des Schaffners (330 Hz) müsste beim Warten klingen');
+}
 erwarte(soll.zustand.schaffner.tat === 'wartet', 'der Schaffner müsste jetzt warten');
 await foto('2-satz');
 
@@ -130,6 +169,12 @@ for (const taste of ['ArrowUp', 'ArrowUp', 'ArrowUp']) {
   await pruefe(`Taste ${taste}`);
 }
 erwarte(soll.zustand.status === 'ende', 'der Wagen müsste zu Ende sein');
+await foto('7-tuer-stille', 1600);
+{
+  const vorher = (await gehoert()).toene.length;
+  await seite.waitForTimeout(1200);
+  erwarte((await gehoert()).toene.length === vorher, 'in der Stille an der Tür darf nichts Neues klingen');
+}
 await foto('7-abschluss', 1200);
 
 // 9. das Protokoll: lange auf die Zuganzeige drücken
