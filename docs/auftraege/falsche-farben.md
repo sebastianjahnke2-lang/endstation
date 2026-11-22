@@ -39,3 +39,11 @@ TESTS
 Jeder Falsche ist durch Umsetzen und Schimmern eindeutig zu erkennen, ohne zu raten. Wer blind setzt, verliert den Abend. Gleicher Startwert ergibt den gleichen Abend. Passt auf 360×600, nichts Tippbares am unteren Rand.
 
 Danach Pull Request und der Bericht in der üblichen Form.
+
+---
+
+Ergänzung des Auftraggebers vom 22.11. zu Punkt 6:
+
+Der Schlusssatz beschreibt trocken, wie der Spieler entschieden hat, zum Beispiel wem er zu schnell geglaubt hat. Er nennt nicht nur das Ergebnis.
+
+Hinweis des Auftraggebers vom 22.11.: Für den Prototyp „Falsche Farben" gelten nur CLAUDE.md und diese Auftragsdatei. Vision, Fahrplan und Ideen von Endstation gelten hier nicht. Der Saal soll nicht wie ein Zugwagen aussehen.
