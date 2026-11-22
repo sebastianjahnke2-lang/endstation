@@ -4238,11 +4238,13 @@ function wischrichtung(dx, dy) {
   return dy > 0 ? 'runter' : 'hoch';
 }
 
-// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen() }
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen(), finger(richtung oder null) }
+// finger: Nach einem Wisch, solange der Finger liegt, die Richtung des Wischs; null, sobald er weg ist.
 function verbindeEingabe(flaeche, melde) {
   let finger = null;
 
   flaeche.addEventListener('pointerdown', (e) => {
+    melde.beruehrt();
     if (finger) return;
     finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
     if (flaeche.setPointerCapture) {
@@ -4261,7 +4263,9 @@ function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
     finger.erledigt = true;
-    melde.aktion(wischrichtung(dx, dy), 'wisch');
+    const richtung = wischrichtung(dx, dy);
+    melde.aktion(richtung, 'wisch');
+    melde.finger(richtung);
   });
 
   const loslassen = (e) => {
@@ -4270,6 +4274,7 @@ function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     const fertig = finger.erledigt;
     finger = null;
+    melde.finger(null);
     if (e.type === 'pointerup') melde.losgelassen();
     if (fertig || e.type !== 'pointerup') return;
     if (Math.hypot(dx, dy) < TIPPWEG) {
@@ -4298,9 +4303,71 @@ function verbindeEingabe(flaeche, melde) {
     const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
     if (!name) return;
     e.preventDefault();
+    melde.beruehrt();
     if (e.code === 'Enter' && !melde.karteOffen()) return;
     melde.aktion(name, 'taste');
   });
+}
+
+// --- kern/leerlauf.js
+// Leerlauf vor der Tür (Schritt 6 aus docs/auftraege/leitsaetze.md, Leitsatz 1 und „Reibung ist ein Fehler").
+// Ist ein Wagen gefahrlos, sind es bis zur Tür oft acht Schritte ohne Entscheidung, im Speisewagen immer.
+// Zwei Varianten, der Auftraggeber wählt am Gerät (Adresse mit #leerlauf=halten oder #leerlauf=tuer):
+//   'halten'  Finger nach dem Wischen liegen lassen: Der Schritt wiederholt sich.
+//   'tuer'    Tipp auf die offene Tür: Die Figur läuft den kürzesten Weg hin und hindurch.
+// Beide wirken nur, solange kein Gegner im Wagen ist. Jeder Schritt ist ein gewöhnlicher Zug.
+// Reine Logik ohne Browser; den Takt gibt main.js vor.
+
+
+
+
+const LEERLAUF_ARTEN = ['tuer', 'halten'];
+const LEERLAUF_ANFANG = 'tuer';
+const LEERLAUF_TAKT = 160; // ms von Schritt zu Schritt
+const HALTEN_AB = 280; // ms, so lange liegt der Finger nach dem Wischen, bevor es weitergeht
+
+// Gefahrlos heißt: Die Fahrt läuft, und kein Gegner ist im Wagen (auch der Speisewagen).
+function istGefahrlos(z) {
+  return z.status === 'faehrt' && z.gegner.length === 0;
+}
+
+// Felder, auf die der Lauf nicht von selbst tritt: Antworten und „Noch mal" beim Begleiter,
+// das Angebot und der Drängler in der Engstelle. Dort entscheidet der Spieler selbst.
+function gesperrt(z, x, y, ohneImWeg) {
+  const b = z.begleiter;
+  if (b && b.antworten && b.antworten.some((a) => a.x === x && a.y === y)) return true;
+  if (b && b.wiederholen && b.wiederholen.x === x && b.wiederholen.y === y) return true;
+  if (z.angebot && z.angebot.x === x && z.angebot.y === y) return true;
+  if (!ohneImWeg && z.wagen.imWeg && z.wagen.imWeg.x === x && z.wagen.imWeg.y === y) return true;
+  return false;
+}
+
+// Der nächste Schritt zur Tür und durch sie hindurch, oder null, wenn der Weg nicht frei ist.
+function schrittZurTuer(z) {
+  if (!istGefahrlos(z) || !z.tuerOffen) return null;
+  const s = z.spieler;
+  if (s.x === TUERFELD.x && s.y === TUERFELD.y) return 'hoch';
+  // Der Drängler in der Engstelle zählt beim Suchen als Weg: Man läuft bis vor ihn und hält dort an.
+  const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y) && !gesperrt(z, x, y, true));
+  const schritt = naechsterSchritt(s, weit, TUERFELD);
+  if (!schritt || gesperrt(z, schritt.x, schritt.y)) return null;
+  return schritt.richtung;
+}
+
+// Darf der gehaltene Finger noch einen Schritt in diese Richtung tun?
+function darfWeiterHalten(z, richtung) {
+  if (!istGefahrlos(z) || !RICHTUNG[richtung]) return false;
+  const s = z.spieler;
+  const x = s.x + RICHTUNG[richtung].x;
+  const y = s.y + RICHTUNG[richtung].y;
+  if (richtung === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y) return z.tuerOffen;
+  return imFeld(x, y) && !istHindernis(z, x, y) && !gesperrt(z, x, y);
+}
+
+// Nach jedem Schritt des Laufs: Ging alles glatt, oder ist etwas geschehen, das der Spieler sehen soll?
+// Glatt sind nur Schritt, Wagenwechsel und das Heilen beim Hineingehen.
+function istGlatt(ereignisse) {
+  return ereignisse.length > 0 && ereignisse.every((e) => e.typ === 'schritt' || e.typ === 'wagenwechsel' || e.typ === 'geheilt');
 }
 
 // --- speicher.js
@@ -4315,7 +4382,8 @@ function leererStand() {
   // mehrAmTisch: so viele sitzen nach dem Gönnen später zusätzlich im Speisewagen
   // fahrkarte: die Lochungen der laufenden Reise, bis zum Halt
   // fahrt: Seed und Eingaben der letzten Fahrt, zum Fortsetzen nach dem Öffnen (kern/fortsetzen.js)
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte(), fahrt: null };
+  // leerlauf: welche Variante gegen den Leerlauf vor der Tür gilt (kern/leerlauf.js), gewählt mit #leerlauf=
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte(), fahrt: null, leerlauf: LEERLAUF_ANFANG };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -4332,6 +4400,7 @@ function bereinigeStand(roh) {
   if (Number.isInteger(roh.mehrAmTisch) && roh.mehrAmTisch >= 0) stand.mehrAmTisch = Math.min(5, roh.mehrAmTisch);
   stand.fahrkarte = bereinigeFahrkarte(roh.fahrkarte);
   stand.fahrt = bereinigeAufzeichnung(roh.fahrt);
+  if (LEERLAUF_ARTEN.includes(roh.leerlauf)) stand.leerlauf = roh.leerlauf;
   return stand;
 }
 
@@ -4542,11 +4611,22 @@ function erzeugeTon() {
 
 
 
+
 const leinwand = document.getElementById('bild');
 const anzeige = erzeugeAnzeige(leinwand);
 const ton = erzeugeTon();
 
 const stand = ladeStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
+
+// Leerlauf vor der Tür: Die Variante wählt der Auftraggeber am Gerät mit #leerlauf=halten oder #leerlauf=tuer.
+// Sie wird gemerkt. Siehe kern/leerlauf.js.
+const leerlaufWahl = /[#&]leerlauf=(\w+)/.exec(window.location.hash);
+if (leerlaufWahl && LEERLAUF_ARTEN.includes(leerlaufWahl[1])) {
+  stand.leerlauf = leerlaufWahl[1];
+  sichereStand(stand);
+}
+let lauf = null; // Tipp auf die offene Tür: { naechster } bis zur Tür und hindurch
+let gehalten = null; // Finger liegt nach dem Wisch: { richtung, naechster }
 
 const grobesZeigen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 let mitTasten = !grobesZeigen;
@@ -4635,10 +4715,11 @@ function gibEin(aktion, quelle) {
   }
   anzeige.beschleunige(jetzt);
   const ereignisse = spiel.act(aktion);
-  if (!ereignisse.length) return;
+  if (!ereignisse.length) return ereignisse;
   anzeige.spiele(ereignisse, jetzt);
   ton.spiele(ereignisse);
   merke(ereignisse, aktion);
+  return ereignisse;
 }
 
 function tippe(x, y) {
@@ -4658,6 +4739,8 @@ function tippe(x, y) {
     sichereStand(stand);
   } else if (ziel.art === 'uhr') {
     gibEin('warten', 'tipp');
+  } else if (ziel.art === 'feld' && ziel.y === -1 && stand.leerlauf === 'tuer' && abstand({ x: ziel.x, y: 0 }, spiel.zustand.spieler) > 1 && schrittZurTuer(spiel.zustand)) {
+    lauf = { naechster: performance.now() }; // Tipp auf die offene Tür im gefahrlosen Wagen: hinlaufen
   } else if (ziel.art === 'feld') {
     const s = spiel.zustand.spieler;
     const dx = ziel.x - s.x;
@@ -4669,7 +4752,24 @@ function tippe(x, y) {
   }
 }
 
+// Der Takt des Leerlaufs: ein gewöhnlicher Zug nach dem anderen, solange alles glatt geht.
+function leerlauf(jetzt) {
+  if (lauf && jetzt >= lauf.naechster) {
+    const richtung = schrittZurTuer(spiel.zustand);
+    const e = richtung ? gibEin(richtung, 'lauf') : null;
+    if (!e || !istGlatt(e) || e.some((x) => x.typ === 'wagenwechsel')) lauf = null;
+    else lauf.naechster = jetzt + LEERLAUF_TAKT;
+  }
+  if (gehalten && stand.leerlauf === 'halten' && jetzt >= gehalten.naechster) {
+    if (!darfWeiterHalten(spiel.zustand, gehalten.richtung)) return;
+    const e = gibEin(gehalten.richtung, 'halten');
+    if (!istGlatt(e)) gehalten = null;
+    else gehalten.naechster = jetzt + LEERLAUF_TAKT;
+  }
+}
+
 function schleife(jetzt) {
+  leerlauf(jetzt);
   anzeige.zeichne(jetzt);
   window.requestAnimationFrame(schleife);
 }
@@ -4683,7 +4783,19 @@ anzeige.melder.takt = () => ton.takt();
 anzeige.passeAn();
 beginne(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
-verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
+verbindeEingabe(leinwand, {
+  aktion: gibEin,
+  tipp: tippe,
+  losgelassen: () => ton.wecke(),
+  karteOffen: () => anzeige.zeigtKarte(),
+  // jede neue Berührung und jede Taste beendet den Lauf zur Tür
+  beruehrt: () => {
+    lauf = null;
+  },
+  finger: (richtung) => {
+    gehalten = richtung ? { richtung, naechster: performance.now() + HALTEN_AB } : null;
+  },
+});
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());
 if (window.visualViewport) window.visualViewport.addEventListener('resize', () => anzeige.passeAn());
 window.requestAnimationFrame(schleife);

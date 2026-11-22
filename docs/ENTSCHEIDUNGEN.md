@@ -383,3 +383,12 @@ Leitsätze 2 (gelernt wird im Spiel), 6 (Hilfe zeigt die Richtung) und 8 (jede B
 - **Verstehen locht:** neue Lochungsart `verstanden`, hell, je Gegner höchstens eine auf der Karte. Sie kommt, wenn der Kontrolleur durchwinkt und wenn eine Stärke neu verdient wird (Pendler, Drängler, Reisegruppe). Wer eine Stärke schon aus einer früheren Fahrt hat, verdient sie nicht noch einmal und bekommt dafür keine Lochung. Den Kontrolleur kann man auf jeder Reise neu durchschauen. In der Wiederholung beim Begleiter zählt nichts.
 - **Rückblick-Zeilen dazu** (Handlung statt Urteil): „Durchgewinkt", „Beim Pendler gewartet", „Drängler ausgewichen", „Mit einem Herz hinaus", darunter der Wagen.
 - **Zahlen:** `npm run balance` unverändert (86 / 56 / 73 %, Ausweicher 60 %, Kämpfer 0 %). Die Bots zählen nur das Erreichen des Halts.
+
+## Leerlauf vor der Tür (22.11., Warteschlange Abschnitt 1, Auftrag 3; Schritt 6 aus `docs/auftraege/leitsaetze.md`)
+Bauprinzip „Reibung ist ein Fehler" und Leitsatz 1 (nach der Entscheidung kein Weg ohne Entscheidung). Regeln in `src/kern/leerlauf.js`, Takt in `src/main.js`.
+- **Gefahrlos heißt: kein Gegner im Wagen.** Das ist der Speisewagen und jeder Kampfwagen, sobald der letzte Gegner fort ist. Im Mittelwagen bleibt es aus, solange nach dem Kontrolleur noch Pendler dort sind.
+- **Umschalten mit der Adresse**, kein Knopf im Spiel (keine Erklärung, kein Menü): `#leerlauf=tuer` oder `#leerlauf=halten`. Die Wahl wird gemerkt (Speicher `leerlauf`, Anfangswert `tuer`, mit Test). Warum `tuer` als Anfang: Die offene Tür leuchtet schon, ein Tipp darauf liegt nahe; den liegenden Finger findet man eher durch Zufall.
+- **Variante Tür:** Tipp auf die offene Tür (der Streifen über dem obersten Feld) läuft den kürzesten Weg hin und hindurch, ein Schritt alle 160 ms, jeder ein gewöhnlicher Zug. Hinter der Tür hält der Lauf an. Jede Berührung und jede Taste hält ihn sofort an.
+- **Variante Halten:** Nach einem Wisch den Finger liegen lassen: nach 280 ms ein Schritt alle 160 ms in dieselbe Richtung, bis etwas im Weg ist oder der Finger weg ist. Durch die offene Tür geht es mit; in einem Wagen mit Gegnern hört es auf.
+- **Der Lauf entscheidet nichts:** Er tritt nie auf ein Angebot, auf Antworten oder „Noch mal" beim Begleiter und stößt den Drängler in der Engstelle nicht an. Dort hält er davor an. Passiert unterwegs etwas anderes als ein Schritt (etwa das Gespräch mit dem Begleiter), hält er ebenfalls an.
+- **Zahlen:** unverändert, die Bots benutzen den Leerlauf nicht.

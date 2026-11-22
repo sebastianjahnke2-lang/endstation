@@ -55,22 +55,26 @@ export async function oeffne(breite, hoehe, optionen = {}) {
   }
 
   // Ein Wisch mit dem Finger. In Chromium als echte Berührung, sonst als nachgestellte Zeigerereignisse.
-  async function wische(vonX, vonY, dx, dy, schritte = 4) {
+  // halten: so viele Millisekunden bleibt der Finger nach dem Wisch liegen (Leerlauf, Variante „halten")
+  async function wische(vonX, vonY, dx, dy, schritte = 4, halten = 0) {
     if (cdp) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: vonX, y: vonY }] });
       for (let i = 1; i <= schritte; i++) {
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: vonX + (dx * i) / schritte, y: vonY + (dy * i) / schritte }] });
       }
+      if (halten) await seite.waitForTimeout(halten);
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       return;
     }
-    await seite.evaluate(([x, y, wegX, wegY, n]) => {
+    const sendeAlle = (liste) => seite.evaluate((l) => {
       const flaeche = document.getElementById('bild');
-      const sende = (typ, px, py) => flaeche.dispatchEvent(new PointerEvent(typ, { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: px, clientY: py, bubbles: true, cancelable: true }));
-      sende('pointerdown', x, y);
-      for (let i = 1; i <= n; i++) sende('pointermove', x + (wegX * i) / n, y + (wegY * i) / n);
-      sende('pointerup', x + wegX, y + wegY);
-    }, [vonX, vonY, dx, dy, schritte]);
+      for (const [typ, px, py] of l) flaeche.dispatchEvent(new PointerEvent(typ, { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: px, clientY: py, bubbles: true, cancelable: true }));
+    }, liste);
+    const anfang = [['pointerdown', vonX, vonY]];
+    for (let i = 1; i <= schritte; i++) anfang.push(['pointermove', vonX + (dx * i) / schritte, vonY + (dy * i) / schritte]);
+    await sendeAlle(anfang);
+    if (halten) await seite.waitForTimeout(halten);
+    await sendeAlle([['pointerup', vonX + dx, vonY + dy]]);
   }
 
   // Lage und Größe des Canvas auf der Seite
