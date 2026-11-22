@@ -407,3 +407,10 @@ Es gelten nur CLAUDE.md und die Auftragsdatei (Hinweis des Auftraggebers vom 22.
 - **Neuer Abend, neuer Startwert.** Mit `#seed=Zahl` sind der erste und alle folgenden Abende immer dieselben.
 - **Saal statt Wagen:** Rückwand mit zwei Reihen Sprossenfenstern, Dielenboden, Holzbänke mit Lehne, eine Tür. Keine Bögen, keine Kerzen, keine Zeichen an der Wand.
 - **Geliehen:** Punktschrift, Zeichenhilfen und Eingabe aus dem Hauptspiel, Lautsprecher aus „Der freie Platz", Build-Skript und Klangbausteine aus „Kontrolle". Spielregeln und Test-Spieler sind neu.
+
+## Nachbesserung „Falsche Farben": Verhalten statt Aussehen (22.11., Warteschlange Abschnitt 3; `docs/auftraege/falsche-farben-verhalten.md`)
+Leitsätze 2 (gelernt wird im Spiel), 5 (in fünf Sekunden lesbar) und 7 (die Welt erkennt das Verstehen an).
+- **Aussehen:** Der kräftigere Mantel, der helle Kragen und die helle Hutkante sind gestrichen. Wie ein Gast gezeichnet wird, hängt nur an der Farbe, die er zeigt (`aussehen()` in `gaeste.js`, mit Test).
+- **Rücken bleibt stehen:** Wer zusammen- oder abgerückt ist, bleibt so sitzen, solange die beiden nebeneinander sitzen (je 14 % eines Platzes zur Seite, gut 10 Pixel). So liest man die Bank auch später noch, ohne sich jeden Zug zu merken. Wer angehoben ist oder an der Tür steht, steht gerade. Zusammenrücken mit Schimmern und hellem Ton, Abrücken mit einem dumpfen, kurzen Ton nach unten.
+- **Einstieg, Abweichung vom Wortlaut:** „Genau zwei Bänke mit freiem Platz" zählt nur Bänke, auf denen schon jemand sitzt. Leere Bänke zählen nicht. Wörtlich genommen kam der erste Falsche in 300 Abenden kein einziges Mal: Volle Bänke mit vier Gleichen räumen sofort, also haben fast immer drei oder mehr Bänke Platz. So kommt er im Schnitt acht Züge nach der ersten geräumten Bank, in jedem Abend, und nur, wenn niemand sonst an der Tür wartet. Er zeigt die Farbe des Äußersten der einen Bank und ist die des Äußersten der anderen.
+- **Zahlen** (500 Abende je Test-Spieler): hinsehend 90 % hell (vorher 89 %), blind 11 % (vorher 9 %), Länge gleich (etwa 128 Züge). Der Unterschied kommt nur vom neuen Einstieg.

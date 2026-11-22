@@ -13,5 +13,5 @@ Aufträge in Reihenfolge, von oben nach unten. Claude arbeitet sie ohne Warten a
 2. [x] SPIELTEST (Pull Request #9 in `main`)
 
 ## Abschnitt 3 (bis zum Spieltest, ein Pull Request)
-1. [ ] Nachbesserung „Falsche Farben": Den Falschen am Verhalten lesen, wörtlich in `docs/auftraege/falsche-farben-verhalten.md`. Nur die drei Punkte, nichts an Länge oder Schwierigkeit.
-2. [ ] SPIELTEST
+1. [x] Nachbesserung „Falsche Farben": Den Falschen am Verhalten lesen, wörtlich in `docs/auftraege/falsche-farben-verhalten.md`. Nur die drei Punkte, nichts an Länge oder Schwierigkeit.
+2. [ ] SPIELTEST (hier angehalten)
