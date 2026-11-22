@@ -1,0 +1,2083 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#120c07">
+<title>Falsche Farben</title>
+<link rel="icon" href="data:,">
+<style>
+/* Die Seite ist nur der Rahmen. Alles Sichtbare zeichnet der Canvas.
+   Zielgerät ist das iPhone mit Safari: nichts scrollt, nichts zoomt, nichts lässt sich markieren. */
+
+html {
+  height: 100%;
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  /* Höhe: erst der Wert, den jeder Browser kennt. Wo es die dynamische Höhe gibt, gilt sie:
+     Sie folgt den Leisten von Safari, damit unten nichts abgeschnitten wird. */
+  height: 100%;
+  box-sizing: border-box;
+  /* Notch und Home-Balken bleiben frei, der Canvas füllt nur den sicheren Bereich. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: #080a10;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (height: 100dvh) {
+  body {
+    height: 100dvh;
+  }
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+html, body { background: #120c07; }
+</style>
+</head>
+<body>
+<canvas id="bild"></canvas>
+<script>
+(function () {
+'use strict';
+
+// --- ../prototyp/falsche-farben/src/kern/zufall.js
+// Zufall mit Startwert für den Abend. Der Stand liegt im Zustand (z.zufall): Gleicher Startwert und
+// gleiche Züge ergeben den gleichen Abend.
+
+function naechsteFarbzahl(z) {
+  z.zufall = (z.zufall + 0x6d2b79f5) >>> 0;
+  let t = z.zufall;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// mischt eine Liste an Ort und Stelle
+function wuerfleFarben(z, liste) {
+  for (let i = liste.length - 1; i > 0; i--) {
+    const j = Math.floor(naechsteFarbzahl(z) * (i + 1));
+    const t = liste[i];
+    liste[i] = liste[j];
+    liste[j] = t;
+  }
+}
+
+// --- ../prototyp/falsche-farben/src/kern/abend.js
+// Der Abend im Saal: fünf Bänke zu je vier Plätzen, Gäste in vier Farben, einige zeigen eine falsche.
+// Reine Logik ohne Browser. Jede Eingabe ist ein Zug, act() gibt eine Ereignisliste zurück.
+//
+//   const abend = erzeugeAbend(seed);
+//   abend.act({ von: 'tuer', nach: 2 });   // den wartenden Gast an der Tür auf Bank 2 setzen
+//   abend.act({ von: 0, nach: 3 });        // den äußersten Gast von Bank 0 auf Bank 3 umsetzen
+//
+// Ein Gast: { id, zeigt, echt }. Ehrlich ist, wer zeigt, was er ist. Ein Falscher zeigt eine andere Farbe.
+// Fliegt er auf, zeigt er seine echte Farbe und behält sie; von da an gilt er wie ein Ehrlicher.
+// Eine Bank ist eine Liste vom inneren zum äußeren Platz. Umgesetzt wird nur der äußerste Gast.
+//
+// Regeln:
+//   Schimmern: Wer gesetzt wird, kommt neben den bisher äußersten Gast. Haben beide dieselbe echte Farbe,
+//     schimmern beide. Ein Falscher schimmert also nicht neben der Farbe, die er zeigt, sondern neben seiner echten.
+//   Räumen: Zeigen vier auf einer Bank dieselbe Farbe und sind alle ehrlich, gehen sie, die Bank wird frei,
+//     ein Fenster leuchtet auf. Ist ein Falscher darunter, räumt die Bank nicht: Er fliegt auf.
+//   Tür: Nach jedem zweiten Zug kommt ein Gast an die Tür. Kommt ein vierter zu dreien, endet der Abend.
+//     Ist nichts mehr zu tun (kein Zug möglich, Tür leer), kommt der nächste Gast sofort.
+//   Es kommen immer weitere Gäste, mit der Zeit mehr Falsche. Der Abend endet, wenn an der Tür ein vierter
+//     dazukäme, wenn kein Zug mehr möglich ist oder wenn alle Fenster des Saals leuchten. So hat jeder
+//     Abend ein Ende.
+//   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, und erst wenn
+//     er aufgeflogen ist, weitere, langsam mehr.
+
+
+
+const FARBEN = 4;
+const BAENKE = 5;
+const PLAETZE = 4;
+const TUER_HOECHSTENS = 3;
+const ANKUNFT_ALLE = 2; // Züge
+const FALSCH_ANFANG = 0.3; // Anteil der Falschen nach dem ersten, steigt je geräumter Bank
+const FALSCH_STEIGT = 0.03;
+const FALSCH_HOECHSTENS = 0.6;
+const VERDECKT_ANFANG = 1; // so viele unaufgeflogene Falsche zugleich, eine mehr alle VERDECKT_ALLE Bänke
+const VERDECKT_ALLE = 4;
+const VERDECKT_HOECHSTENS = 3;
+const FENSTER = 14; // so viele Fenster hat der Saal, für jede geräumte Bank leuchtet eines
+
+function istFalsch(g) {
+  return g.zeigt !== g.echt;
+}
+
+function erzeugeAbend(seed) {
+  const z = {
+    seed: seed >>> 0,
+    zufall: seed >>> 0,
+    status: 'laeuft', // 'laeuft' | 'ende'
+    ende: null, // 'tuer' | 'fest' | 'hell'
+    baenke: [],
+    tuer: [],
+    zug: 0,
+    gekommen: 0,
+    naechsteId: 1,
+    geraeumt: 0,
+    beutel: [],
+    ersterFalscher: null, // 'unterwegs' | 'aufgeflogen'
+    // für den Satz am Ende, was der Spieler mit Falschen getan hat:
+    //   aufgeflogen: in Reihenfolge { id, zeigte, echt, wie }; wie 'geglaubt': flog unter anderen auf, es saß
+    //     schon jemand auf ihm; 'zuletzt': flog als äußerster auf, als vierter zu drei Gleichen
+    //   umgesetzt: ids der Falschen, die umgesetzt wurden, bevor sie aufflogen
+    verlauf: { aufgeflogen: [], umgesetzt: [] },
+  };
+  for (let b = 0; b < BAENKE; b++) z.baenke.push([]);
+  kommt(z, []);
+  return { zustand: z, act: (aktion) => fuehreAus(z, aktion) };
+}
+
+// echte Farben aus einem Beutel mit je zwei jeder Farbe: Über den Abend gleicht es sich aus
+function echteFarbe(z) {
+  if (!z.beutel.length) {
+    for (let f = 0; f < FARBEN; f++) z.beutel.push(f, f);
+    wuerfleFarben(z, z.beutel);
+  }
+  return z.beutel.pop();
+}
+
+function alleImSaal(z) {
+  const alle = z.tuer.slice();
+  for (const bank of z.baenke) alle.push(...bank);
+  return alle;
+}
+
+// Soll der nächste Gast falsch sein? Nach dem Einstieg zuerst genau einer, dann langsam mehr.
+function wirdFalsch(z) {
+  if (z.geraeumt < 1) return false;
+  if (z.ersterFalscher === null) return true;
+  if (z.ersterFalscher === 'unterwegs') return false;
+  const anteil = Math.min(FALSCH_HOECHSTENS, FALSCH_ANFANG + FALSCH_STEIGT * (z.geraeumt - 1));
+  return naechsteFarbzahl(z) < anteil;
+}
+
+function neuerGast(z) {
+  const echt = echteFarbe(z);
+  const gast = { id: z.naechsteId++, zeigt: echt, echt };
+  if (wirdFalsch(z)) {
+    // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Schimmern zwischen zwei gleich
+    // Aussehenden, dass beide ehrlich sind, und bleibt es aus, ist genau einer von beiden falsch.
+    const verdeckt = alleImSaal(z).filter(istFalsch);
+    const zugleich = Math.min(VERDECKT_HOECHSTENS, VERDECKT_ANFANG + Math.floor(z.geraeumt / VERDECKT_ALLE));
+    const moeglich = [];
+    for (let f = 0; f < FARBEN; f++) if (f !== echt && !verdeckt.some((g) => g.zeigt === f)) moeglich.push(f);
+    if (moeglich.length && verdeckt.length < zugleich) {
+      gast.zeigt = moeglich[Math.floor(naechsteFarbzahl(z) * moeglich.length)];
+      if (z.ersterFalscher === null) z.ersterFalscher = 'unterwegs';
+    }
+  }
+  z.gekommen += 1;
+  return gast;
+}
+
+// Ein Gast kommt an die Tür. Gibt false zurück, wenn es der vierte wäre: Dann endet der Abend.
+function kommt(z, ereignisse) {
+  if (z.tuer.length >= TUER_HOECHSTENS) {
+    beende(z, 'tuer', ereignisse);
+    return false;
+  }
+  const gast = neuerGast(z);
+  z.tuer.push(gast);
+  ereignisse.push({ typ: 'ankunft', gast: { ...gast } });
+  return true;
+}
+
+function beende(z, wie, ereignisse) {
+  z.status = 'ende';
+  z.ende = wie;
+  ereignisse.push({ typ: 'ende', wie, geraeumt: z.geraeumt });
+}
+
+function gueltig(z, aktion) {
+  if (!aktion || z.status !== 'laeuft') return false;
+  const { von, nach } = aktion;
+  if (!Number.isInteger(nach) || nach < 0 || nach >= BAENKE) return false;
+  if (z.baenke[nach].length >= PLAETZE) return false;
+  if (von === 'tuer') return z.tuer.length > 0;
+  if (!Number.isInteger(von) || von < 0 || von >= BAENKE || von === nach) return false;
+  return z.baenke[von].length > 0;
+}
+
+function zuege(z) {
+  const liste = [];
+  for (const von of ['tuer', 0, 1, 2, 3, 4]) {
+    for (let nach = 0; nach < BAENKE; nach++) if (gueltig(z, { von, nach })) liste.push({ von, nach });
+  }
+  return liste;
+}
+
+function fuehreAus(z, aktion) {
+  if (!gueltig(z, aktion)) return [];
+  const ereignisse = [];
+  const { von, nach } = aktion;
+  const gast = von === 'tuer' ? z.tuer.shift() : z.baenke[von].pop();
+  if (von !== 'tuer' && istFalsch(gast) && !z.verlauf.umgesetzt.includes(gast.id)) z.verlauf.umgesetzt.push(gast.id);
+  const bank = z.baenke[nach];
+  const nachbar = bank.length ? bank[bank.length - 1] : null;
+  bank.push(gast);
+  z.zug += 1;
+  ereignisse.push({ typ: 'gesetzt', id: gast.id, von, nach, platz: bank.length - 1 });
+
+  // Schimmern: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
+  if (nachbar && nachbar.echt === gast.echt) ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
+
+  // vier, die dieselbe Farbe zeigen: räumen oder auffliegen
+  if (bank.length === PLAETZE && bank.every((g) => g.zeigt === bank[0].zeigt)) {
+    const falsche = bank.filter(istFalsch);
+    if (falsche.length) {
+      for (const f of falsche) {
+        const wie = bank.indexOf(f) === PLAETZE - 1 ? 'zuletzt' : 'geglaubt';
+        z.verlauf.aufgeflogen.push({ id: f.id, zeigte: f.zeigt, echt: f.echt, wie });
+        f.zeigt = f.echt;
+        if (z.ersterFalscher === 'unterwegs') z.ersterFalscher = 'aufgeflogen';
+      }
+      ereignisse.push({ typ: 'aufgeflogen', bank: nach, gaeste: falsche.map((f) => ({ id: f.id, platz: bank.indexOf(f), echt: f.echt })) });
+    } else {
+      z.geraeumt += 1;
+      ereignisse.push({ typ: 'geraeumt', bank: nach, farbe: bank[0].zeigt, ids: bank.map((g) => g.id), fenster: z.geraeumt });
+      z.baenke[nach] = [];
+      if (z.geraeumt >= FENSTER) {
+        beende(z, 'hell', ereignisse);
+        return ereignisse;
+      }
+    }
+  }
+
+  // nach jedem zweiten Zug ein neuer Gast an der Tür
+  if (z.zug % ANKUNFT_ALLE === 0 && !kommt(z, ereignisse)) return ereignisse;
+  pruefeEnde(z, ereignisse);
+  return ereignisse;
+}
+
+// Kein Zug möglich: Ist die Tür leer, kommt der nächste Gast sofort, sonst endet der Abend.
+function pruefeEnde(z, ereignisse) {
+  if (z.status !== 'laeuft' || zuege(z).length) return;
+  if (z.tuer.length) return beende(z, 'fest', ereignisse);
+  if (kommt(z, ereignisse) && !zuege(z).length) beende(z, 'fest', ereignisse);
+}
+
+// --- ../prototyp/falsche-farben/src/kern/schluss.js
+// Der Satz am Ende des Abends: Welcher Gast wird genannt, und wie hat der Spieler mit ihm entschieden?
+// Reine Logik ohne Browser. Gibt { art, werte } zurück; den Wortlaut liefert texte.js.
+//
+// Reihenfolge:
+//   1. Endete der Abend, bevor alle Fenster leuchten, und wurde einem Falschen zu schnell geglaubt: der
+//      letzte davon. Er erklärt am ehesten, warum der Saal voll wurde.
+//   2. Ein Falscher, der bis zum Schluss unentdeckt blieb, aber umgesetzt wurde und am Ende bei keinem saß,
+//      dessen Farbe er zeigte: ferngehalten.
+//   3. Der zuletzt aufgeflogene Falsche, geglaubt oder als Letzter dazugesetzt.
+//   4. Ein Falscher, der unentdeckt blieb.
+//   5. Kam keiner: die Farbe, die am Ende auf den meisten Bänken saß.
+
+
+
+function schlussSatz(z) {
+  const auf = z.verlauf.aufgeflogen;
+  const geglaubt = auf.filter((a) => a.wie === 'geglaubt');
+  if (z.ende !== 'hell' && geglaubt.length) {
+    const g = geglaubt[geglaubt.length - 1];
+    return { art: 'geglaubt', zeigte: g.zeigte, echt: g.echt };
+  }
+  const versteckt = [];
+  for (const g of z.tuer) if (istFalsch(g)) versteckt.push({ g, bank: null });
+  for (const bank of z.baenke) for (const g of bank) if (istFalsch(g)) versteckt.push({ g, bank });
+  const fern = versteckt.filter(
+    ({ g, bank }) => z.verlauf.umgesetzt.includes(g.id) && bank && !bank.some((x) => x !== g && x.zeigt === g.zeigt),
+  );
+  if (fern.length) return { art: 'ferngehalten', zeigte: fern[0].g.zeigt, echt: fern[0].g.echt };
+  if (auf.length) {
+    const g = auf[auf.length - 1];
+    return { art: g.wie, zeigte: g.zeigte, echt: g.echt };
+  }
+  if (versteckt.length) return { art: 'unentdeckt', zeigte: versteckt[0].g.zeigt, echt: versteckt[0].g.echt };
+  let best = { farbe: 0, n: -1 };
+  for (let f = 0; f < FARBEN; f++) {
+    const n = z.baenke.filter((b) => b.some((g) => g.zeigt === f)).length;
+    if (n > best.n) best = { farbe: f, n };
+  }
+  return { art: 'verteilt', zeigte: best.farbe, echt: best.farbe, n: best.n };
+}
+
+// --- ../prototyp/falsche-farben/src/texte.js
+// Alle sichtbaren Texte des Prototyps "Falsche Farben". Es gibt nur den einen Satz am Ende des Abends.
+// Er beschreibt trocken, wie der Spieler mit einem Gast entschieden hat, und nennt dessen Farben.
+// Kein Lob, kein Tadel, keine Zahl.
+
+// je Farbe: wie der Gast im Satz heißt (dem/den Roten) und was er war (rot)
+const FARBNAMEN = [
+  { wer: 'Roten', ist: 'rot' },
+  { wer: 'Blauen', ist: 'blau' },
+  { wer: 'Grünen', ist: 'grün' },
+  { wer: 'Violetten', ist: 'violett' },
+];
+
+const SCHLUSSSAETZE = {
+  // ein Falscher flog auf, als schon jemand auf ihm saß
+  geglaubt: 'Dem {wer} hast du zu schnell geglaubt. Er war {ist}.',
+  // ein Falscher flog als Äußerster auf, als vierter zu drei Gleichen
+  zuletzt: 'Den {wer} hast du als Letzten dazugesetzt. Er war {ist}.',
+  // ein Falscher blieb bis zum Schluss unentdeckt, saß aber nicht bei denen, deren Farbe er zeigte
+  ferngehalten: 'Den {wer} hast du von den {wer} getrennt. Er war {ist}.',
+  // ein Falscher blieb unentdeckt und saß mitten unter ihnen
+  unentdeckt: 'Der {wer} saß bis zuletzt. Er war {ist}.',
+  // es kam kein Falscher: welche Farbe am Ende am weitesten verteilt saß
+  verteilt: 'Die {wer} saßen am Ende auf {n} Bänken.',
+  beisammen: 'Die {wer} saßen am Ende beisammen.',
+};
+
+const ZAHLWOERTER = ['', '', 'zwei', 'drei', 'vier', 'fünf'];
+
+function fuelle(vorlage, werte) {
+  return vorlage.replace(/\{(\w+)\}/g, (ganz, name) => (werte[name] === undefined ? ganz : String(werte[name])));
+}
+
+// der fertige Satz zu einem Ergebnis aus kern/schluss.js
+function schlussText(e) {
+  const werte = { wer: FARBNAMEN[e.zeigte].wer, ist: FARBNAMEN[e.echt].ist };
+  if (e.art === 'verteilt') {
+    if (e.n < 2) return fuelle(SCHLUSSSAETZE.beisammen, werte);
+    werte.n = ZAHLWOERTER[e.n];
+  }
+  return fuelle(SCHLUSSSAETZE[e.art], werte);
+}
+
+// --- ../prototyp/falsche-farben/src/anzeige/masse.js
+// Bildschirmaufteilung des Saals, ab 360 x 600. Alles in CSS-Pixeln des sicheren Bereichs.
+// Von oben nach unten: die Rückwand mit den Fenstern (dort oben rechts der Lautsprecher), die Tür mit den
+// Wartenden, dann die fünf Bänke. Unten bleibt ein Rand frei, dort liegt nichts zum Antippen.
+// Eine Bank ist eine Reihe von vier Plätzen. Innen ist links, der äußerste Platz rechts, zum Gang hin.
+
+
+
+const SAALRAND_UNTEN = 26; // so viel bleibt unten frei
+const SEITE = 12;
+
+function berechneSaal(breite, hoehe) {
+  const wandH = Math.round(Math.min(170, Math.max(96, hoehe * 0.19)));
+  const verfuegbar = hoehe - wandH - SAALRAND_UNTEN - 8;
+  let reihe = Math.floor(verfuegbar / (BAENKE + 1)); // Tür und fünf Bänke
+  // Platz: vier Plätze und rechts ein Stück Gang
+  const s = Math.floor(Math.min((breite - 2 * SEITE) / (PLAETZE + 0.7), reihe * 0.98, 96));
+  reihe = Math.min(reihe, Math.round(s * 1.22));
+  const hoch = reihe * (BAENKE + 1);
+  const oben = wandH + Math.max(4, Math.round((verfuegbar - hoch) / 3));
+  const x0 = Math.round((breite - s * (PLAETZE + 0.7)) / 2);
+
+  const plaetze = (zeile) => {
+    const y = oben + zeile * reihe;
+    const liste = [];
+    for (let i = 0; i < PLAETZE; i++) liste.push({ x: x0 + i * s, y, b: s, h: reihe, cx: x0 + (i + 0.5) * s, fy: y + reihe * 0.9 });
+    return liste;
+  };
+
+  const tuer = {
+    zeile: { x: 0, y: oben, b: breite, h: reihe },
+    plaetze: plaetze(0).slice(0, TUER_HOECHSTENS),
+    // die Tür selbst steht rechts neben den Wartenden
+    rahmen: { x: x0 + TUER_HOECHSTENS * s + s * 0.15, y: oben + reihe * 0.04, b: s * 1.0, h: reihe * 0.96 },
+  };
+  const baenke = [];
+  for (let b = 0; b < BAENKE; b++) {
+    const p = plaetze(b + 1);
+    baenke.push({ zeile: { x: 0, y: p[0].y, b: breite, h: reihe }, plaetze: p, holz: { x: x0 - s * 0.08, y: p[0].y + reihe * 0.5, b: s * PLAETZE + s * 0.16, h: reihe * 0.44 } });
+  }
+
+  // Fenster: zwei Reihen auf der Rückwand
+  const proReihe = Math.ceil(FENSTER / 2);
+  const fb = Math.floor((breite - 2 * SEITE) / proReihe);
+  const fh = Math.floor((wandH - 22) / 2);
+  const fenster = [];
+  for (let i = 0; i < FENSTER; i++) {
+    const r = Math.floor(i / proReihe);
+    const c = i % proReihe;
+    fenster.push({ x: SEITE + c * fb + fb * 0.16, y: 12 + r * (fh + 4), b: fb * 0.68, h: fh - 2 });
+  }
+
+  return {
+    breite,
+    hoehe,
+    s,
+    reihe,
+    wand: { x: 0, y: 0, b: breite, h: wandH },
+    fenster,
+    tuer,
+    baenke,
+    ton: { x: breite - 26, y: 20, b: 44, h: 40 },
+    // der Satz am Ende steht über der Tür, damit man alle Bänke sieht
+    satz: { x: SEITE, y: oben - 6, b: breite - 2 * SEITE, h: reihe + 6 },
+    unten: baenke[BAENKE - 1].zeile.y + reihe,
+  };
+}
+
+function imSaalKasten(k, x, y) {
+  return x >= k.x && x <= k.x + k.b && y >= k.y && y <= k.y + k.h;
+}
+
+// Was liegt unter dem Finger? { art: 'ton' } | { art: 'tuer' } | { art: 'bank', bank, platz } | { art: 'nichts' }
+// platz ist der Platz in der Bank, über dem der Finger liegt (0 innen bis 3 außen), oder 4 im Gang daneben.
+function wasImSaal(m, x, y) {
+  const t = m.ton;
+  if (Math.abs(x - t.x) <= t.b / 2 && Math.abs(y - t.y) <= t.h / 2) return { art: 'ton' };
+  if (imSaalKasten(m.tuer.zeile, x, y)) return { art: 'tuer' };
+  for (let b = 0; b < m.baenke.length; b++) {
+    if (!imSaalKasten(m.baenke[b].zeile, x, y)) continue;
+    const p = m.baenke[b].plaetze;
+    const platz = Math.max(0, Math.min(PLAETZE, Math.floor((x - p[0].x) / m.s)));
+    return { art: 'bank', bank: b, platz };
+  }
+  return { art: 'nichts' };
+}
+
+// --- anzeige/formen.js
+// Farben und kleine Zeichenhilfen für die ganze Anzeige.
+
+const FARBE = {
+  nacht: '#080a10',
+  wand: '#2b3550',
+  wandKante: '#3a4666',
+  wandDunkel: '#171d2c',
+  boden: '#151c2b',
+  feld: '#212c44',
+  feldKante: '#2a3858',
+  glas: '#0c1626',
+  glasGlanz: '#1c2d48',
+  tafel: '#120e08',
+  tafelRand: '#2c2416',
+  bernstein: '#ffb347',
+  bernsteinAus: '#33260f',
+  rot: '#e8402f',
+  rotHell: '#ff7a63',
+  herz: '#f08a7a',
+  ruhe: '#bfe3ff',
+  leer: '#39435c',
+  gruen: '#6fdc8f',
+  warm: '#ffd9a0',
+  spieler: { mantel: '#eadfc6', kopf: '#f7eedb', schuh: '#8d7b5e', schal: '#ffb347' },
+  pendler: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658', tasche: '#4a392b', arm: '#56667d' },
+  gruppe: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', rucksack: '#2f6155', wimpel: '#f2d264' },
+  draengler: { mantel: '#9a5a74', kopf: '#dbb9c6', schuh: '#4f2c3c', arm: '#7c455c' },
+  kontrolleur: { mantel: '#33405f', kopf: '#c6ccd8', schuh: '#1d2538', arm: '#2b3752', muetze: '#28334f', band: '#c8463c', zange: '#cfd4de' },
+};
+
+function rundesRechteck(stift, x, y, b, h, r) {
+  const k = Math.min(r, b / 2, h / 2);
+  stift.beginPath();
+  stift.moveTo(x + k, y);
+  stift.lineTo(x + b - k, y);
+  stift.quadraticCurveTo(x + b, y, x + b, y + k);
+  stift.lineTo(x + b, y + h - k);
+  stift.quadraticCurveTo(x + b, y + h, x + b - k, y + h);
+  stift.lineTo(x + k, y + h);
+  stift.quadraticCurveTo(x, y + h, x, y + h - k);
+  stift.lineTo(x, y + k);
+  stift.quadraticCurveTo(x, y, x + k, y);
+  stift.closePath();
+}
+
+function kreis(stift, x, y, r) {
+  stift.beginPath();
+  stift.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
+}
+
+function begrenze(wert, von, bis) {
+  return wert < von ? von : wert > bis ? bis : wert;
+}
+
+// weiches Auslaufen
+function sanft(p) {
+  return 1 - (1 - p) * (1 - p) * (1 - p);
+}
+
+// Auslaufen mit kleinem Überschwingen, für den Flusszustand
+function leicht(p) {
+  const c = 1.9;
+  return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2);
+}
+
+// hin und zurück: 0 -> 1 -> 0
+function hinUndHer(p) {
+  return Math.sin(p * Math.PI);
+}
+
+// --- ../prototyp/falsche-farben/src/anzeige/saal.js
+// Der Saal: eine warme, goldene Halle in der Nacht. Hohe Rückwand mit zwei Reihen Fenstern, Dielenboden,
+// fünf Holzbänke mit Lehne, rechts oben die Tür. Der Hintergrund wird einmal je Größe vorgemalt.
+
+
+
+const SAALFARBE = {
+  nacht: '#120c07',
+  wand: '#3b2715',
+  wandLeiste: '#56391d',
+  boden: '#4a2f17',
+  diele: '#563719',
+  fuge: '#3a240f',
+  glas: '#141a2a',
+  glasRand: '#6b4a24',
+  licht: '#ffd47e',
+  lichtHell: '#fff1c8',
+  lehne: '#6e4524',
+  sitz: '#8a5a2f',
+  sitzKante: '#a06c3a',
+  tuer: '#2a1a0c',
+  tuerRahmen: '#7a5228',
+  wahl: '#ffe3a1',
+  schrift: '#ffe2a6',
+  schriftGrund: '#1c1209',
+};
+
+function maleSaalGrund(m, dichte) {
+  const leinwand = document.createElement('canvas');
+  leinwand.width = Math.round(m.breite * dichte);
+  leinwand.height = Math.round(m.hoehe * dichte);
+  const st = leinwand.getContext('2d');
+  st.scale(dichte, dichte);
+
+  // Boden: Dielen quer
+  st.fillStyle = SAALFARBE.boden;
+  st.fillRect(0, 0, m.breite, m.hoehe);
+  const diele = Math.max(10, Math.round(m.s * 0.32));
+  for (let y = m.wand.h, i = 0; y < m.hoehe; y += diele, i++) {
+    st.fillStyle = i % 2 ? SAALFARBE.diele : SAALFARBE.boden;
+    st.fillRect(0, y, m.breite, diele - 1);
+    st.fillStyle = SAALFARBE.fuge;
+    st.fillRect(0, y + diele - 1, m.breite, 1);
+    const versatz = (i * 0.37) % 1;
+    for (let x = versatz * m.breite * 0.5; x < m.breite; x += m.breite * 0.5) st.fillRect(x, y, 1, diele - 1);
+  }
+  // warmer Schein von oben
+  const schein = st.createLinearGradient(0, m.wand.h, 0, m.hoehe);
+  schein.addColorStop(0, 'rgba(255,200,120,0.16)');
+  schein.addColorStop(1, 'rgba(0,0,0,0.25)');
+  st.fillStyle = schein;
+  st.fillRect(0, m.wand.h, m.breite, m.hoehe - m.wand.h);
+
+  // Rückwand mit Leiste
+  st.fillStyle = SAALFARBE.wand;
+  st.fillRect(0, 0, m.breite, m.wand.h);
+  st.fillStyle = SAALFARBE.wandLeiste;
+  st.fillRect(0, m.wand.h - 6, m.breite, 6);
+
+  // Fenster, dunkel; die hellen malt die Bühne darüber
+  for (const f of m.fenster) {
+    st.fillStyle = SAALFARBE.glasRand;
+    st.fillRect(f.x - 2, f.y - 2, f.b + 4, f.h + 4);
+    st.fillStyle = SAALFARBE.glas;
+    st.fillRect(f.x, f.y, f.b, f.h);
+    maleSprossen(st, f, SAALFARBE.glasRand);
+  }
+
+  // Tür
+  const t = m.tuer.rahmen;
+  st.fillStyle = SAALFARBE.tuerRahmen;
+  rundesRechteck(st, t.x - 3, t.y - 3, t.b + 6, t.h + 3, 4);
+  st.fill();
+  st.fillStyle = SAALFARBE.tuer;
+  st.fillRect(t.x, t.y, t.b, t.h);
+  st.fillStyle = 'rgba(255,212,126,0.10)';
+  st.fillRect(t.x, t.y + t.h * 0.55, t.b, t.h * 0.45);
+
+  // Bänke: Lehne hinter den Plätzen, Sitzfläche davor
+  for (const bank of m.baenke) {
+    const h = bank.holz;
+    st.fillStyle = SAALFARBE.lehne;
+    rundesRechteck(st, h.x, bank.zeile.y + m.reihe * 0.22, h.b, m.reihe * 0.4, m.s * 0.06);
+    st.fill();
+    for (const p of bank.plaetze) {
+      st.fillStyle = 'rgba(0,0,0,0.12)';
+      st.fillRect(p.x + p.b - 1, bank.zeile.y + m.reihe * 0.26, 2, m.reihe * 0.32);
+    }
+  }
+  return leinwand;
+}
+
+function maleSprossen(st, f, farbe) {
+  st.fillStyle = farbe;
+  st.fillRect(f.x + f.b / 2 - 1, f.y, 2, f.h);
+  st.fillRect(f.x, f.y + f.h * 0.45, f.b, 2);
+}
+
+// Sitzfläche, über den sitzenden Figuren gemalt, damit sie auf der Bank sitzen
+function maleSitz(st, m, bank) {
+  const h = bank.holz;
+  st.fillStyle = SAALFARBE.sitz;
+  rundesRechteck(st, h.x, bank.zeile.y + m.reihe * 0.8, h.b, m.reihe * 0.13, m.s * 0.04);
+  st.fill();
+  st.fillStyle = SAALFARBE.sitzKante;
+  st.fillRect(h.x + 2, bank.zeile.y + m.reihe * 0.8, h.b - 4, 2);
+  st.fillStyle = SAALFARBE.lehne;
+  st.fillRect(h.x + m.s * 0.1, bank.zeile.y + m.reihe * 0.93, m.s * 0.08, m.reihe * 0.07);
+  st.fillRect(h.x + h.b - m.s * 0.18, bank.zeile.y + m.reihe * 0.93, m.s * 0.08, m.reihe * 0.07);
+}
+
+// ein leuchtendes Fenster, staerke 0..1
+function maleLichtFenster(st, f, staerke) {
+  if (staerke <= 0.01) return;
+  st.save();
+  st.globalAlpha = 0.22 * staerke;
+  st.fillStyle = SAALFARBE.licht;
+  st.fillRect(f.x - 5, f.y - 5, f.b + 10, f.h + 10);
+  st.globalAlpha = 0.12 * staerke;
+  st.fillRect(f.x - 10, f.y - 9, f.b + 20, f.h + 18);
+  st.globalAlpha = staerke;
+  const g = st.createLinearGradient(0, f.y, 0, f.y + f.h);
+  g.addColorStop(0, SAALFARBE.lichtHell);
+  g.addColorStop(1, SAALFARBE.licht);
+  st.fillStyle = g;
+  st.fillRect(f.x, f.y, f.b, f.h);
+  maleSprossen(st, f, SAALFARBE.glasRand);
+  st.restore();
+}
+
+// --- ../prototyp/falsche-farben/src/anzeige/gaeste.js
+// Gäste im Saal: Mantel, Kopf, Hut. Jede Farbe hat ihren eigenen Hut, damit man sie auch ohne
+// Farbsehen unterscheidet: rot ein runder, blau ein hoher, grün ein breiter, violett eine Mütze mit Bommel.
+// Ein Falscher trägt Farbe und Hut der Gruppe, die er zeigt, nur eine Spur kräftiger, mit hellem Kragen.
+
+
+
+const GASTFARBEN = [
+  { mantel: '#b5452f', kraeftig: '#d6391c', hut: '#5e2117', kopf: '#ecc9a8' },
+  { mantel: '#33609c', kraeftig: '#1f66d1', hut: '#172c4d', kopf: '#e6c7a6' },
+  { mantel: '#3f8350', kraeftig: '#22a347', hut: '#1c3d24', kopf: '#ebcaa9' },
+  { mantel: '#76508f', kraeftig: '#8f3dc7', hut: '#382449', kopf: '#e8c8a8' },
+];
+
+// Mischt zwei Farben '#rrggbb', p von 0 (a) bis 1 (b)
+function mische(a, b, p) {
+  const ka = parseInt(a.slice(1), 16);
+  const kb = parseInt(b.slice(1), 16);
+  let aus = '#';
+  for (const k of [16, 8, 0]) {
+    const wert = Math.round(((ka >> k) & 255) * (1 - p) + ((kb >> k) & 255) * p);
+    aus += (wert < 16 ? '0' : '') + wert.toString(16);
+  }
+  return aus;
+}
+
+function maleHut(stift, form, x, y, k, farbe) {
+  stift.fillStyle = farbe;
+  if (form === 0) {
+    // runder Hut: Kuppel mit schmaler Krempe
+    stift.beginPath();
+    stift.arc(x, y - k * 0.35, k * 0.85, Math.PI, 0);
+    stift.fill();
+    rundesRechteck(stift, x - k * 1.25, y - k * 0.42, k * 2.5, k * 0.36, k * 0.18);
+    stift.fill();
+  } else if (form === 1) {
+    // hoher Hut
+    rundesRechteck(stift, x - k * 0.75, y - k * 2.2, k * 1.5, k * 1.95, k * 0.15);
+    stift.fill();
+    rundesRechteck(stift, x - k * 1.25, y - k * 0.42, k * 2.5, k * 0.36, k * 0.18);
+    stift.fill();
+  } else if (form === 2) {
+    // breiter Hut: flache Kappe, weite Krempe
+    rundesRechteck(stift, x - k * 0.75, y - k * 0.95, k * 1.5, k * 0.7, k * 0.3);
+    stift.fill();
+    rundesRechteck(stift, x - k * 1.9, y - k * 0.42, k * 3.8, k * 0.34, k * 0.17);
+    stift.fill();
+  } else {
+    // Mütze mit Bommel
+    stift.beginPath();
+    stift.arc(x, y - k * 0.2, k * 1.02, Math.PI, 0);
+    stift.fill();
+    kreis(stift, x, y - k * 1.45, k * 0.42);
+    stift.fill();
+  }
+}
+
+// (cx, fy): Mitte unter der Figur. s: Größe eines Platzes.
+// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, kraeftig 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
+function maleGast(stift, cx, fy, s, o) {
+  const farbe = GASTFARBEN[o.farbe];
+  const alt = o.alt === undefined || o.alt === null ? farbe : GASTFARBEN[o.alt];
+  const w = o.wechsel === undefined ? 1 : o.wechsel;
+  const kr = o.kraeftig || 0;
+  const sitzt = o.sitzt === undefined ? 1 : o.sitzt;
+  const hoch = s * (0.62 + 0.14 * (1 - sitzt));
+  const schulter = s * 0.46;
+  const saum = s * 0.56;
+  const k = s * 0.13;
+  const schulterY = fy - hoch + k * 1.9;
+  const r = schulter * 0.28;
+
+  const mantelVon = mische(alt.mantel, alt.kraeftig, kr);
+  const mantelNach = mische(farbe.mantel, farbe.kraeftig, kr);
+  const mantel = mische(mantelVon, mantelNach, w);
+  const hut = mische(alt.hut, farbe.hut, w);
+
+  if (o.glanz > 0.01) schein(stift, cx, fy - hoch * 0.5, s * 0.55, 'rgba(255,240,190,', 0.75 * o.glanz);
+
+  stift.fillStyle = mantel;
+  stift.beginPath();
+  stift.moveTo(cx - saum / 2, fy);
+  stift.lineTo(cx - schulter / 2, schulterY + r);
+  stift.quadraticCurveTo(cx - schulter / 2, schulterY, cx - schulter / 2 + r, schulterY);
+  stift.lineTo(cx + schulter / 2 - r, schulterY);
+  stift.quadraticCurveTo(cx + schulter / 2, schulterY, cx + schulter / 2, schulterY + r);
+  stift.lineTo(cx + saum / 2, fy);
+  stift.closePath();
+  stift.fill();
+
+  // Kragen: bei Falschen hell
+  const kragen = mische(mische(mantel, '#000000', 0.25), '#ffe2a0', kr * 0.85);
+  stift.fillStyle = kragen;
+  stift.beginPath();
+  stift.moveTo(cx - k * 1.1, schulterY);
+  stift.lineTo(cx, schulterY + k * 1.1);
+  stift.lineTo(cx + k * 1.1, schulterY);
+  stift.closePath();
+  stift.fill();
+
+  const kopfY = schulterY - k * 0.85;
+  stift.fillStyle = farbe.kopf;
+  kreis(stift, cx, kopfY, k);
+  stift.fill();
+
+  // Beim Wechsel schrumpft der alte Hut und der neue wächst
+  if (w < 1) {
+    stift.save();
+    stift.globalAlpha *= 1 - w;
+    maleHut(stift, o.alt, cx, kopfY - k * 0.55, k * (1 - w * 0.5), hut);
+    stift.restore();
+  }
+  stift.save();
+  stift.globalAlpha *= w;
+  maleHut(stift, o.farbe, cx, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
+  if (kr > 0.01) {
+    // eine feine helle Kante am Hut
+    stift.globalAlpha *= 0.7 * kr;
+    stift.fillStyle = '#ffe9b8';
+    stift.fillRect(cx - k * 1.1, kopfY - k * 0.95, k * 2.2, Math.max(1, k * 0.12));
+  }
+  stift.restore();
+
+  // Leuchten beim Räumen
+  if (o.licht > 0.01) schein(stift, cx, fy - hoch * 0.5, s * 0.7, 'rgba(255,226,150,', 0.8 * o.licht);
+}
+
+// weicher, runder Schein, innen hell, nach außen auslaufend
+function schein(stift, x, y, r, farbe, staerke) {
+  const g = stift.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, farbe + staerke + ')');
+  g.addColorStop(1, farbe + '0)');
+  stift.fillStyle = g;
+  kreis(stift, x, y, r);
+  stift.fill();
+}
+
+// --- ../prototyp/freier-platz/src/anzeige/gestalten.js
+// Alles, was im Wagen 7 zu sehen ist: Menschen, Schaffner, Tasche, Lampen, Schatten, Fahrkarte.
+// Einfache Formen, niemand hat ein Gesicht. Schatten gibt es nur als flache, geworfene Schatten
+// im Lampenlicht: Deshalb hat hier keine Figur den runden Bodenschatten des Hauptspiels.
+
+
+
+const PLATZFARBE = {
+  licht: '255, 217, 160',
+  schatten: '3, 5, 12',
+  schaffner: { mantel: '#3a55a4', kopf: '#d3d8e4', schuh: '#10141f', muetze: '#1f2e5e', band: '#d2553f', schirm: '#0d1322', knopf: '#ffb347', arm: '#2f4688' },
+  schlaefer: { mantel: '#6d7f98', kopf: '#bcc6d4', schuh: '#3b4658' },
+  wacher: { mantel: '#4f9483', kopf: '#b9dbd0', schuh: '#2c5449', buch: '#e9dcc0' },
+  tasche: { leder: '#8a6547', naht: '#5c4331', griff: '#4a3526', schild: '#e9dcc0' },
+  zange: '#cfd6e2',
+  papier: '#e9dcc0',
+  papierKante: '#c9bb9a',
+  papierFalz: '#d8caa9',
+  lampe: { arm: '#8796ae', kopf: '#fff1d6', schirm: '#5b6680' },
+};
+
+function strich(stift, punkte, farbe, dicke) {
+  stift.strokeStyle = farbe;
+  stift.lineWidth = dicke;
+  stift.lineCap = 'round';
+  stift.lineJoin = 'round';
+  stift.beginPath();
+  stift.moveTo(punkte[0][0], punkte[0][1]);
+  for (let i = 1; i < punkte.length; i++) stift.lineTo(punkte[i][0], punkte[i][1]);
+  stift.stroke();
+}
+
+// Rumpf und Kopf. (cx, fy) ist der Punkt unter der Figur, s die Feldgröße.
+// o: farben, sitzt, neigung, kopfX und kopfY (Versatz des Kopfs in Feldern), schultern (Heben in Feldern)
+function maleMensch(stift, cx, fy, s, o) {
+  const sitzt = o.sitzt === true;
+  const hoch = s * (sitzt ? 0.6 : 0.74);
+  const schulter = s * (sitzt ? 0.37 : 0.35);
+  const saum = s * (sitzt ? 0.46 : 0.4);
+  const kopf = s * 0.12;
+  const heben = (o.schultern || 0) * s;
+  const schulterY = fy - hoch + kopf * 1.75 - heben;
+  const schub = (o.neigung || 0) * hoch * 0.16;
+  const r = Math.min(schulter * 0.3, hoch * 0.16);
+  const f = o.farben;
+
+  if (!sitzt) {
+    stift.fillStyle = f.schuh;
+    rundesRechteck(stift, cx - saum * 0.42, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+    stift.fill();
+    rundesRechteck(stift, cx + saum * 0.06, fy - hoch * 0.07, saum * 0.36, hoch * 0.09, hoch * 0.03);
+    stift.fill();
+  }
+
+  stift.fillStyle = f.mantel;
+  stift.beginPath();
+  stift.moveTo(cx - saum / 2, fy - hoch * 0.05);
+  stift.lineTo(cx - schulter / 2 + schub, schulterY + r);
+  stift.quadraticCurveTo(cx - schulter / 2 + schub, schulterY, cx - schulter / 2 + schub + r, schulterY);
+  stift.lineTo(cx + schulter / 2 + schub - r, schulterY);
+  stift.quadraticCurveTo(cx + schulter / 2 + schub, schulterY, cx + schulter / 2 + schub, schulterY + r);
+  stift.lineTo(cx + saum / 2, fy - hoch * 0.05);
+  stift.closePath();
+  stift.fill();
+
+  const kopfX = cx + schub * 1.35 + (o.kopfX || 0) * s;
+  const kopfY = schulterY - kopf * 0.72 + heben * 0.6 + (o.kopfY || 0) * s;
+  stift.fillStyle = f.kopf;
+  kreis(stift, kopfX, kopfY, kopf);
+  stift.fill();
+  return { schulterY, kopfX, kopfY, schub, schulter, kopf, hoch };
+}
+
+// Die Tasche: liegt auf dem Fensterplatz oder ist beim Spieler. gross: 1 auf dem Sitz, kleiner in der Hand.
+function maleTasche(stift, cx, cy, s, gross) {
+  const f = PLATZFARBE.tasche;
+  const b = s * 0.46 * gross;
+  const h = s * 0.3 * gross;
+  const x = cx - b / 2;
+  const y = cy - h / 2;
+  strich(stift, [[x + b * 0.3, y + 1], [x + b * 0.34, y - h * 0.34], [x + b * 0.66, y - h * 0.34], [x + b * 0.7, y + 1]], f.griff, Math.max(1.5, s * 0.04 * gross));
+  stift.fillStyle = f.leder;
+  rundesRechteck(stift, x, y, b, h, s * 0.07 * gross);
+  stift.fill();
+  stift.fillStyle = f.naht;
+  stift.fillRect(x + b * 0.08, y + h * 0.3, b * 0.84, Math.max(1, h * 0.09));
+  stift.fillStyle = f.schild;
+  stift.fillRect(x + b * 0.42, y + h * 0.5, b * 0.16, h * 0.24);
+}
+
+// Der Spieler: heller Mantel, bernsteinfarbener Schal, wie im Hauptspiel.
+// o: sitzt, neigung, traegt (hat die Tasche), sx (Seite der Tasche im Stehen)
+function maleReisenden(stift, cx, fy, s, o) {
+  const f = FARBE.spieler;
+  if (o.traegt && !o.sitzt) maleTasche(stift, cx + s * 0.27, fy - s * 0.2, s, 0.62);
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: o.sitzt, neigung: o.neigung || 0 });
+  stift.fillStyle = f.schal;
+  rundesRechteck(stift, cx - k.schulter * 0.42 + k.schub, k.schulterY - s * 0.025, k.schulter * 0.84, s * 0.085, s * 0.04);
+  stift.fill();
+  stift.beginPath();
+  stift.moveTo(cx + k.schulter * 0.1 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + k.schulter * 0.34 + k.schub, k.schulterY + s * 0.03);
+  stift.lineTo(cx + k.schulter * 0.36 + k.schub, k.schulterY + s * 0.24);
+  stift.lineTo(cx + k.schulter * 0.12 + k.schub, k.schulterY + s * 0.22);
+  stift.closePath();
+  stift.fill();
+  // im Sitzen liegt die Tasche auf dem Schoß
+  if (o.traegt && o.sitzt) maleTasche(stift, cx - s * 0.02, fy - s * 0.13, s, 0.66);
+  // ein Arm, der sich nach etwas streckt und es nicht erreicht
+  if (o.arm) {
+    const sx = cx + Math.sign(o.arm.x || 0.001) * k.schulter * 0.4 + k.schub;
+    const sy = k.schulterY + s * 0.09;
+    strich(stift, [[sx, sy], [sx + o.arm.x * s, sy + o.arm.y * s]], '#d6caae', s * 0.075);
+    stift.fillStyle = f.kopf;
+    kreis(stift, sx + o.arm.x * s, sy + o.arm.y * s, s * 0.04);
+    stift.fill();
+  }
+  return k;
+}
+
+// Der Schlafende: zur Seite gesunken, Kopf auf der Brust. Wach sitzt er gerade.
+// o: wach 0..1, atem (-1..1), kopfX, kopfY, schultern
+function maleSchlaefer(stift, cx, fy, s, o) {
+  const schlaf = 1 - o.wach;
+  const k = maleMensch(stift, cx, fy + (o.atem || 0) * schlaf * s * 0.008, s, {
+    farben: PLATZFARBE.schlaefer,
+    sitzt: true,
+    neigung: 0.55 * schlaf,
+    kopfX: 0.05 * schlaf + (o.kopfX || 0),
+    kopfY: 0.075 * schlaf + (o.kopfY || 0),
+    schultern: o.schultern || 0,
+  });
+  // Krawatte, lose
+  stift.fillStyle = PLATZFARBE.schlaefer.schuh;
+  stift.beginPath();
+  stift.moveTo(cx - s * 0.022 + k.schub, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.022 + k.schub, k.schulterY + s * 0.02);
+  stift.lineTo(cx + s * 0.03 + k.schub * 0.5, k.schulterY + s * 0.18);
+  stift.lineTo(cx + k.schub * 0.5, k.schulterY + s * 0.22);
+  stift.lineTo(cx - s * 0.03 + k.schub * 0.5, k.schulterY + s * 0.18);
+  stift.closePath();
+  stift.fill();
+  return k;
+}
+
+// Der wache Fahrgast: liest.
+function maleWachen(stift, cx, fy, s) {
+  const f = PLATZFARBE.wacher;
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: true, kopfY: 0.012 });
+  stift.fillStyle = f.buch;
+  stift.fillRect(cx - s * 0.13, fy - s * 0.3, s * 0.12, s * 0.15);
+  stift.fillRect(cx + s * 0.01, fy - s * 0.3, s * 0.12, s * 0.15);
+  stift.fillStyle = f.schuh;
+  stift.fillRect(cx - s * 0.008, fy - s * 0.3, s * 0.016, s * 0.15);
+  return k;
+}
+
+// Die Lochzange. (hx, hy) ist die Hand, (dx, dy) die Richtung, offen 0..1.
+function maleZange(stift, hx, hy, dx, dy, s, offen) {
+  const lang = s * 0.24;
+  const gx = hx + dx * lang * 0.42; // Gelenk
+  const gy = hy + dy * lang * 0.42;
+  const qx = -dy;
+  const qy = dx;
+  const weit = 0.07 + 0.2 * offen;
+  const farbe = PLATZFARBE.zange;
+  const dicke = Math.max(1.6, s * 0.04);
+  // Griffe hinter dem Gelenk
+  strich(stift, [[hx - dx * s * 0.03 + qx * s * 0.045, hy - dy * s * 0.03 + qy * s * 0.045], [gx, gy]], farbe, dicke);
+  strich(stift, [[hx - dx * s * 0.03 - qx * s * 0.045, hy - dy * s * 0.03 - qy * s * 0.045], [gx, gy]], farbe, dicke);
+  // Backen davor
+  const rest = lang * 0.58;
+  for (const seite of [-1, 1]) {
+    const c = Math.cos(weit * seite);
+    const sn = Math.sin(weit * seite);
+    strich(stift, [[gx, gy], [gx + (dx * c - dy * sn) * rest, gy + (dx * sn + dy * c) * rest]], farbe, dicke);
+  }
+}
+
+const ZANGENLAENGE = 0.24; // in Feldern, von der Hand bis zur Spitze
+
+// Der Schaffner. Er sieht in jeder Warterunde gleich aus.
+// o: blick ('hoch' | 'links' | 'rechts' | 'runter'), nick 0..1, gruss 0..1, neigung,
+//    zeigt { x, y } (Bildpunkt, auf den die Zange zielt) oder null, streck 0..1, offen 0..1 (Zange)
+function maleSchaffner(stift, cx, fy, s, o) {
+  const f = PLATZFARBE.schaffner;
+  const k = maleMensch(stift, cx, fy, s, { farben: f, sitzt: false, neigung: o.neigung || 0, kopfY: (o.nick || 0) * 0.04 });
+  // zwei Knöpfe
+  stift.fillStyle = f.knopf;
+  kreis(stift, cx + k.schub * 0.8, k.schulterY + s * 0.12, s * 0.022);
+  stift.fill();
+  kreis(stift, cx + k.schub * 0.5, k.schulterY + s * 0.24, s * 0.022);
+  stift.fill();
+
+  // Mütze: Kuppe, rotes Band, Schirm in Blickrichtung
+  const gruss = o.gruss || 0;
+  const my = k.kopfY - k.kopf * 0.22 - gruss * s * 0.09;
+  stift.fillStyle = f.muetze;
+  stift.beginPath();
+  stift.arc(k.kopfX, my, k.kopf * 1.08, Math.PI, 0);
+  stift.closePath();
+  stift.fill();
+  stift.fillStyle = f.band;
+  rundesRechteck(stift, k.kopfX - k.kopf * 1.1, my - k.kopf * 0.12, k.kopf * 2.2, k.kopf * 0.34, k.kopf * 0.1);
+  stift.fill();
+  stift.fillStyle = f.schirm;
+  if (o.blick === 'links' || o.blick === 'rechts') {
+    const r = o.blick === 'links' ? -1 : 1;
+    rundesRechteck(stift, k.kopfX + (r > 0 ? k.kopf * 0.55 : -k.kopf * 1.75), my + k.kopf * 0.12, k.kopf * 1.2, k.kopf * 0.28, k.kopf * 0.12);
+    stift.fill();
+  } else if (o.blick === 'runter') {
+    rundesRechteck(stift, k.kopfX - k.kopf * 0.8, my + k.kopf * 0.16, k.kopf * 1.6, k.kopf * 0.3, k.kopf * 0.14);
+    stift.fill();
+  }
+
+  // der freie Arm tippt beim Grüßen an die Mütze
+  if (gruss > 0.02) {
+    const sx = cx - k.schulter * 0.44 + k.schub;
+    const sy = k.schulterY + s * 0.08;
+    const hx = k.kopfX - k.kopf * 1.05;
+    const hy = my + k.kopf * 0.1 + (1 - gruss) * s * 0.3;
+    strich(stift, [[sx, sy], [sx - s * 0.1, sy + s * 0.1 * (1 - gruss)], [hx, hy]], f.arm, s * 0.075);
+    stift.fillStyle = f.kopf;
+    kreis(stift, hx, hy, s * 0.038);
+    stift.fill();
+  }
+
+  // der Arm mit der Zange: hängt an der Seite oder zeigt genau auf das störende Ding
+  const streck = o.zeigt ? o.streck || 0 : 0;
+  const seite = o.zeigt ? (o.zeigt.x < cx ? -1 : 1) : 1;
+  const sx = cx + seite * k.schulter * 0.42 + k.schub;
+  const sy = k.schulterY + s * 0.09;
+  const ruheX = cx + k.schulter * 0.5 + s * 0.03;
+  const ruheY = k.schulterY + s * 0.3;
+  let hx = ruheX;
+  let hy = ruheY;
+  let dx = 0.25;
+  let dy = 0.97;
+  if (streck > 0.001) {
+    const zx = o.zeigt.x - sx;
+    const zy = o.zeigt.y - sy;
+    const weit = Math.max(1, Math.hypot(zx, zy));
+    const armlang = Math.max(s * 0.12, weit - s * ZANGENLAENGE);
+    const zielX = sx + (zx / weit) * armlang;
+    const zielY = sy + (zy / weit) * armlang;
+    hx = ruheX + (zielX - ruheX) * streck;
+    hy = ruheY + (zielY - ruheY) * streck;
+    const rx = dx + (zx / weit - dx) * streck;
+    const ry = dy + (zy / weit - dy) * streck;
+    const rl = Math.max(0.001, Math.hypot(rx, ry));
+    dx = rx / rl;
+    dy = ry / rl;
+  }
+  const schulterX = streck > 0.001 ? sx + (cx + k.schulter * 0.42 + k.schub - sx) * (1 - streck) : cx + k.schulter * 0.42 + k.schub;
+  strich(stift, [[schulterX, sy], [hx, hy]], f.arm, s * 0.08);
+  stift.fillStyle = f.kopf;
+  kreis(stift, hx, hy, s * 0.04);
+  stift.fill();
+  maleZange(stift, hx, hy, dx, dy, s, o.offen === undefined ? 1 : o.offen);
+  return { spitzeX: hx + dx * s * ZANGENLAENGE, spitzeY: hy + dy * s * ZANGENLAENGE, kopfX: k.kopfX, kopfY: my - k.kopf * 1.08 };
+}
+
+// Der geworfene Schatten: der Umriss einer sitzenden Figur, flach hingelegt.
+// (bx, by) ist sein Fuß, richtung -1 oder +1, laenge und dicke in Pixeln.
+function maleWurfschatten(stift, bx, by, richtung, laenge, dicke, staerke) {
+  if (laenge < 1 || staerke <= 0.01) return;
+  const u = (t) => bx + richtung * t * laenge;
+  const kr = Math.min(dicke * 0.3, laenge * 0.19);
+  stift.fillStyle = `rgba(${PLATZFARBE.schatten}, ${0.62 * staerke})`;
+  stift.beginPath();
+  // Rumpf: am Saum breit, an den Schultern schmaler und rund
+  stift.moveTo(u(0), by - dicke * 0.5);
+  stift.lineTo(u(0.5), by - dicke * 0.41);
+  stift.quadraticCurveTo(u(0.61), by - dicke * 0.41, u(0.61), by - dicke * 0.27);
+  stift.lineTo(u(0.61), by + dicke * 0.27);
+  stift.quadraticCurveTo(u(0.61), by + dicke * 0.41, u(0.5), by + dicke * 0.41);
+  stift.lineTo(u(0), by + dicke * 0.5);
+  stift.closePath();
+  // Kopf, im selben Drehsinn, damit sich beide Flächen vereinen
+  const kx = u(0.61) + richtung * kr * 0.8;
+  stift.moveTo(kx + kr, by);
+  stift.arc(kx, by, kr, 0, Math.PI * 2, richtung < 0);
+  stift.fill();
+}
+
+// Der blasse Lichtkeil zeigt, wohin das Licht fällt.
+// kopf: Lampenkopf, richtung -1 oder +1, weit: Reichweite in Pixeln, oben und unten: Rand der Reihe
+function maleLichtkeil(stift, kopf, richtung, weit, oben, unten, s, staerke) {
+  if (staerke <= 0.01 || weit < 2) return;
+  const fern = kopf.x + richtung * weit;
+  const verlauf = stift.createLinearGradient(kopf.x, 0, fern, 0);
+  verlauf.addColorStop(0, `rgba(${PLATZFARBE.licht}, ${0.34 * staerke})`);
+  verlauf.addColorStop(0.5, `rgba(${PLATZFARBE.licht}, ${0.17 * staerke})`);
+  verlauf.addColorStop(1, `rgba(${PLATZFARBE.licht}, ${0.05 * staerke})`);
+  stift.save();
+  stift.globalCompositeOperation = 'lighter';
+  stift.fillStyle = verlauf;
+  const auf = Math.min(weit, s * 0.5);
+  stift.beginPath();
+  stift.moveTo(kopf.x, kopf.y - s * 0.02);
+  stift.lineTo(kopf.x + richtung * auf, oben);
+  stift.lineTo(fern, oben);
+  stift.lineTo(fern, unten);
+  stift.lineTo(kopf.x + richtung * auf, unten);
+  stift.lineTo(kopf.x, kopf.y + s * 0.1);
+  stift.closePath();
+  stift.fill();
+  stift.restore();
+}
+
+// Die Leselampe: Gelenk auf der Lehne, Arm, Kopf. winkel 0 zeigt nach rechts, Pi nach links.
+function maleLampe(stift, gelenk, winkel, s, armlaenge) {
+  const f = PLATZFARBE.lampe;
+  const kx = gelenk.x + Math.cos(winkel) * armlaenge;
+  const ky = gelenk.y + Math.sin(winkel) * armlaenge;
+  strich(stift, [[gelenk.x, gelenk.y], [kx, ky]], f.arm, Math.max(1.5, s * 0.035));
+  stift.fillStyle = f.schirm;
+  kreis(stift, gelenk.x, gelenk.y, s * 0.05);
+  stift.fill();
+  const hof = stift.createRadialGradient(kx, ky, 0, kx, ky, s * 0.3);
+  hof.addColorStop(0, `rgba(${PLATZFARBE.licht}, 0.5)`);
+  hof.addColorStop(1, `rgba(${PLATZFARBE.licht}, 0)`);
+  stift.save();
+  stift.globalCompositeOperation = 'lighter';
+  stift.fillStyle = hof;
+  kreis(stift, kx, ky, s * 0.3);
+  stift.fill();
+  stift.restore();
+  // Schirm auf der abgewandten Seite, die helle Öffnung zeigt in Lichtrichtung
+  stift.fillStyle = f.schirm;
+  kreis(stift, kx, ky, s * 0.105);
+  stift.fill();
+  stift.fillStyle = f.kopf;
+  kreis(stift, kx - Math.cos(winkel) * s * 0.03, ky - Math.sin(winkel) * s * 0.03, s * 0.075);
+  stift.fill();
+  return { x: kx, y: ky };
+}
+
+// Die Fahrkarte: schlichtes Papier ohne vorgedruckte Felder und ohne Zahlen.
+// Die Lochung des Schaffners ist eine schmale Sichel. loch: 0 keine, bis 1 ganz da.
+function maleFahrkarte(stift, x, y, b, h, loch, gedrueckt) {
+  const d = gedrueckt * 2;
+  stift.save();
+  stift.translate(x + b / 2, y + h / 2 + d);
+  stift.rotate(-0.035);
+  const kx = -b / 2 + 4;
+  const ky = -h / 2 + 5;
+  const kb = b - 8;
+  const kh = h - 10;
+  stift.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  rundesRechteck(stift, kx + 2, ky + 3, kb, kh, 5);
+  stift.fill();
+  stift.fillStyle = PLATZFARBE.papier;
+  rundesRechteck(stift, kx, ky, kb, kh, 5);
+  stift.fill();
+  stift.fillStyle = PLATZFARBE.papierKante;
+  rundesRechteck(stift, kx, ky + kh - 3, kb, 3, 2);
+  stift.fill();
+  // eine Abrisskante, sonst nichts
+  stift.fillStyle = PLATZFARBE.papierFalz;
+  for (let i = 0; i < 9; i++) stift.fillRect(kx + kb * 0.24, ky + 4 + (i * (kh - 8)) / 9, 1.5, (kh - 8) / 18);
+
+  if (loch > 0.01) {
+    // schmale Sichel: ein Kreis, aus dem ein zweiter herausgeschnitten ist
+    const r = Math.min(kh * 0.27, 17) * (0.6 + 0.4 * loch);
+    const lx = kx + kb * 0.66;
+    const ly = ky + kh * 0.5;
+    stift.save();
+    stift.translate(lx, ly);
+    stift.rotate(0.9); // schräg gestanzt, wie mit der Hand angesetzt
+    stift.beginPath();
+    stift.arc(0, 0, r, 0, Math.PI * 2);
+    stift.clip();
+    stift.fillStyle = FARBE.nacht;
+    stift.beginPath();
+    stift.rect(-r * 2, -r * 2, r * 4, r * 4);
+    stift.arc(r * 0.3, 0, r * 0.99, 0, Math.PI * 2, true);
+    stift.fill('evenodd');
+    stift.restore();
+  }
+  stift.restore();
+}
+
+// Ein Schnipsel in Sichelform, der nach dem Lochen fällt.
+function maleSchnipsel(stift, x, y, s, staerke) {
+  if (staerke <= 0.01) return;
+  stift.save();
+  stift.globalAlpha *= staerke;
+  stift.strokeStyle = PLATZFARBE.papier;
+  stift.lineWidth = Math.max(1.5, s * 0.035);
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.arc(x, y, s * 0.05, 0.6, 2.9);
+  stift.stroke();
+  stift.restore();
+}
+
+// Lautsprecher: an oder durchgestrichen, wie im Hauptspiel
+function maleTonschalter(stift, ton, an) {
+  const x = ton.x;
+  const y = ton.y;
+  stift.fillStyle = '#5b6680';
+  stift.strokeStyle = '#5b6680';
+  stift.lineWidth = 2;
+  stift.lineCap = 'round';
+  stift.beginPath();
+  stift.moveTo(x - 9, y - 3.5);
+  stift.lineTo(x - 4, y - 3.5);
+  stift.lineTo(x + 1, y - 8);
+  stift.lineTo(x + 1, y + 8);
+  stift.lineTo(x - 4, y + 3.5);
+  stift.lineTo(x - 9, y + 3.5);
+  stift.closePath();
+  stift.fill();
+  stift.beginPath();
+  if (an) {
+    stift.arc(x + 2, y, 5, -0.9, 0.9);
+    stift.stroke();
+    stift.beginPath();
+    stift.arc(x + 2, y, 9, -0.9, 0.9);
+  } else {
+    stift.moveTo(x + 5, y - 4);
+    stift.lineTo(x + 12, y + 4);
+    stift.moveTo(x + 12, y - 4);
+    stift.lineTo(x + 5, y + 4);
+  }
+  stift.stroke();
+}
+
+// --- anzeige/matrix.js
+// Punktmatrix-Schrift der Zuganzeige. Jedes Zeichen ist 5 Punkte breit und 7 hoch,
+// Unterlängen brauchen zwei Zeilen mehr. Alles Geschriebene im Spiel nutzt diese Schrift,
+// damit es auf jedem Gerät gleich aussieht.
+
+const ZEICHEN = {
+  ' ': '..... ..... ..... ..... ..... ..... .....',
+  A: '.###. #...# #...# ##### #...# #...# #...#',
+  B: '####. #...# #...# ####. #...# #...# ####.',
+  C: '.###. #...# #.... #.... #.... #...# .###.',
+  D: '####. #...# #...# #...# #...# #...# ####.',
+  E: '##### #.... #.... ####. #.... #.... #####',
+  F: '##### #.... #.... ####. #.... #.... #....',
+  G: '.###. #...# #.... #.### #...# #...# .###.',
+  H: '#...# #...# #...# ##### #...# #...# #...#',
+  I: '.###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  J: '..### ...#. ...#. ...#. ...#. #..#. .##..',
+  K: '#...# #..#. #.#.. ##... #.#.. #..#. #...#',
+  L: '#.... #.... #.... #.... #.... #.... #####',
+  M: '#...# ##.## #.#.# #.#.# #...# #...# #...#',
+  N: '#...# ##..# #.#.# #..## #...# #...# #...#',
+  O: '.###. #...# #...# #...# #...# #...# .###.',
+  P: '####. #...# #...# ####. #.... #.... #....',
+  Q: '.###. #...# #...# #...# #.#.# #..#. .##.#',
+  R: '####. #...# #...# ####. #.#.. #..#. #...#',
+  S: '.#### #.... #.... .###. ....# ....# ####.',
+  T: '##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..',
+  U: '#...# #...# #...# #...# #...# #...# .###.',
+  V: '#...# #...# #...# #...# #...# .#.#. ..#..',
+  W: '#...# #...# #...# #.#.# #.#.# ##.## #...#',
+  X: '#...# #...# .#.#. ..#.. .#.#. #...# #...#',
+  Y: '#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..',
+  Z: '##### ....# ...#. ..#.. .#... #.... #####',
+  Ä: '#...# .###. #...# #...# ##### #...# #...#',
+  Ö: '#...# .###. #...# #...# #...# #...# .###.',
+  Ü: '#...# ..... #...# #...# #...# #...# .###.',
+  a: '..... ..... .###. ....# .#### #...# .####',
+  b: '#.... #.... #.##. ##..# #...# #...# ####.',
+  c: '..... ..... .###. #.... #.... #...# .###.',
+  d: '....# ....# .##.# #..## #...# #...# .####',
+  e: '..... ..... .###. #...# ##### #.... .###.',
+  f: '..##. .#..# .#... ###.. .#... .#... .#...',
+  g: '..... ..... .#### #...# #...# #...# .#### ....# .###.',
+  h: '#.... #.... #.##. ##..# #...# #...# #...#',
+  i: '..#.. ..... .##.. ..#.. ..#.. ..#.. .###.',
+  j: '...#. ..... ..##. ...#. ...#. ...#. ...#. #..#. .##..',
+  k: '#.... #.... #..#. #.#.. ##... #.#.. #..#.',
+  l: '.##.. ..#.. ..#.. ..#.. ..#.. ..#.. .###.',
+  m: '..... ..... ##.#. #.#.# #.#.# #.#.# #.#.#',
+  n: '..... ..... #.##. ##..# #...# #...# #...#',
+  o: '..... ..... .###. #...# #...# #...# .###.',
+  p: '..... ..... ####. #...# #...# #...# ####. #.... #....',
+  q: '..... ..... .#### #...# #...# #...# .#### ....# ....#',
+  r: '..... ..... #.##. ##..# #.... #.... #....',
+  s: '..... ..... .#### #.... .###. ....# ####.',
+  t: '.#... .#... ###.. .#... .#... .#..# ..##.',
+  u: '..... ..... #...# #...# #...# #..## .##.#',
+  v: '..... ..... #...# #...# #...# .#.#. ..#..',
+  w: '..... ..... #...# #...# #.#.# #.#.# .#.#.',
+  x: '..... ..... #...# .#.#. ..#.. .#.#. #...#',
+  y: '..... ..... #...# #...# #...# #...# .#### ....# .###.',
+  z: '..... ..... ##### ...#. ..#.. .#... #####',
+  ä: '.#.#. ..... .###. ....# .#### #...# .####',
+  ö: '.#.#. ..... .###. #...# #...# #...# .###.',
+  ü: '.#.#. ..... #...# #...# #...# #..## .##.#',
+  ß: '.##.. #..#. #..#. #.##. #...# #...# #.##.',
+  0: '.###. #...# #..## #.#.# ##..# #...# .###.',
+  1: '..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.',
+  2: '.###. #...# ....# ...#. ..#.. .#... #####',
+  3: '##### ...#. ..#.. ...#. ....# #...# .###.',
+  4: '...#. ..##. .#.#. #..#. ##### ...#. ...#.',
+  5: '##### #.... ####. ....# ....# #...# .###.',
+  6: '..##. .#... #.... ####. #...# #...# .###.',
+  7: '##### ....# ...#. ..#.. .#... .#... .#...',
+  8: '.###. #...# #...# .###. #...# #...# .###.',
+  9: '.###. #...# #...# .#### ....# ...#. .##..',
+  '.': '..... ..... ..... ..... ..... .##.. .##..',
+  ',': '..... ..... ..... ..... .##.. ..#.. .#...',
+  ':': '..... .##.. .##.. ..... .##.. .##.. .....',
+  '!': '..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..',
+  '?': '.###. #...# ....# ...#. ..#.. ..... ..#..',
+  '-': '..... ..... ..... ##### ..... ..... .....',
+  '+': '..... ..#.. ..#.. ##### ..#.. ..#.. .....',
+  '/': '....# ....# ...#. ..#.. .#... #.... #....',
+};
+
+const ZEICHENBREITE = 6; // fünf Punkte und eine Lücke
+const ZEILENHOEHE = 9; // sieben Punkte und zwei für Unterlängen
+
+const MUSTER = {};
+for (const [zeichen, bild] of Object.entries(ZEICHEN)) MUSTER[zeichen] = bild.split(' ');
+
+function hatZeichen(zeichen) {
+  return MUSTER[zeichen] !== undefined;
+}
+
+// Breite eines Texts in Punkten, ohne die Lücke nach dem letzten Zeichen
+function textBreite(text) {
+  return Math.max(0, [...text].length * ZEICHENBREITE - 1);
+}
+
+// Ein Punktfeld: spalten mal zeilen, jeder Punkt an oder aus.
+function neuesPunktfeld(spalten, zeilen) {
+  return { spalten, zeilen, an: new Uint8Array(spalten * zeilen) };
+}
+
+function schreibe(feld, text, spalte, zeile) {
+  let x = spalte;
+  for (const zeichen of text) {
+    const muster = MUSTER[zeichen] || MUSTER['?'];
+    for (let r = 0; r < muster.length; r++) {
+      for (let c = 0; c < 5; c++) {
+        const px = x + c;
+        const py = zeile + r;
+        if (muster[r][c] === '#' && px >= 0 && px < feld.spalten && py >= 0 && py < feld.zeilen) {
+          feld.an[py * feld.spalten + px] = 1;
+        }
+      }
+    }
+    x += ZEICHENBREITE;
+  }
+}
+
+function schreibeMittig(feld, text, zeile) {
+  schreibe(feld, text, Math.round((feld.spalten - textBreite(text)) / 2), zeile);
+}
+
+// Zeichnet das Punktfeld. raster ist der Abstand der Punkte in Pixeln.
+// dunkel ist die Farbe der unbeleuchteten Punkte, null lässt sie weg.
+function zeichnePunktfeld(stift, feld, x, y, raster, hell, dunkel) {
+  const r = raster * 0.38;
+  for (const durchgang of dunkel ? [0, 1] : [1]) {
+    stift.fillStyle = durchgang ? hell : dunkel;
+    stift.beginPath();
+    for (let py = 0; py < feld.zeilen; py++) {
+      for (let px = 0; px < feld.spalten; px++) {
+        if (feld.an[py * feld.spalten + px] !== durchgang) continue;
+        const cx = x + (px + 0.5) * raster;
+        const cy = y + (py + 0.5) * raster;
+        stift.moveTo(cx + r, cy);
+        stift.arc(cx, cy, r, 0, Math.PI * 2);
+      }
+    }
+    stift.fill();
+  }
+}
+
+// --- ../prototyp/falsche-farben/src/anzeige/buehne.js
+// Die Bühne des Prototyps "Falsche Farben": malt den Saal und spielt die Ereignisse des Kerns ab.
+// Sie entscheidet nie über Regeln. Sie führt nur die Auswahl: Wer gerade angehoben ist, setzt sich beim
+// nächsten Tipp auf eine Bank. Standard ist der Gast an der Tür. Wer den äußersten Gast einer Bank antippt
+// (oder irgendwen auf einer vollen Bank), hebt ihn an; ein Tipp auf die Bank daneben setzt ihn um.
+//
+// Angehalten wird nur beim Auffliegen und beim Räumen, je höchstens PAUSE ms. Alles andere läuft, während
+// schon der nächste Tipp angenommen wird.
+
+
+
+
+
+
+
+
+
+const PAUSE = 150; // so lange hält das Bild beim Auffliegen und beim Räumen an, nie länger
+const WEG = 140; // so lange gleitet ein Gast auf seinen neuen Platz
+const GLANZ = 520;
+const WECHSEL = 420;
+const RAEUMEN = 900;
+const FENSTERZEIT = 700;
+const SCHLUSS_WARTET = 650; // nach dem letzten Zug, bis der Satz steht und ein Tipp neu beginnt
+
+// Zeilen eines Satzes für die Punktschrift, höchstens spalten Punkte breit
+// Punktabstand der Schrift am Ende: so groß wie möglich, aber gut 28 Zeichen je Zeile
+function satzRaster(breite) {
+  return Math.max(1.8, Math.min(3, (breite - 24) / 170));
+}
+
+// Jeder Satz beginnt auf einer neuen Zeile.
+function brichUm(text, spalten) {
+  const zeilen = [];
+  const saetze = text.split('. ').map((t, i, alle) => (i < alle.length - 1 ? t + '.' : t));
+  for (const satz of saetze) {
+    let zeile = '';
+    for (const wort of satz.split(' ')) {
+      const probe = zeile ? zeile + ' ' + wort : wort;
+      if (textBreite(probe) <= spalten || !zeile) zeile = probe;
+      else {
+        zeilen.push(zeile);
+        zeile = wort;
+      }
+    }
+    if (zeile) zeilen.push(zeile);
+  }
+  return zeilen;
+}
+
+function erzeugeSaalBuehne(leinwand) {
+  const stift = leinwand.getContext('2d');
+  let m = null;
+  let dichte = 1;
+  let grund = null;
+  let z = null;
+  let tonAn = true;
+  let auswahl = null; // 'tuer' | Banknummer | null
+  let stups = { wo: null, t: -1e9 }; // ein Tipp ohne Wirkung: die Stelle zuckt kurz
+  let pauseBis = 0;
+  let schluss = null; // { t, satz, zeilen }
+  let angetippt = false;
+  const lage = new Map(); // id -> { x, y, vonX, vonY, t }
+  const gezeigt = new Map(); // id -> Farbe, wie sie gerade gemalt wird
+  const wechsel = new Map(); // id -> { alt, t, kraeftig }
+  const glanz = new Map(); // id -> t
+  let gehen = []; // geräumte Gäste auf dem Weg hinaus: { farbe, x, y, t }
+  let fensterAn = []; // t je leuchtendem Fenster
+  const melder = { klang: null, schicht: null };
+
+  function klinge(name) {
+    if (melder.klang) melder.klang(name);
+  }
+
+  function passeAn() {
+    const breite = Math.max(200, leinwand.clientWidth || window.innerWidth);
+    const hoehe = Math.max(240, leinwand.clientHeight || window.innerHeight);
+    dichte = Math.min(window.devicePixelRatio || 1, 2.5);
+    leinwand.width = Math.round(breite * dichte);
+    leinwand.height = Math.round(hoehe * dichte);
+    m = berechneSaal(breite, hoehe);
+    grund = maleSaalGrund(m, dichte);
+    lage.clear(); // nach einer Größenänderung stehen alle sofort auf ihrem Platz
+    if (schluss) schluss.zeilen = null;
+  }
+
+  function grundAuswahl() {
+    auswahl = z && z.tuer.length ? 'tuer' : null;
+  }
+
+  function neu(zustand) {
+    z = zustand;
+    lage.clear();
+    gezeigt.clear();
+    wechsel.clear();
+    glanz.clear();
+    gehen = [];
+    fensterAn = [];
+    schluss = null;
+    pauseBis = 0;
+    grundAuswahl();
+  }
+
+  // wo ein Gast hingehört
+  function ort(g) {
+    const i = z.tuer.indexOf(g);
+    if (i >= 0) {
+      const p = m.tuer.plaetze[i];
+      return { x: p.cx, y: p.fy, sitzt: 0 };
+    }
+    for (let b = 0; b < z.baenke.length; b++) {
+      const k = z.baenke[b].indexOf(g);
+      if (k >= 0) {
+        const p = m.baenke[b].plaetze[k];
+        return { x: p.cx, y: p.fy, sitzt: 1 };
+      }
+    }
+    return null;
+  }
+
+  function finde(id) {
+    for (const g of z.tuer) if (g.id === id) return g;
+    for (const b of z.baenke) for (const g of b) if (g.id === id) return g;
+    return null;
+  }
+
+  function spiele(ereignisse, jetzt) {
+    for (const e of ereignisse) {
+      if (e.typ === 'gesetzt') klinge('setzen');
+      else if (e.typ === 'ankunft') {
+        const t = m.tuer.rahmen;
+        lage.set(e.gast.id, { x: t.x + t.b / 2, y: t.y + t.h * 0.9, vonX: t.x + t.b / 2, vonY: t.y + t.h * 0.9, t: -1e9 });
+        klinge('ankunft');
+      } else if (e.typ === 'schimmer') {
+        for (const id of e.ids) glanz.set(id, jetzt);
+        klinge('schimmer');
+      } else if (e.typ === 'aufgeflogen') {
+        pauseBis = Math.max(pauseBis, jetzt + PAUSE);
+        for (const f of e.gaeste) wechsel.set(f.id, { alt: gezeigt.get(f.id), t: jetzt + PAUSE, kraeftig: 1 });
+        klinge('aufgeflogen');
+      } else if (e.typ === 'geraeumt') {
+        pauseBis = Math.max(pauseBis, jetzt + PAUSE);
+        e.ids.forEach((id, k) => {
+          const p = m.baenke[e.bank].plaetze[k];
+          const l = lage.get(id);
+          gehen.push({ farbe: e.farbe, x: l ? l.x : p.cx, y: l ? l.y : p.fy, t: jetzt });
+          lage.delete(id);
+        });
+        fensterAn[e.fenster - 1] = jetzt + PAUSE;
+        klinge('raeumen');
+        if (melder.schicht) melder.schicht(e.fenster);
+      } else if (e.typ === 'ende') {
+        schluss = { t: Math.max(jetzt, pauseBis) + SCHLUSS_WARTET, satz: e.satz, zeilen: null };
+        klinge('ende');
+        // der Saal, wie er ist: Wer noch eine falsche Farbe zeigt, zeigt am Ende seine echte
+        const spaeter = Math.max(jetzt, pauseBis) + 250;
+        for (const g of [...z.tuer, ...z.baenke.flat()]) if (istFalsch(g)) wechsel.set(g.id, { alt: g.zeigt, t: spaeter, kraeftig: 1, nach: g.echt });
+      }
+    }
+    grundAuswahl();
+  }
+
+  // Ein Tipp: gibt eine Aktion für den Kern zurück oder null. Ändert sonst nur die Auswahl.
+  function tippe(x, y, jetzt) {
+    angetippt = true;
+    const ziel = wasImSaal(m, x, y);
+    if (ziel.art === 'ton') return { ton: true };
+    if (schluss) return jetzt >= schluss.t ? { neu: true } : null;
+    if (ziel.art === 'tuer') {
+      if (z.tuer.length) auswahl = 'tuer';
+      else stups = { wo: 'tuer', t: jetzt };
+      return null;
+    }
+    if (ziel.art !== 'bank') return null;
+    const b = ziel.bank;
+    const bank = z.baenke[b];
+    const voll = bank.length >= PLAETZE;
+    const aufAeusserstem = bank.length && ziel.platz === bank.length - 1;
+    if (auswahl === b) {
+      // die eigene Bank: wieder absetzen
+      grundAuswahl();
+      return null;
+    }
+    if (voll || aufAeusserstem || auswahl === null) {
+      if (bank.length) auswahl = b;
+      else stups = { wo: b, t: jetzt };
+      return null;
+    }
+    return { von: auswahl, nach: b };
+  }
+
+  function gast(g, jetzt, o) {
+    const soll = ort(g);
+    if (!soll) return;
+    let l = lage.get(g.id);
+    if (!l) {
+      l = { x: soll.x, y: soll.y, vonX: soll.x, vonY: soll.y, t: -1e9 };
+      lage.set(g.id, l);
+    }
+    if (l.x !== soll.x || l.y !== soll.y) {
+      const p = begrenze((jetzt - l.t) / WEG, 0, 1);
+      l.vonX = l.vonX + (l.x - l.vonX) * sanft(p);
+      l.vonY = l.vonY + (l.y - l.vonY) * sanft(p);
+      l.x = soll.x;
+      l.y = soll.y;
+      l.t = jetzt;
+    }
+    const p = begrenze((jetzt - l.t) / WEG, 0, 1);
+    const x = l.vonX + (l.x - l.vonX) * sanft(p);
+    const y = l.vonY + (l.y - l.vonY) * sanft(p);
+
+    let farbe = g.zeigt;
+    let alt = null;
+    let w = 1;
+    let kraeftig = istFalsch(g) ? 1 : 0;
+    const wx = wechsel.get(g.id);
+    if (wx) {
+      const q = begrenze((jetzt - wx.t) / WECHSEL, 0, 1);
+      if (wx.nach !== undefined) farbe = q > 0 ? wx.nach : g.zeigt;
+      alt = wx.alt;
+      w = q > 0 ? sanft(q) : 0;
+      kraeftig = wx.kraeftig * (1 - w);
+      if (q <= 0) {
+        farbe = wx.alt;
+        w = 1;
+        alt = null;
+        kraeftig = 1;
+      }
+    }
+    gezeigt.set(g.id, g.zeigt);
+    const gt = glanz.get(g.id);
+    const gl = gt === undefined ? 0 : jetzt - gt < GLANZ ? hinUndHer((jetzt - gt) / GLANZ) : 0;
+    const hebe = o.hebe ? m.s * 0.12 : 0;
+    if (o.hebe) {
+      stift.save();
+      stift.globalAlpha = 0.35;
+      stift.fillStyle = SAALFARBE.wahl;
+      stift.beginPath();
+      stift.ellipse(x, y + 1, m.s * 0.34, m.s * 0.08, 0, 0, Math.PI * 2);
+      stift.fill();
+      stift.restore();
+    }
+    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, kraeftig, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
+  }
+
+  function zeichne(jetzt) {
+    if (!m || !z) return;
+    stift.setTransform(dichte, 0, 0, dichte, 0, 0);
+    stift.drawImage(grund, 0, 0, m.breite, m.hoehe);
+    m.fenster.forEach((f, i) => {
+      const t = fensterAn[i];
+      if (t !== undefined) maleLichtFenster(stift, f, begrenze((jetzt - t) / FENSTERZEIT, 0, 1));
+    });
+    maleTonschalter(stift, m.ton, tonAn);
+
+    // Stups: eine Stelle, an der ein Tipp nichts bewirkt hat, zuckt kurz
+    const st = (jetzt - stups.t) / 220;
+    const zuck = st >= 0 && st < 1 ? Math.sin(st * Math.PI * 3) * (1 - st) * 3 : 0;
+
+    // die Wartenden an der Tür, vorn der, der als Nächster gesetzt wird
+    const vorn = !angetippt && auswahl === 'tuer' ? 0.5 + 0.5 * Math.sin(jetzt / 260) : 0;
+    z.tuer.forEach((g, i) => {
+      stift.save();
+      if (stups.wo === 'tuer') stift.translate(zuck, 0);
+      gast(g, jetzt, { hebe: auswahl === 'tuer' && i === 0 && !schluss });
+      stift.restore();
+      if (i === 0 && vorn > 0.01 && !schluss) {
+        // vor dem ersten Tipp atmet der vordere Gast leise, damit man weiß, wer dran ist
+        const p = m.tuer.plaetze[0];
+        stift.save();
+        stift.globalAlpha = 0.25 * vorn;
+        stift.strokeStyle = SAALFARBE.wahl;
+        stift.lineWidth = 2;
+        stift.beginPath();
+        stift.ellipse(p.cx, p.fy, m.s * 0.4, m.s * 0.1, 0, 0, Math.PI * 2);
+        stift.stroke();
+        stift.restore();
+      }
+    });
+
+    z.baenke.forEach((bank, b) => {
+      stift.save();
+      if (stups.wo === b) stift.translate(zuck, 0);
+      bank.forEach((g, k) => gast(g, jetzt, { hebe: auswahl === b && k === bank.length - 1 && !schluss }));
+      maleSitz(stift, m, m.baenke[b]);
+      stift.restore();
+    });
+
+    // die Geräumten leuchten auf und gehen zur Tür
+    gehen = gehen.filter((g) => jetzt - g.t < RAEUMEN + PAUSE);
+    for (const g of gehen) {
+      const p = begrenze((jetzt - g.t - PAUSE) / RAEUMEN, 0, 1);
+      const t = m.tuer.rahmen;
+      const x = g.x + (t.x + t.b / 2 - g.x) * sanft(p);
+      const y = g.y + (t.y + t.h * 0.9 - g.y) * sanft(p);
+      stift.save();
+      stift.globalAlpha = 1 - p;
+      maleGast(stift, x, y, m.s, { farbe: g.farbe, sitzt: 1 - p, licht: 1 - p * 0.5 });
+      stift.restore();
+    }
+
+    if (schluss && jetzt >= schluss.t) zeichneSatz(jetzt);
+  }
+
+  function zeichneSatz(jetzt) {
+    const raster = satzRaster(m.breite);
+    const spalten = Math.floor((m.breite - 24) / raster);
+    if (!schluss.zeilen) schluss.zeilen = brichUm(schluss.satz, spalten);
+    const n = schluss.zeilen.length;
+    const hoch = (n * ZEILENHOEHE + (n - 1) * 3) * raster;
+    const breit = Math.max(...schluss.zeilen.map(textBreite)) * raster;
+    const feld = neuesPunktfeld(Math.ceil(breit / raster) + 1, n * (ZEILENHOEHE + 3));
+    schluss.zeilen.forEach((zeile, i) => schreibe(feld, zeile, Math.round((feld.spalten - textBreite(zeile)) / 2), i * (ZEILENHOEHE + 3)));
+    const x = Math.round((m.breite - feld.spalten * raster) / 2);
+    const y = Math.round(m.satz.y + (m.satz.h - hoch) / 2);
+    const a = begrenze((jetzt - schluss.t) / 300, 0, 1);
+    stift.save();
+    stift.globalAlpha = 0.82 * a;
+    stift.fillStyle = SAALFARBE.schriftGrund;
+    stift.fillRect(0, y - raster * 5, m.breite, hoch + raster * 9);
+    stift.globalAlpha = a;
+    zeichnePunktfeld(stift, feld, x, y, raster, SAALFARBE.schrift, null);
+    stift.restore();
+  }
+
+  return {
+    melder,
+    passeAn,
+    neu,
+    spiele,
+    tippe,
+    zeichne,
+    bereit: (jetzt) => jetzt >= pauseBis,
+    pauseBis: () => pauseBis,
+    setzeTon(an) {
+      tonAn = an;
+    },
+    masse: () => m,
+    auswahl: () => auswahl,
+    schlussSteht: (jetzt) => !!schluss && jetzt >= schluss.t,
+  };
+}
+
+// --- ../prototyp/falsche-farben/src/ton.js
+// Geräusche des Prototyps "Falsche Farben", erzeugt über Web Audio, keine Dateien, erst nach der ersten
+// Berührung. Dazu die Tonschichten: Jede geräumte Bank fügt dem Saal einen leisen, gehaltenen Ton hinzu,
+// bis zu einer für jedes Fenster. Ohne Ton fehlt nichts: Jedes Geräusch hat ein sichtbares Gegenstück.
+
+const SCHICHTTOENE = [146.83, 220, 293.66, 369.99, 440, 329.63, 554.37, 587.33, 659.25, 493.88, 739.99, 880, 196, 987.77];
+
+function erzeugeSaalTon() {
+  let ac = null;
+  let haupt = null;
+  let rauschen = null;
+  let an = true;
+  let schichten = []; // { g } je klingender Schicht
+  let gewuenscht = 0;
+
+  function wecke() {
+    if (!an) return;
+    try {
+      if (!ac) {
+        const Klasse = window.AudioContext || window.webkitAudioContext;
+        if (!Klasse) return;
+        ac = new Klasse();
+        haupt = ac.createGain();
+        haupt.gain.value = 0.22;
+        haupt.connect(ac.destination);
+        rauschen = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const daten = rauschen.getChannelData(0);
+        let wert = 4711;
+        for (let i = 0; i < daten.length; i++) {
+          wert = (Math.imul(wert, 1664525) + 1013904223) >>> 0;
+          daten[i] = wert / 2147483648 - 1;
+        }
+        stelleSchichten();
+      }
+      if (ac.state !== 'running') {
+        const versuch = ac.resume();
+        if (versuch && versuch.catch) versuch.catch(() => {});
+      }
+    } catch (fehler) {
+      ac = null;
+    }
+  }
+
+  function klang(von, bis, dauer, laut, form, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = form || 'sine';
+      o.frequency.setValueAtTime(von, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, bis), t + dauer);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      o.connect(g);
+      g.connect(haupt);
+      o.start(t);
+      o.stop(t + dauer + 0.02);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  function hauch(hoehe, dauer, laut, spaeter) {
+    if (!ac || !an) return;
+    try {
+      const t = ac.currentTime + (spaeter || 0);
+      const q = ac.createBufferSource();
+      const f = ac.createBiquadFilter();
+      const g = ac.createGain();
+      q.buffer = rauschen;
+      f.type = 'bandpass';
+      f.frequency.value = hoehe;
+      f.Q.value = 0.9;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(laut, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      q.connect(f);
+      f.connect(g);
+      g.connect(haupt);
+      q.start(t, 0, dauer + 0.05);
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  // eine gehaltene Schicht: leiser Ton, der langsam an- und abschwillt
+  function neueSchicht(i) {
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    const lfo = ac.createOscillator();
+    const tiefe = ac.createGain();
+    o.type = i % 3 === 0 ? 'triangle' : 'sine';
+    o.frequency.value = SCHICHTTOENE[i % SCHICHTTOENE.length];
+    const laut = i < 2 ? 0.05 : 0.032;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(laut, t + 2.5);
+    lfo.frequency.value = 0.06 + (i % 5) * 0.035;
+    tiefe.gain.value = laut * 0.45;
+    lfo.connect(tiefe);
+    tiefe.connect(g.gain);
+    o.connect(g);
+    g.connect(haupt);
+    o.start(t);
+    lfo.start(t);
+    return { o, g, lfo };
+  }
+
+  function stelleSchichten() {
+    if (!ac) return;
+    try {
+      while (schichten.length < gewuenscht) schichten.push(neueSchicht(schichten.length));
+      while (schichten.length > gewuenscht) {
+        const s = schichten.pop();
+        const t = ac.currentTime;
+        s.g.gain.cancelScheduledValues(t);
+        s.g.gain.setValueAtTime(s.g.gain.value, t);
+        s.g.gain.linearRampToValueAtTime(0, t + 1.2);
+        s.o.stop(t + 1.3);
+        s.lfo.stop(t + 1.3);
+      }
+    } catch (fehler) {
+      // still weiter
+    }
+  }
+
+  const SAALKLAENGE = {
+    setzen: () => {
+      hauch(700, 0.06, 0.25);
+      klang(210, 170, 0.08, 0.2, 'triangle');
+    },
+    ankunft: () => hauch(1500, 0.3, 0.07),
+    schimmer: () => {
+      klang(1318.5, 1318.5, 0.4, 0.06);
+      klang(1760, 1760, 0.45, 0.045, 'sine', 0.06);
+    },
+    // eigener Klang beim Auffliegen: zwei tiefe Töne, die sich reiben und absinken
+    aufgeflogen: () => {
+      klang(311, 292, 0.55, 0.2, 'triangle');
+      klang(330, 309, 0.55, 0.14, 'triangle', 0.04);
+    },
+    raeumen: () => {
+      [293.66, 369.99, 440, 587.33].forEach((f, i) => klang(f, f, 0.9, 0.12, 'triangle', i * 0.07));
+    },
+    ende: () => {
+      klang(146.83, 146.83, 1.6, 0.12, 'triangle');
+      klang(220, 220, 1.6, 0.08, 'sine', 0.1);
+    },
+  };
+
+  return {
+    wecke,
+    spiele(name) {
+      if (SAALKLAENGE[name]) SAALKLAENGE[name]();
+    },
+    schicht(n) {
+      gewuenscht = Math.max(0, Math.min(SCHICHTTOENE.length, n));
+      stelleSchichten();
+    },
+    setze(wert) {
+      an = wert;
+      if (!ac) return;
+      try {
+        haupt.gain.setValueAtTime(an ? 0.22 : 0, ac.currentTime);
+      } catch (fehler) {
+        // still weiter
+      }
+    },
+  };
+}
+
+// --- eingabe.js
+// Eingabe: Wischen, Tippen, Tastatur. Meldet nur, was der Mensch getan hat.
+// Ein Wisch löst aus, sobald der Finger weit genug gewandert ist, nicht erst beim Loslassen.
+
+const WISCHWEG = 18; // Pixel bis zum Auslösen
+const TIPPWEG = 9; // weniger Bewegung gilt als Tippen
+
+const TASTEN = {
+  ArrowUp: 'hoch',
+  ArrowRight: 'rechts',
+  ArrowDown: 'runter',
+  ArrowLeft: 'links',
+  KeyW: 'hoch',
+  KeyD: 'rechts',
+  KeyS: 'runter',
+  KeyA: 'links',
+  Space: 'warten',
+};
+
+function wischrichtung(dx, dy) {
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'rechts' : 'links';
+  return dy > 0 ? 'runter' : 'hoch';
+}
+
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen(), finger(richtung oder null) }
+// finger: Nach einem Wisch, solange der Finger liegt, die Richtung des Wischs; null, sobald er weg ist.
+function verbindeEingabe(flaeche, melde) {
+  let finger = null;
+
+  flaeche.addEventListener('pointerdown', (e) => {
+    melde.beruehrt();
+    if (finger) return;
+    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
+    if (flaeche.setPointerCapture) {
+      try {
+        flaeche.setPointerCapture(e.pointerId);
+      } catch (fehler) {
+        // ohne Fang geht es auch
+      }
+    }
+    e.preventDefault();
+  });
+
+  flaeche.addEventListener('pointermove', (e) => {
+    if (!finger || e.pointerId !== finger.id || finger.erledigt) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
+    finger.erledigt = true;
+    const richtung = wischrichtung(dx, dy);
+    melde.aktion(richtung, 'wisch');
+    melde.finger(richtung);
+  });
+
+  const loslassen = (e) => {
+    if (!finger || e.pointerId !== finger.id) return;
+    const dx = e.clientX - finger.x;
+    const dy = e.clientY - finger.y;
+    const fertig = finger.erledigt;
+    finger = null;
+    melde.finger(null);
+    if (e.type === 'pointerup') melde.losgelassen();
+    if (fertig || e.type !== 'pointerup') return;
+    if (Math.hypot(dx, dy) < TIPPWEG) {
+      // Der Canvas beginnt nicht immer in der Ecke: Neben Notch und Home-Balken bleibt ein Rand frei.
+      const kasten = flaeche.getBoundingClientRect();
+      melde.tipp(e.clientX - kasten.left, e.clientY - kasten.top);
+    }
+    else melde.aktion(wischrichtung(dx, dy), 'wisch'); // ein kurzer Wisch zählt auch
+  };
+  flaeche.addEventListener('pointerup', loslassen);
+  flaeche.addEventListener('pointercancel', loslassen);
+  flaeche.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Safari auf dem iPhone: kein Gummiband beim Ziehen, kein Zoom mit zwei Fingern oder Doppeltipp.
+  const halt = (e) => e.preventDefault();
+  document.addEventListener('touchmove', halt, { passive: false });
+  document.addEventListener('gesturestart', halt);
+  document.addEventListener('gesturechange', halt);
+  document.addEventListener('dblclick', halt);
+  // Den Ton gibt Safari erst frei, wenn ein Finger den Bildschirm wieder verlässt.
+  document.addEventListener('touchend', () => melde.losgelassen(), { passive: true });
+  document.addEventListener('click', () => melde.losgelassen());
+
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
+    if (!name) return;
+    e.preventDefault();
+    melde.beruehrt();
+    if (e.code === 'Enter' && !melde.karteOffen()) return;
+    melde.aktion(name, 'taste');
+  });
+}
+
+// --- ../prototyp/falsche-farben/src/main.js
+// Einstieg des Prototyps "Falsche Farben": verbindet Kern, Bühne, Eingabe und Ton.
+// Kein Menü: Beim Öffnen sitzt man sofort im Saal, der erste Gast steht an der Tür.
+// Gemerkt wird nichts. Am Ende startet ein Tipp sofort den nächsten Abend, nie das Spiel von selbst.
+
+
+
+
+
+
+
+
+const leinwand = document.getElementById('bild');
+const buehne = erzeugeSaalBuehne(leinwand);
+const ton = erzeugeSaalTon();
+const fest = /[#&]seed=(\d+)/.exec(window.location.hash);
+let naechsterSeed = fest ? Number(fest[1]) : zufallsSeed();
+let abend = null;
+let tonAn = true;
+let wartet = null; // ein Tipp, der während einer Pause kam: Er wird danach ausgeführt, nicht verworfen
+
+function zufallsSeed() {
+  try {
+    return window.crypto.getRandomValues(new Uint32Array(1))[0];
+  } catch (fehler) {
+    return Math.floor(performance.now() * 1000) >>> 0;
+  }
+}
+
+function neuerAbend() {
+  abend = erzeugeAbend(naechsterSeed);
+  naechsterSeed = (naechsterSeed + 0x9e3779b9) >>> 0; // der nächste Abend ist ein anderer, mit Seed immer derselbe
+  buehne.neu(abend.zustand);
+  ton.schicht(0);
+}
+
+function tippe(x, y) {
+  const jetzt = performance.now();
+  ton.wecke();
+  if (!buehne.bereit(jetzt)) {
+    if (!wartet) window.setTimeout(holeNach, Math.max(0, buehne.pauseBis() - jetzt) + 1);
+    wartet = { x, y };
+    return;
+  }
+  const was = buehne.tippe(x, y, jetzt);
+  if (!was) return;
+  if (was.ton) {
+    tonAn = !tonAn;
+    ton.setze(tonAn);
+    buehne.setzeTon(tonAn);
+    return;
+  }
+  if (was.neu) {
+    neuerAbend();
+    return;
+  }
+  const ereignisse = abend.act(was);
+  for (const e of ereignisse) if (e.typ === 'ende') e.satz = schlussText(schlussSatz(abend.zustand));
+  buehne.spiele(ereignisse, jetzt);
+}
+
+function holeNach() {
+  const t = wartet;
+  wartet = null;
+  if (t) tippe(t.x, t.y);
+}
+
+function schleife(jetzt) {
+  window.requestAnimationFrame(schleife);
+  buehne.zeichne(jetzt);
+}
+
+// Nur für die Prüfwerkzeuge: Mit #probe lässt sich der Zustand von außen ablesen, nicht ändern.
+if (/[#&]probe\b/.test(window.location.hash)) {
+  window.saalZustand = () => JSON.stringify(abend.zustand);
+  window.saalMasse = () => JSON.stringify(buehne.masse());
+  window.saalAuswahl = () => buehne.auswahl();
+  window.saalSatzSteht = () => buehne.schlussSteht(performance.now());
+}
+
+buehne.melder.klang = (name) => ton.spiele(name);
+buehne.melder.schicht = (n) => ton.schicht(n);
+buehne.passeAn();
+neuerAbend();
+verbindeEingabe(leinwand, {
+  aktion: () => {},
+  tipp: tippe,
+  losgelassen: () => ton.wecke(),
+  karteOffen: () => false,
+  beruehrt: () => ton.wecke(),
+  finger: () => {},
+});
+for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => buehne.passeAn());
+if (window.visualViewport) window.visualViewport.addEventListener('resize', () => buehne.passeAn());
+window.requestAnimationFrame(schleife);
+})();
+</script>
+</body>
+</html>
