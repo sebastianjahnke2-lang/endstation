@@ -24,7 +24,7 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Etappe 1, Der Kern muss allein Spaß machen: **gebaut, vom Auftraggeber noch nicht abgenommen.** Seine Antwort auf die vier Prüffragen im Fahrplan steht aus.
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Pull Request #3 ist ebenfalls in `main`: Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
 - Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
-- Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`): **gebaut, wartet auf den Test am iPhone.** Ein Wagen, der Spieler ist der Kontrolleur. Eigener Ordner `prototyp/kontrolle/`.
+- Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -138,13 +138,13 @@ prototyp/freier-platz/   ein einzelner Wagen als eigene Seite, getrennt vom Haup
   werkzeug/         fotos.mjs, szene.mjs: Selbstkontrolle im Browser
 prototyp/kontrolle/      Prototyp „Kontrolle": ein Wagen, der Spieler ist der Kontrolleur
   build.js, index.html    wie beim freien Platz
-  src/kern/         halte.js (drei feste Sitzordnungen und der Lernhalt), kontrolle.js (Regeln ohne DOM),
-                    pruefung.js (lösbar, nicht blind zu schaffen), auslosen.js (neue Ordnungen beim Neustart),
-                    durchgang.js (drei Halte, Schluss, Neustart)
+  src/kern/         halte.js (Zeichen der Sitzordnungen, Lernhalt), kontrolle.js (Regeln eines Halts, drei Maschen),
+                    pruefung.js (lösbar, nicht blind zu schaffen, durch Hinsehen zu schaffen),
+                    auslosen.js (jeder Halt der Schicht, Steigerung, Zeit), durchgang.js (Schicht, Lernhalt)
   src/anzeige/      buehne.js, figuren.js; leiht Aufteilung, Wagenbild und Figuren vom freien Platz
-  src/              texte.js, ton.js, speicher.js (nur: Lernhalt geschafft), main.js
-  tests/            Regeln, Lösbarkeit jeder festen und ausgelosten Ordnung, Lernhalt, Speicher, Anzeige, Build
-  werkzeug/         fotos.mjs: alle drei Halte im Browser mit Bildern
+  src/              texte.js (mit Stationsnamen), ton.js, speicher.js (Lernhalt geschafft, weiteste Station), main.js
+  tests/            Regeln, Maschen, Schicht, Lösbarkeit jedes ausgelosten Halts, Lernhalt, Speicher, Anzeige, Build
+  werkzeug/         fotos.mjs: Lernhalt und eine Schicht im Browser mit Bildern
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
 
@@ -181,7 +181,7 @@ node werkzeug/begleiter.mjs 390x844    Tod, Begleiter, „Noch mal", Wiederholun
 node werkzeug/fortsetzen.mjs 390x844   Fahrt fortsetzen nach dem Neuladen, kaputter Speicher
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
-node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: alle drei Halte im Browser mit Bildern
+node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: Lernhalt und eine Schicht im Browser mit Bildern
 ```
 
 `index.html` nie von Hand ändern. Nach jeder Änderung in `src/` bauen, sonst schlägt `npm test` fehl.
