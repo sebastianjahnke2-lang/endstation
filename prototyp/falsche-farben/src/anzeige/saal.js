@@ -126,3 +126,50 @@ export function maleLichtFenster(st, f, staerke) {
   maleSprossen(st, f, SAALFARBE.glasRand);
   st.restore();
 }
+
+// Die Glocke am Rand des Saals, an einem Haken. o: { matt, an (Verhör angewählt), blink 0..1, zeit }
+// Matt: dunkles, stumpfes Metall. Angewählt: sie schwingt leicht und glänzt.
+export function maleGlocke(st, g, s, o) {
+  const r = Math.min(g.b * 0.36, s * 0.28);
+  const x = g.cx;
+  const oben = g.cy - r * 1.25;
+  const winkel = o.an ? Math.sin(o.zeit / 110) * 0.18 : 0;
+  st.save();
+  // Haken an der Wand
+  st.fillStyle = SAALFARBE.tuerRahmen;
+  st.fillRect(x - r * 0.7, oben - r * 0.45, r * 1.4, r * 0.18);
+  st.fillRect(x - 1, oben - r * 0.3, 2, r * 0.32);
+  st.translate(x, oben);
+  st.rotate(winkel);
+  if (o.an || o.blink > 0.01) {
+    const schein = st.createRadialGradient(0, r, 0, 0, r, r * 2.2);
+    const a = Math.max(o.an ? 0.45 : 0, o.blink * 0.8);
+    schein.addColorStop(0, 'rgba(255,226,150,' + a + ')');
+    schein.addColorStop(1, 'rgba(255,226,150,0)');
+    st.fillStyle = schein;
+    st.beginPath();
+    st.arc(0, r, r * 2.2, 0, Math.PI * 2);
+    st.fill();
+  }
+  // Glockenkörper: schmal oben, weit unten, mit Rand
+  st.fillStyle = o.matt ? '#5e5140' : '#d4a548';
+  st.beginPath();
+  st.moveTo(-r * 0.35, 0);
+  st.quadraticCurveTo(-r * 0.55, r * 0.2, -r * 0.62, r * 1.2);
+  st.quadraticCurveTo(-r * 0.7, r * 1.6, -r * 1.0, r * 1.8);
+  st.lineTo(r * 1.0, r * 1.8);
+  st.quadraticCurveTo(r * 0.7, r * 1.6, r * 0.62, r * 1.2);
+  st.quadraticCurveTo(r * 0.55, r * 0.2, r * 0.35, 0);
+  st.closePath();
+  st.fill();
+  if (!o.matt) {
+    st.fillStyle = 'rgba(255,240,200,0.45)';
+    st.fillRect(-r * 0.4, r * 0.3, r * 0.14, r * 1.1);
+  }
+  // Klöppel
+  st.fillStyle = o.matt ? '#3f3628' : '#8a6a2c';
+  st.beginPath();
+  st.arc(Math.sin(-winkel) * r * 0.4, r * 1.95, r * 0.2, 0, Math.PI * 2);
+  st.fill();
+  st.restore();
+}

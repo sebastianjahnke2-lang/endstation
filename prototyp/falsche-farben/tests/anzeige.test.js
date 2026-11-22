@@ -26,7 +26,11 @@ for (const [b, h] of [[360, 600], [375, 548], [390, 664], [390, 844], [430, 739]
     }
     // jeder Platz ist dort antippbar, wo er gezeichnet ist
     m.baenke.forEach((bank, i) => bank.plaetze.forEach((p, k) => assert.deepEqual(wasImSaal(m, p.cx, p.fy - 10), { art: 'bank', bank: i, platz: k })));
-    assert.deepEqual(wasImSaal(m, m.tuer.plaetze[0].cx, m.tuer.plaetze[0].fy - 10), { art: 'tuer' });
+    m.tuer.plaetze.forEach((p, i) => assert.deepEqual(wasImSaal(m, p.cx, p.fy - 10), { art: 'tuer', platz: i }));
+    // die Glocke: am Rand, rechts neben der Tür, groß genug für den Daumen, nicht unten
+    assert.ok(m.glocke.x >= m.tuer.rahmen.x + m.tuer.rahmen.b && m.glocke.x + m.glocke.b <= b, 'Glocke außerhalb');
+    assert.ok(m.glocke.b >= 40 && m.glocke.h >= 44, `Glocke zu klein: ${m.glocke.b} x ${m.glocke.h}`);
+    assert.deepEqual(wasImSaal(m, m.glocke.cx, m.glocke.cy), { art: 'glocke' });
     assert.deepEqual(wasImSaal(m, m.ton.x, m.ton.y), { art: 'ton' });
     assert.ok(m.ton.y - m.ton.h / 2 >= 0 && m.ton.y < h / 4, 'der Lautsprecher sitzt oben');
     // unter den Bänken liegt nichts zum Antippen

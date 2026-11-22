@@ -110,6 +110,10 @@ function wuerfleFarben(z, liste) {
 //   Es kommen immer weitere Gäste, mit der Zeit mehr Falsche. Der Abend endet, wenn an der Tür ein vierter
 //     dazukäme, wenn kein Zug mehr möglich ist oder wenn alle Fenster des Saals leuchten. So hat jeder
 //     Abend ein Ende.
+//   Spur: Wer abrückt, bleibt abgewandt sitzen, beide Beteiligten (g.abgewandt: -1 nach innen, 1 nach außen).
+//     Das endet, sobald er neben seiner echten Farbe zusammenrückt, auffliegt oder verhört wird.
+//   Verhör: { verhoer: id } kostet ein leuchtendes Fenster und keinen Zug. Der Gast zeigt danach seine echte
+//     Farbe und behält sie. Ohne leuchtendes Fenster geht es nicht. Zum Ende „hell" müssen alle Fenster leuchten.
 //   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, in einem Moment,
 //     in dem genau zwei Bänke Platz haben (einstiegsMoment), und erst wenn er aufgeflogen ist, weitere.
 
@@ -143,14 +147,16 @@ function erzeugeAbend(seed) {
     zug: 0,
     gekommen: 0,
     naechsteId: 1,
-    geraeumt: 0,
+    geraeumt: 0, // geräumte Bänke, sie bestimmen, wie viele Falsche kommen
+    licht: 0, // leuchtende Fenster: eines je geräumter Bank, eines weniger je Verhör
     beutel: [],
     ersterFalscher: null, // 'unterwegs' | 'aufgeflogen'
     // für den Satz am Ende, was der Spieler mit Falschen getan hat:
     //   aufgeflogen: in Reihenfolge { id, zeigte, echt, wie }; wie 'geglaubt': flog unter anderen auf, es saß
     //     schon jemand auf ihm; 'zuletzt': flog als äußerster auf, als vierter zu drei Gleichen
     //   umgesetzt: ids der Falschen, die umgesetzt wurden, bevor sie aufflogen
-    verlauf: { aufgeflogen: [], umgesetzt: [] },
+    //   verhoert: Falsche, die verhört wurden, { id, zeigte, echt }
+    verlauf: { aufgeflogen: [], umgesetzt: [], verhoert: [] },
   };
   for (let b = 0; b < BAENKE; b++) z.baenke.push([]);
   kommt(z, []);
@@ -199,11 +205,11 @@ function neuerGast(z) {
     if (moment) {
       z.ersterFalscher = 'unterwegs';
       z.gekommen += 1;
-      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt };
+      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt, abgewandt: 0 };
     }
   }
   const echt = echteFarbe(z);
-  const gast = { id: z.naechsteId++, zeigt: echt, echt };
+  const gast = { id: z.naechsteId++, zeigt: echt, echt, abgewandt: 0 };
   if (wirdFalsch(z)) {
     // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Zusammenrücken zwischen zwei gleich
     // Aussehenden, dass beide ehrlich sind, und rücken sie ab, ist genau einer von beiden falsch.
@@ -235,8 +241,19 @@ function beende(z, wie, ereignisse) {
   ereignisse.push({ typ: 'ende', wie, geraeumt: z.geraeumt });
 }
 
+function finde(z, id) {
+  for (const g of z.tuer) if (g.id === id) return g;
+  for (const b of z.baenke) for (const g of b) if (g.id === id) return g;
+  return null;
+}
+
+function darfVerhoeren(z, id) {
+  return z.status === 'laeuft' && z.licht >= 1 && finde(z, id) !== null;
+}
+
 function gueltig(z, aktion) {
   if (!aktion || z.status !== 'laeuft') return false;
+  if (aktion.verhoer !== undefined) return darfVerhoeren(z, aktion.verhoer);
   const { von, nach } = aktion;
   if (!Number.isInteger(nach) || nach < 0 || nach >= BAENKE) return false;
   if (z.baenke[nach].length >= PLAETZE) return false;
@@ -253,8 +270,23 @@ function zuege(z) {
   return liste;
 }
 
+// Verhör: kein Zug, niemand kommt an die Tür, ein Fenster geht aus
+function verhoere(z, id) {
+  const g = finde(z, id);
+  const zeigte = g.zeigt;
+  if (istFalsch(g)) {
+    z.verlauf.verhoert.push({ id: g.id, zeigte, echt: g.echt });
+    if (z.ersterFalscher === 'unterwegs') z.ersterFalscher = 'aufgeflogen';
+  }
+  g.zeigt = g.echt;
+  g.abgewandt = 0;
+  z.licht -= 1;
+  return [{ typ: 'verhoer', id: g.id, zeigte, echt: g.echt, fenster: z.licht }];
+}
+
 function fuehreAus(z, aktion) {
   if (!gueltig(z, aktion)) return [];
+  if (aktion.verhoer !== undefined) return verhoere(z, aktion.verhoer);
   const ereignisse = [];
   const { von, nach } = aktion;
   const gast = von === 'tuer' ? z.tuer.shift() : z.baenke[von].pop();
@@ -266,9 +298,17 @@ function fuehreAus(z, aktion) {
   ereignisse.push({ typ: 'gesetzt', id: gast.id, von, nach, platz: bank.length - 1 });
 
   // Schimmern und Zusammenrücken: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
-  if (nachbar && nachbar.echt === gast.echt) ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
-  // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden
-  else if (nachbar && nachbar.zeigt === gast.zeigt) ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
+  // Wer neben seiner echten Farbe zusammenrückt, wendet sich nicht mehr ab.
+  if (nachbar && nachbar.echt === gast.echt) {
+    nachbar.abgewandt = 0;
+    gast.abgewandt = 0;
+    ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
+  } else if (nachbar && nachbar.zeigt === gast.zeigt) {
+    // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden. Beide bleiben abgewandt sitzen.
+    nachbar.abgewandt = -1;
+    gast.abgewandt = 1;
+    ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
+  }
 
   // vier, die dieselbe Farbe zeigen: räumen oder auffliegen
   if (bank.length === PLAETZE && bank.every((g) => g.zeigt === bank[0].zeigt)) {
@@ -278,14 +318,16 @@ function fuehreAus(z, aktion) {
         const wie = bank.indexOf(f) === PLAETZE - 1 ? 'zuletzt' : 'geglaubt';
         z.verlauf.aufgeflogen.push({ id: f.id, zeigte: f.zeigt, echt: f.echt, wie });
         f.zeigt = f.echt;
+        f.abgewandt = 0;
         if (z.ersterFalscher === 'unterwegs') z.ersterFalscher = 'aufgeflogen';
       }
       ereignisse.push({ typ: 'aufgeflogen', bank: nach, gaeste: falsche.map((f) => ({ id: f.id, platz: bank.indexOf(f), echt: f.echt })) });
     } else {
       z.geraeumt += 1;
-      ereignisse.push({ typ: 'geraeumt', bank: nach, farbe: bank[0].zeigt, ids: bank.map((g) => g.id), fenster: z.geraeumt });
+      z.licht += 1;
+      ereignisse.push({ typ: 'geraeumt', bank: nach, farbe: bank[0].zeigt, ids: bank.map((g) => g.id), fenster: z.licht });
       z.baenke[nach] = [];
-      if (z.geraeumt >= FENSTER) {
+      if (z.licht >= FENSTER) {
         beende(z, 'hell', ereignisse);
         return ereignisse;
       }
@@ -393,7 +435,7 @@ function schlussText(e) {
 // --- ../prototyp/falsche-farben/src/anzeige/masse.js
 // Bildschirmaufteilung des Saals, ab 360 x 600. Alles in CSS-Pixeln des sicheren Bereichs.
 // Von oben nach unten: die Rückwand mit den Fenstern (dort oben rechts der Lautsprecher), die Tür mit den
-// Wartenden, dann die fünf Bänke. Unten bleibt ein Rand frei, dort liegt nichts zum Antippen.
+// Wartenden und rechts daneben, am Rand des Saals, die Glocke, dann die fünf Bänke. Unten bleibt ein Rand frei, dort liegt nichts zum Antippen.
 // Eine Bank ist eine Reihe von vier Plätzen. Innen ist links, der äußerste Platz rechts, zum Gang hin.
 
 
@@ -425,6 +467,11 @@ function berechneSaal(breite, hoehe) {
     // die Tür selbst steht rechts neben den Wartenden
     rahmen: { x: x0 + TUER_HOECHSTENS * s + s * 0.15, y: oben + reihe * 0.04, b: s * 1.0, h: reihe * 0.96 },
   };
+  // die Glocke: rechts neben der Tür, am Rand des Saals, so breit wie der Platz bis zum Rand
+  const tuerRechts = tuer.rahmen.x + tuer.rahmen.b;
+  const glocke = { x: tuerRechts + 2, y: oben, b: Math.max(30, breite - tuerRechts - 4), h: reihe };
+  glocke.cx = glocke.x + glocke.b / 2;
+  glocke.cy = oben + reihe * 0.55;
   const baenke = [];
   for (let b = 0; b < BAENKE; b++) {
     const p = plaetze(b + 1);
@@ -450,6 +497,7 @@ function berechneSaal(breite, hoehe) {
     wand: { x: 0, y: 0, b: breite, h: wandH },
     fenster,
     tuer,
+    glocke,
     baenke,
     ton: { x: breite - 26, y: 20, b: 44, h: 40 },
     // der Satz am Ende steht über der Tür, damit man alle Bänke sieht
@@ -462,12 +510,17 @@ function imSaalKasten(k, x, y) {
   return x >= k.x && x <= k.x + k.b && y >= k.y && y <= k.y + k.h;
 }
 
-// Was liegt unter dem Finger? { art: 'ton' } | { art: 'tuer' } | { art: 'bank', bank, platz } | { art: 'nichts' }
-// platz ist der Platz in der Bank, über dem der Finger liegt (0 innen bis 3 außen), oder 4 im Gang daneben.
+// Was liegt unter dem Finger? { art: 'ton' } | { art: 'glocke' } | { art: 'tuer', platz } | { art: 'bank', bank, platz }
+// | { art: 'nichts' }. platz ist der Platz, über dem der Finger liegt: an der Tür 0 bis 3 (3 ist die Tür selbst),
+// in der Bank 0 innen bis 3 außen, oder 4 im Gang daneben.
 function wasImSaal(m, x, y) {
   const t = m.ton;
   if (Math.abs(x - t.x) <= t.b / 2 && Math.abs(y - t.y) <= t.h / 2) return { art: 'ton' };
-  if (imSaalKasten(m.tuer.zeile, x, y)) return { art: 'tuer' };
+  if (imSaalKasten(m.glocke, x, y)) return { art: 'glocke' };
+  if (imSaalKasten(m.tuer.zeile, x, y)) {
+    const p = m.tuer.plaetze;
+    return { art: 'tuer', platz: Math.max(0, Math.min(3, Math.floor((x - p[0].x) / m.s))) };
+  }
   for (let b = 0; b < m.baenke.length; b++) {
     if (!imSaalKasten(m.baenke[b].zeile, x, y)) continue;
     const p = m.baenke[b].plaetze;
@@ -678,6 +731,53 @@ function maleLichtFenster(st, f, staerke) {
   st.restore();
 }
 
+// Die Glocke am Rand des Saals, an einem Haken. o: { matt, an (Verhör angewählt), blink 0..1, zeit }
+// Matt: dunkles, stumpfes Metall. Angewählt: sie schwingt leicht und glänzt.
+function maleGlocke(st, g, s, o) {
+  const r = Math.min(g.b * 0.36, s * 0.28);
+  const x = g.cx;
+  const oben = g.cy - r * 1.25;
+  const winkel = o.an ? Math.sin(o.zeit / 110) * 0.18 : 0;
+  st.save();
+  // Haken an der Wand
+  st.fillStyle = SAALFARBE.tuerRahmen;
+  st.fillRect(x - r * 0.7, oben - r * 0.45, r * 1.4, r * 0.18);
+  st.fillRect(x - 1, oben - r * 0.3, 2, r * 0.32);
+  st.translate(x, oben);
+  st.rotate(winkel);
+  if (o.an || o.blink > 0.01) {
+    const schein = st.createRadialGradient(0, r, 0, 0, r, r * 2.2);
+    const a = Math.max(o.an ? 0.45 : 0, o.blink * 0.8);
+    schein.addColorStop(0, 'rgba(255,226,150,' + a + ')');
+    schein.addColorStop(1, 'rgba(255,226,150,0)');
+    st.fillStyle = schein;
+    st.beginPath();
+    st.arc(0, r, r * 2.2, 0, Math.PI * 2);
+    st.fill();
+  }
+  // Glockenkörper: schmal oben, weit unten, mit Rand
+  st.fillStyle = o.matt ? '#5e5140' : '#d4a548';
+  st.beginPath();
+  st.moveTo(-r * 0.35, 0);
+  st.quadraticCurveTo(-r * 0.55, r * 0.2, -r * 0.62, r * 1.2);
+  st.quadraticCurveTo(-r * 0.7, r * 1.6, -r * 1.0, r * 1.8);
+  st.lineTo(r * 1.0, r * 1.8);
+  st.quadraticCurveTo(r * 0.7, r * 1.6, r * 0.62, r * 1.2);
+  st.quadraticCurveTo(r * 0.55, r * 0.2, r * 0.35, 0);
+  st.closePath();
+  st.fill();
+  if (!o.matt) {
+    st.fillStyle = 'rgba(255,240,200,0.45)';
+    st.fillRect(-r * 0.4, r * 0.3, r * 0.14, r * 1.1);
+  }
+  // Klöppel
+  st.fillStyle = o.matt ? '#3f3628' : '#8a6a2c';
+  st.beginPath();
+  st.arc(Math.sin(-winkel) * r * 0.4, r * 1.95, r * 0.2, 0, Math.PI * 2);
+  st.fill();
+  st.restore();
+}
+
 // --- ../prototyp/falsche-farben/src/anzeige/gaeste.js
 // Gäste im Saal: Mantel, Kopf, Hut. Jede Farbe hat ihren eigenen Hut, damit man sie auch ohne
 // Farbsehen unterscheidet: rot ein runder, blau ein hoher, grün ein breiter, violett eine Mütze mit Bommel.
@@ -742,14 +842,17 @@ function maleHut(stift, form, x, y, k, farbe) {
 }
 
 // (cx, fy): Mitte unter der Figur. s: Größe eines Platzes.
-// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
+// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1,
+//      dreh -1..1 (abgewandt: nach innen oder außen; Kopf zur Seite, Schultern schmal, Kragen an der Seite) }
 function maleGast(stift, cx, fy, s, o) {
   const farbe = GASTFARBEN[o.farbe];
   const alt = o.alt === undefined || o.alt === null ? farbe : GASTFARBEN[o.alt];
   const w = o.wechsel === undefined ? 1 : o.wechsel;
   const sitzt = o.sitzt === undefined ? 1 : o.sitzt;
   const hoch = s * (0.62 + 0.14 * (1 - sitzt));
-  const schulter = s * 0.46;
+  const d = o.dreh || 0;
+  const ad = Math.abs(d);
+  const schulter = s * 0.46 * (1 - 0.18 * ad);
   const saum = s * 0.56;
   const k = s * 0.13;
   const schulterY = fy - hoch + k * 1.9;
@@ -763,37 +866,41 @@ function maleGast(stift, cx, fy, s, o) {
   stift.fillStyle = mantel;
   stift.beginPath();
   stift.moveTo(cx - saum / 2, fy);
-  stift.lineTo(cx - schulter / 2, schulterY + r);
-  stift.quadraticCurveTo(cx - schulter / 2, schulterY, cx - schulter / 2 + r, schulterY);
-  stift.lineTo(cx + schulter / 2 - r, schulterY);
-  stift.quadraticCurveTo(cx + schulter / 2, schulterY, cx + schulter / 2, schulterY + r);
+  const sx = cx + d * k * 0.35; // die Schultern lehnen zur Seite
+  stift.lineTo(sx - schulter / 2, schulterY + r);
+  stift.quadraticCurveTo(sx - schulter / 2, schulterY, sx - schulter / 2 + r, schulterY);
+  stift.lineTo(sx + schulter / 2 - r, schulterY);
+  stift.quadraticCurveTo(sx + schulter / 2, schulterY, sx + schulter / 2, schulterY + r);
   stift.lineTo(cx + saum / 2, fy);
   stift.closePath();
   stift.fill();
 
   stift.fillStyle = mische(mantel, '#000000', 0.25);
   stift.beginPath();
-  stift.moveTo(cx - k * 1.1, schulterY);
-  stift.lineTo(cx, schulterY + k * 1.1);
-  stift.lineTo(cx + k * 1.1, schulterY);
+  const kx = sx + d * k * 1.25;
+  const kb = k * 1.1 * (1 - 0.6 * ad);
+  stift.moveTo(kx - kb, schulterY);
+  stift.lineTo(kx, schulterY + k * 1.1 * (1 - 0.3 * ad));
+  stift.lineTo(kx + kb, schulterY);
   stift.closePath();
   stift.fill();
 
-  const kopfY = schulterY - k * 0.85;
+  const kopfY = schulterY - k * 0.85 + ad * k * 0.15;
+  const kopfX = cx + d * k * 0.8;
   stift.fillStyle = farbe.kopf;
-  kreis(stift, cx, kopfY, k);
+  kreis(stift, kopfX, kopfY, k);
   stift.fill();
 
   // Beim Wechsel schrumpft der alte Hut und der neue wächst
   if (w < 1) {
     stift.save();
     stift.globalAlpha *= 1 - w;
-    maleHut(stift, o.alt, cx, kopfY - k * 0.55, k * (1 - w * 0.5), hut);
+    maleHut(stift, o.alt, kopfX, kopfY - k * 0.55, k * (1 - w * 0.5), hut);
     stift.restore();
   }
   stift.save();
   stift.globalAlpha *= w;
-  maleHut(stift, o.farbe, cx, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
+  maleHut(stift, o.farbe, kopfX, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
   stift.restore();
 
   // Leuchten beim Räumen
@@ -1392,6 +1499,10 @@ function zeichnePunktfeld(stift, feld, x, y, raster, hell, dunkel) {
 // nächsten Tipp auf eine Bank. Standard ist der Gast an der Tür. Wer den äußersten Gast einer Bank antippt
 // (oder irgendwen auf einer vollen Bank), hebt ihn an; ein Tipp auf die Bank daneben setzt ihn um.
 //
+// Die Glocke: Ein Tipp wählt das Verhör an, ein leuchtendes Fenster flackert. Der nächste Tipp auf einen Gast
+// verhört ihn, ein Tipp woandershin bricht ab. Ohne leuchtendes Fenster ist die Glocke matt und tut nichts.
+// Sie erscheint, sobald das erste Fenster leuchtet, mit kurzem Aufblinken.
+//
 // Angehalten wird nur beim Auffliegen und beim Räumen, je höchstens PAUSE ms. Alles andere läuft, während
 // schon der nächste Tipp angenommen wird.
 
@@ -1408,7 +1519,9 @@ const WEG = 140; // so lange gleitet ein Gast auf seinen neuen Platz
 const GLANZ = 520;
 const WECHSEL = 420;
 const RUCK = 0.14; // so weit rücken Nachbarn zusammen oder ab, in Plätzen
-const RUCKZEIT = 90; // Zeitkonstante des Rückens in ms
+const RUCKZEIT = 90; // Zeitkonstante des Rückens und Abwendens in ms
+const AUSZEIT = 450; // so lange erlischt ein Fenster nach dem Verhör
+const BLINKEN = 700; // so lange blinkt die Glocke, wenn sie erscheint
 const RAEUMEN = 900;
 const FENSTERZEIT = 700;
 const SCHLUSS_WARTET = 650; // nach dem letzten Zug, bis der Satz steht und ein Tipp neu beginnt
@@ -1476,7 +1589,10 @@ function erzeugeSaalBuehne(leinwand) {
   let letzteZeit = 0;
   const glanz = new Map(); // id -> t
   let gehen = []; // geräumte Gäste auf dem Weg hinaus: { farbe, x, y, t }
-  let fensterAn = []; // t je leuchtendem Fenster
+  let fenster = []; // je Fenster { an, t }: seit wann es angeht oder ausgeht
+  let verhoer = false; // die Glocke ist angetippt, der nächste Tipp auf einen Gast verhört ihn
+  let glockeSeit = null; // seit wann die Glocke zu sehen ist
+  const dreh = new Map(); // id -> wie weit er gerade abgewandt sitzt, -1..1
   const melder = { klang: null, schicht: null };
 
   function klinge(name) {
@@ -1506,7 +1622,10 @@ function erzeugeSaalBuehne(leinwand) {
     wechsel.clear();
     glanz.clear();
     gehen = [];
-    fensterAn = [];
+    fenster = [];
+    verhoer = false;
+    glockeSeit = zustand.licht >= 1 || zustand.geraeumt >= 1 ? 0 : null;
+    dreh.clear();
     schluss = null;
     pauseBis = 0;
     grundAuswahl();
@@ -1559,8 +1678,15 @@ function erzeugeSaalBuehne(leinwand) {
           gehen.push({ farbe: e.farbe, x: l ? l.x : p.cx, y: l ? l.y : p.fy, t: jetzt });
           lage.delete(id);
         });
-        fensterAn[e.fenster - 1] = jetzt + PAUSE;
+        fenster[e.fenster - 1] = { an: true, t: jetzt + PAUSE };
+        if (glockeSeit === null) glockeSeit = jetzt + PAUSE;
         klinge('raeumen');
+        if (melder.schicht) melder.schicht(e.fenster);
+      } else if (e.typ === 'verhoer') {
+        wechsel.set(e.id, { alt: e.zeigte, t: jetzt });
+        fenster[e.fenster] = { an: false, t: jetzt };
+        verhoer = false;
+        klinge('verhoer');
         if (melder.schicht) melder.schicht(e.fenster);
       } else if (e.typ === 'ende') {
         schluss = { t: Math.max(jetzt, pauseBis) + SCHLUSS_WARTET, satz: e.satz, zeilen: null };
@@ -1579,6 +1705,19 @@ function erzeugeSaalBuehne(leinwand) {
     const ziel = wasImSaal(m, x, y);
     if (ziel.art === 'ton') return { ton: true };
     if (schluss) return jetzt >= schluss.t ? { neu: true } : null;
+    if (ziel.art === 'glocke' && glockeSeit !== null) {
+      // matt: kein Ton, keine Wirkung
+      if (z.licht < 1) return null;
+      verhoer = !verhoer;
+      if (verhoer) klinge('glocke');
+      return null;
+    }
+    if (verhoer) {
+      // jetzt zählt nur ein Gast; alles andere bricht ab und kostet nichts
+      verhoer = false;
+      const g = gastBei(ziel);
+      return g ? { verhoer: g.id } : null;
+    }
     if (ziel.art === 'tuer') {
       if (z.tuer.length) auswahl = 'tuer';
       else stups = { wo: 'tuer', t: jetzt };
@@ -1600,6 +1739,13 @@ function erzeugeSaalBuehne(leinwand) {
       return null;
     }
     return { von: auswahl, nach: b };
+  }
+
+  // der Gast unter dem Finger, oder null
+  function gastBei(ziel) {
+    if (ziel.art === 'tuer') return z.tuer[ziel.platz] || null;
+    if (ziel.art === 'bank') return z.baenke[ziel.bank][ziel.platz] || null;
+    return null;
   }
 
   function gast(g, jetzt, o) {
@@ -1650,7 +1796,7 @@ function erzeugeSaalBuehne(leinwand) {
       stift.fill();
       stift.restore();
     }
-    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
+    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, dreh: dreh.get(g.id) || 0, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
   }
 
   function zeichne(jetzt) {
@@ -1670,10 +1816,24 @@ function erzeugeSaalBuehne(leinwand) {
       const ist = ruck.get(id) || 0;
       ruck.set(id, ist + (soll - ist) * schritt);
     }
+    // Spur: wer abgerückt ist, sitzt abgewandt, bis er neben seiner echten Farbe zusammenrückt
+    for (const g of [...z.tuer, ...z.baenke.flat()]) {
+      const ist = dreh.get(g.id) || 0;
+      dreh.set(g.id, ist + (g.abgewandt - ist) * schritt);
+    }
     m.fenster.forEach((f, i) => {
-      const t = fensterAn[i];
-      if (t !== undefined) maleLichtFenster(stift, f, begrenze((jetzt - t) / FENSTERZEIT, 0, 1));
+      const fe = fenster[i];
+      if (!fe) return;
+      let hell = fe.an ? begrenze((jetzt - fe.t) / FENSTERZEIT, 0, 1) : 1 - begrenze((jetzt - fe.t) / AUSZEIT, 0, 1);
+      // der Preis des Verhörs: das letzte leuchtende Fenster flackert
+      if (verhoer && fe.an && i === z.licht - 1) hell *= 0.55 + 0.45 * Math.abs(Math.sin(jetzt / 70) * Math.sin(jetzt / 163));
+      maleLichtFenster(stift, f, hell);
     });
+    if (glockeSeit !== null && jetzt >= glockeSeit) {
+      const b = (jetzt - glockeSeit) / BLINKEN;
+      const blink = b < 1 ? Math.abs(Math.sin(b * Math.PI * 3)) * (1 - b) : 0;
+      maleGlocke(stift, m.glocke, m.s, { matt: z.licht < 1, an: verhoer, blink, zeit: jetzt });
+    }
     maleTonschalter(stift, m.ton, tonAn);
 
     // Stups: eine Stelle, an der ein Tipp nichts bewirkt hat, zuckt kurz
@@ -1760,6 +1920,7 @@ function erzeugeSaalBuehne(leinwand) {
     },
     masse: () => m,
     auswahl: () => auswahl,
+    verhoerAn: () => verhoer,
     schlussSteht: (jetzt) => !!schluss && jetzt >= schluss.t,
   };
 }
@@ -1906,6 +2067,17 @@ function erzeugeSaalTon() {
     abruecken: () => {
       klang(150, 105, 0.22, 0.28, 'triangle');
       hauch(260, 0.12, 0.18);
+    },
+    // die Glocke wird angewählt: ein heller, kurzer Glockenton
+    glocke: () => {
+      klang(1174.7, 1174.7, 0.7, 0.1, 'sine');
+      klang(2349, 2349, 0.35, 0.03, 'sine');
+    },
+    // Verhör: die Glocke schlägt, dann sinkt ein tiefer Ton
+    verhoer: () => {
+      klang(880, 880, 0.9, 0.13, 'triangle');
+      klang(1760, 1760, 0.5, 0.04, 'sine');
+      klang(330, 220, 0.6, 0.12, 'triangle', 0.12);
     },
     // eigener Klang beim Auffliegen: zwei tiefe Töne, die sich reiben und absinken
     aufgeflogen: () => {
@@ -2114,6 +2286,7 @@ if (/[#&]probe\b/.test(window.location.hash)) {
   window.saalZustand = () => JSON.stringify(abend.zustand);
   window.saalMasse = () => JSON.stringify(buehne.masse());
   window.saalAuswahl = () => buehne.auswahl();
+  window.saalVerhoer = () => buehne.verhoerAn();
   window.saalSatzSteht = () => buehne.schlussSteht(performance.now());
 }
 

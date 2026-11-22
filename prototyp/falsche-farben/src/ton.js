@@ -140,6 +140,17 @@ export function erzeugeSaalTon() {
       klang(150, 105, 0.22, 0.28, 'triangle');
       hauch(260, 0.12, 0.18);
     },
+    // die Glocke wird angewählt: ein heller, kurzer Glockenton
+    glocke: () => {
+      klang(1174.7, 1174.7, 0.7, 0.1, 'sine');
+      klang(2349, 2349, 0.35, 0.03, 'sine');
+    },
+    // Verhör: die Glocke schlägt, dann sinkt ein tiefer Ton
+    verhoer: () => {
+      klang(880, 880, 0.9, 0.13, 'triangle');
+      klang(1760, 1760, 0.5, 0.04, 'sine');
+      klang(330, 220, 0.6, 0.12, 'triangle', 0.12);
+    },
     // eigener Klang beim Auffliegen: zwei tiefe Töne, die sich reiben und absinken
     aufgeflogen: () => {
       klang(311, 292, 0.55, 0.2, 'triangle');

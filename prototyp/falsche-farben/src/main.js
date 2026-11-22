@@ -74,6 +74,7 @@ if (/[#&]probe\b/.test(window.location.hash)) {
   window.saalZustand = () => JSON.stringify(abend.zustand);
   window.saalMasse = () => JSON.stringify(buehne.masse());
   window.saalAuswahl = () => buehne.auswahl();
+  window.saalVerhoer = () => buehne.verhoerAn();
   window.saalSatzSteht = () => buehne.schlussSteht(performance.now());
 }
 

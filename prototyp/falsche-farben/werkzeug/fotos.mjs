@@ -66,6 +66,35 @@ while (z.status === 'laeuft' && zuege < 600) {
       await bild(`1-${x.typ}`);
     }
   }
+  // Glocke: sobald ein Fenster leuchtet und jemand abgewandt sitzt, einmal abbrechen und einmal verhören
+  const abgewandt = z.baenke.flat().find((g) => g.abgewandt);
+  if (abgewandt && z.licht >= 1 && !gesehen.has('verhoer') && z.status === 'laeuft') {
+    gesehen.add('verhoer');
+    await seite.waitForTimeout(250);
+    await bild('5a-abgewandt');
+    const vorher = JSON.stringify(z);
+    await tippe(m.glocke.cx, m.glocke.cy);
+    await seite.waitForTimeout(120);
+    if (!(await seite.evaluate(() => window.saalVerhoer()))) maengel.push('die Glocke wählt das Verhör nicht an');
+    await bild('5b-glocke-angewaehlt');
+    await tippe(k.b / 2, m.wand.h / 2); // woandershin: bricht ab
+    await seite.waitForTimeout(80);
+    if (await seite.evaluate(() => window.saalVerhoer())) maengel.push('Abbrechen klappt nicht');
+    if ((await seite.evaluate(() => window.saalZustand())) !== vorher) maengel.push('Abbrechen hat etwas gekostet');
+    await tippe(m.glocke.cx, m.glocke.cy);
+    await seite.waitForTimeout(80);
+    const bi = z.baenke.findIndex((b) => b.includes(abgewandt));
+    const p = m.baenke[bi].plaetze[z.baenke[bi].indexOf(abgewandt)];
+    await tippe(p.cx, p.fy - m.s * 0.3);
+    const lichtVorher = z.licht;
+    const zugVorher = z.zug;
+    abend.act({ verhoer: abgewandt.id });
+    await seite.waitForTimeout(500);
+    if ((await seite.evaluate(() => window.saalZustand())) !== JSON.stringify(z)) maengel.push('Verhör: Browser und Kern weichen ab');
+    if (z.licht !== lichtVorher - 1 || z.zug !== zugVorher) maengel.push('Verhör kostet nicht genau ein Fenster');
+    console.log(`Verhör: Gast zeigte ${abgewandt.zeigt === abgewandt.echt ? 'schon' : 'nicht'} seine echte Farbe, Fenster ${lichtVorher} -> ${z.licht}, Zug bleibt ${z.zug}`);
+    await bild('5c-nach-verhoer');
+  }
   const verdeckt = z.baenke.flat().filter((g) => g.zeigt !== g.echt);
   if (verdeckt.length >= 1 && z.tuer.length && !gesehen.has('falsch')) {
     gesehen.add('falsch');
@@ -74,13 +103,18 @@ while (z.status === 'laeuft' && zuege < 600) {
     const wo = z.baenke.findIndex((b) => b.some((g) => g.zeigt !== g.echt));
     console.log(`Bild "falscher-sitzt": Falscher auf Bank ${wo + 1}, zeigt ${verdeckt[0].zeigt}, ist ${verdeckt[0].echt}`);
   }
+  if (z.geraeumt === 1 && !gesehen.has('glocke')) {
+    gesehen.add('glocke');
+    await seite.waitForTimeout(330);
+    await bild('1-glocke-erscheint');
+  }
   if (z.geraeumt === 7 && !gesehen.has('halb')) {
     gesehen.add('halb');
     await seite.waitForTimeout(900);
     await bild('2-sieben-fenster');
   }
 }
-for (const typ of ['schimmer', 'abruecken', 'aufgeflogen', 'geraeumt']) if (!gesehen.has(typ)) maengel.push(`nie gesehen: ${typ}`);
+for (const typ of ['schimmer', 'abruecken', 'aufgeflogen', 'geraeumt', 'verhoer']) if (!gesehen.has(typ)) maengel.push(`nie gesehen: ${typ}`);
 if (z.status !== 'ende') maengel.push('der Abend endete nicht');
 
 await seite.waitForFunction(() => window.saalSatzSteht(), null, { timeout: 4000 }).catch(() => maengel.push('der Satz erscheint nicht'));
