@@ -60,9 +60,9 @@ while (z.status === 'laeuft' && zuege < 600) {
     break;
   }
   for (const x of e) {
-    if (!gesehen.has(x.typ) && ['schimmer', 'aufgeflogen', 'geraeumt'].includes(x.typ)) {
+    if (!gesehen.has(x.typ) && ['schimmer', 'abruecken', 'aufgeflogen', 'geraeumt'].includes(x.typ)) {
       gesehen.add(x.typ);
-      await seite.waitForTimeout(x.typ === 'schimmer' ? 180 : 120);
+      await seite.waitForTimeout(x.typ === 'schimmer' || x.typ === 'abruecken' ? 300 : 120);
       await bild(`1-${x.typ}`);
     }
   }
@@ -80,7 +80,7 @@ while (z.status === 'laeuft' && zuege < 600) {
     await bild('2-sieben-fenster');
   }
 }
-for (const typ of ['schimmer', 'aufgeflogen', 'geraeumt']) if (!gesehen.has(typ)) maengel.push(`nie gesehen: ${typ}`);
+for (const typ of ['schimmer', 'abruecken', 'aufgeflogen', 'geraeumt']) if (!gesehen.has(typ)) maengel.push(`nie gesehen: ${typ}`);
 if (z.status !== 'ende') maengel.push('der Abend endete nicht');
 
 await seite.waitForFunction(() => window.saalSatzSteht(), null, { timeout: 4000 }).catch(() => maengel.push('der Satz erscheint nicht'));

@@ -100,8 +100,9 @@ function wuerfleFarben(z, liste) {
 // Eine Bank ist eine Liste vom inneren zum äußeren Platz. Umgesetzt wird nur der äußerste Gast.
 //
 // Regeln:
-//   Schimmern: Wer gesetzt wird, kommt neben den bisher äußersten Gast. Haben beide dieselbe echte Farbe,
-//     schimmern beide. Ein Falscher schimmert also nicht neben der Farbe, die er zeigt, sondern neben seiner echten.
+//   Nachbarn: Wer gesetzt wird, kommt neben den bisher äußersten Gast. Haben beide dieselbe echte Farbe,
+//     schimmern beide und rücken zusammen, auch wenn einer eine andere Farbe zeigt. Zeigen beide dieselbe
+//     Farbe und sind verschieden, rücken sie ab. Sonst geschieht nichts. Ein Falscher sieht aus wie jeder andere.
 //   Räumen: Zeigen vier auf einer Bank dieselbe Farbe und sind alle ehrlich, gehen sie, die Bank wird frei,
 //     ein Fenster leuchtet auf. Ist ein Falscher darunter, räumt die Bank nicht: Er fliegt auf.
 //   Tür: Nach jedem zweiten Zug kommt ein Gast an die Tür. Kommt ein vierter zu dreien, endet der Abend.
@@ -109,8 +110,8 @@ function wuerfleFarben(z, liste) {
 //   Es kommen immer weitere Gäste, mit der Zeit mehr Falsche. Der Abend endet, wenn an der Tür ein vierter
 //     dazukäme, wenn kein Zug mehr möglich ist oder wenn alle Fenster des Saals leuchten. So hat jeder
 //     Abend ein Ende.
-//   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, und erst wenn
-//     er aufgeflogen ist, weitere, langsam mehr.
+//   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, in einem Moment,
+//     in dem genau zwei Bänke Platz haben (einstiegsMoment), und erst wenn er aufgeflogen ist, weitere.
 
 
 
@@ -171,29 +172,46 @@ function alleImSaal(z) {
   return alle;
 }
 
+// Einstieg: Der erste Falsche kommt nur in einem Moment, in dem niemand an der Tür wartet und genau zwei Bänke
+// einen freien Platz haben, beide mit jemandem darauf, deren Äußerste verschiedene Farben haben. Er zeigt die
+// Farbe der einen und ist in Wahrheit die der anderen: Wohin er auch gesetzt wird, er rückt ab oder zusammen.
+// Gibt die beiden Farben { zeigt, echt } zurück oder null, wenn der Moment nicht passt.
+function einstiegsMoment(z) {
+  if (z.tuer.length) return null;
+  const offen = z.baenke.filter((b) => b.length < PLAETZE);
+  const besetzt = offen.filter((b) => b.length);
+  if (besetzt.length !== 2) return null;
+  const [a, b] = besetzt.map((bank) => bank[bank.length - 1]);
+  if (a.echt === b.echt || istFalsch(a) || istFalsch(b)) return null;
+  return naechsteFarbzahl(z) < 0.5 ? { zeigt: a.echt, echt: b.echt } : { zeigt: b.echt, echt: a.echt };
+}
+
 // Soll der nächste Gast falsch sein? Nach dem Einstieg zuerst genau einer, dann langsam mehr.
 function wirdFalsch(z) {
-  if (z.geraeumt < 1) return false;
-  if (z.ersterFalscher === null) return true;
-  if (z.ersterFalscher === 'unterwegs') return false;
+  if (z.geraeumt < 1 || z.ersterFalscher !== 'aufgeflogen') return false;
   const anteil = Math.min(FALSCH_HOECHSTENS, FALSCH_ANFANG + FALSCH_STEIGT * (z.geraeumt - 1));
   return naechsteFarbzahl(z) < anteil;
 }
 
 function neuerGast(z) {
+  if (z.geraeumt >= 1 && z.ersterFalscher === null) {
+    const moment = einstiegsMoment(z);
+    if (moment) {
+      z.ersterFalscher = 'unterwegs';
+      z.gekommen += 1;
+      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt };
+    }
+  }
   const echt = echteFarbe(z);
   const gast = { id: z.naechsteId++, zeigt: echt, echt };
   if (wirdFalsch(z)) {
-    // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Schimmern zwischen zwei gleich
-    // Aussehenden, dass beide ehrlich sind, und bleibt es aus, ist genau einer von beiden falsch.
+    // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Zusammenrücken zwischen zwei gleich
+    // Aussehenden, dass beide ehrlich sind, und rücken sie ab, ist genau einer von beiden falsch.
     const verdeckt = alleImSaal(z).filter(istFalsch);
     const zugleich = Math.min(VERDECKT_HOECHSTENS, VERDECKT_ANFANG + Math.floor(z.geraeumt / VERDECKT_ALLE));
     const moeglich = [];
     for (let f = 0; f < FARBEN; f++) if (f !== echt && !verdeckt.some((g) => g.zeigt === f)) moeglich.push(f);
-    if (moeglich.length && verdeckt.length < zugleich) {
-      gast.zeigt = moeglich[Math.floor(naechsteFarbzahl(z) * moeglich.length)];
-      if (z.ersterFalscher === null) z.ersterFalscher = 'unterwegs';
-    }
+    if (moeglich.length && verdeckt.length < zugleich) gast.zeigt = moeglich[Math.floor(naechsteFarbzahl(z) * moeglich.length)];
   }
   z.gekommen += 1;
   return gast;
@@ -247,8 +265,10 @@ function fuehreAus(z, aktion) {
   z.zug += 1;
   ereignisse.push({ typ: 'gesetzt', id: gast.id, von, nach, platz: bank.length - 1 });
 
-  // Schimmern: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
+  // Schimmern und Zusammenrücken: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
   if (nachbar && nachbar.echt === gast.echt) ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
+  // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden
+  else if (nachbar && nachbar.zeigt === gast.zeigt) ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
 
   // vier, die dieselbe Farbe zeigen: räumen oder auffliegen
   if (bank.length === PLAETZE && bank.every((g) => g.zeigt === bank[0].zeigt)) {
@@ -661,16 +681,22 @@ function maleLichtFenster(st, f, staerke) {
 // --- ../prototyp/falsche-farben/src/anzeige/gaeste.js
 // Gäste im Saal: Mantel, Kopf, Hut. Jede Farbe hat ihren eigenen Hut, damit man sie auch ohne
 // Farbsehen unterscheidet: rot ein runder, blau ein hoher, grün ein breiter, violett eine Mütze mit Bommel.
-// Ein Falscher trägt Farbe und Hut der Gruppe, die er zeigt, nur eine Spur kräftiger, mit hellem Kragen.
+// Ein Falscher trägt Farbe und Hut der Gruppe, die er zeigt, und sieht genauso aus wie ein Ehrlicher dieser Farbe.
+// Erkennen kann man ihn nur am Verhalten: Er rückt ab oder zusammen (buehne.js).
 
 
 
 const GASTFARBEN = [
-  { mantel: '#b5452f', kraeftig: '#d6391c', hut: '#5e2117', kopf: '#ecc9a8' },
-  { mantel: '#33609c', kraeftig: '#1f66d1', hut: '#172c4d', kopf: '#e6c7a6' },
-  { mantel: '#3f8350', kraeftig: '#22a347', hut: '#1c3d24', kopf: '#ebcaa9' },
-  { mantel: '#76508f', kraeftig: '#8f3dc7', hut: '#382449', kopf: '#e8c8a8' },
+  { mantel: '#b5452f', hut: '#5e2117', kopf: '#ecc9a8' },
+  { mantel: '#33609c', hut: '#172c4d', kopf: '#e6c7a6' },
+  { mantel: '#3f8350', hut: '#1c3d24', kopf: '#ebcaa9' },
+  { mantel: '#76508f', hut: '#382449', kopf: '#e8c8a8' },
 ];
+
+// Wie ein Gast gezeichnet wird, hängt nur an der Farbe, die er zeigt. Die echte bleibt unsichtbar.
+function aussehen(g) {
+  return { farbe: g.zeigt };
+}
 
 // Mischt zwei Farben '#rrggbb', p von 0 (a) bis 1 (b)
 function mische(a, b, p) {
@@ -716,12 +742,11 @@ function maleHut(stift, form, x, y, k, farbe) {
 }
 
 // (cx, fy): Mitte unter der Figur. s: Größe eines Platzes.
-// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, kraeftig 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
+// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
 function maleGast(stift, cx, fy, s, o) {
   const farbe = GASTFARBEN[o.farbe];
   const alt = o.alt === undefined || o.alt === null ? farbe : GASTFARBEN[o.alt];
   const w = o.wechsel === undefined ? 1 : o.wechsel;
-  const kr = o.kraeftig || 0;
   const sitzt = o.sitzt === undefined ? 1 : o.sitzt;
   const hoch = s * (0.62 + 0.14 * (1 - sitzt));
   const schulter = s * 0.46;
@@ -730,9 +755,7 @@ function maleGast(stift, cx, fy, s, o) {
   const schulterY = fy - hoch + k * 1.9;
   const r = schulter * 0.28;
 
-  const mantelVon = mische(alt.mantel, alt.kraeftig, kr);
-  const mantelNach = mische(farbe.mantel, farbe.kraeftig, kr);
-  const mantel = mische(mantelVon, mantelNach, w);
+  const mantel = mische(alt.mantel, farbe.mantel, w);
   const hut = mische(alt.hut, farbe.hut, w);
 
   if (o.glanz > 0.01) schein(stift, cx, fy - hoch * 0.5, s * 0.55, 'rgba(255,240,190,', 0.75 * o.glanz);
@@ -748,9 +771,7 @@ function maleGast(stift, cx, fy, s, o) {
   stift.closePath();
   stift.fill();
 
-  // Kragen: bei Falschen hell
-  const kragen = mische(mische(mantel, '#000000', 0.25), '#ffe2a0', kr * 0.85);
-  stift.fillStyle = kragen;
+  stift.fillStyle = mische(mantel, '#000000', 0.25);
   stift.beginPath();
   stift.moveTo(cx - k * 1.1, schulterY);
   stift.lineTo(cx, schulterY + k * 1.1);
@@ -773,12 +794,6 @@ function maleGast(stift, cx, fy, s, o) {
   stift.save();
   stift.globalAlpha *= w;
   maleHut(stift, o.farbe, cx, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
-  if (kr > 0.01) {
-    // eine feine helle Kante am Hut
-    stift.globalAlpha *= 0.7 * kr;
-    stift.fillStyle = '#ffe9b8';
-    stift.fillRect(cx - k * 1.1, kopfY - k * 0.95, k * 2.2, Math.max(1, k * 0.12));
-  }
   stift.restore();
 
   // Leuchten beim Räumen
@@ -1392,11 +1407,32 @@ const PAUSE = 150; // so lange hält das Bild beim Auffliegen und beim Räumen a
 const WEG = 140; // so lange gleitet ein Gast auf seinen neuen Platz
 const GLANZ = 520;
 const WECHSEL = 420;
+const RUCK = 0.14; // so weit rücken Nachbarn zusammen oder ab, in Plätzen
+const RUCKZEIT = 90; // Zeitkonstante des Rückens in ms
 const RAEUMEN = 900;
 const FENSTERZEIT = 700;
 const SCHLUSS_WARTET = 650; // nach dem letzten Zug, bis der Satz steht und ein Tipp neu beginnt
 
 // Zeilen eines Satzes für die Punktschrift, höchstens spalten Punkte breit
+// Wie weit jeder Gast einer Bank zur Seite rückt, in Vielfachen von RUCK (negativ: nach innen, links).
+// Nachbarn mit gleicher echter Farbe rücken zusammen, auch wenn einer eine andere zeigt. Zeigen beide dieselbe
+// Farbe und sind verschieden, rücken sie ab. Sonst bleiben beide, wo sie sind.
+function rueckVersatz(bank) {
+  const v = bank.map(() => 0);
+  for (let i = 0; i + 1 < bank.length; i++) {
+    const a = bank[i];
+    const b = bank[i + 1];
+    if (a.echt === b.echt) {
+      v[i] += 1;
+      v[i + 1] -= 1;
+    } else if (a.zeigt === b.zeigt) {
+      v[i] -= 1;
+      v[i + 1] += 1;
+    }
+  }
+  return v;
+}
+
 // Punktabstand der Schrift am Ende: so groß wie möglich, aber gut 28 Zeichen je Zeile
 function satzRaster(breite) {
   return Math.max(1.8, Math.min(3, (breite - 24) / 170));
@@ -1435,7 +1471,9 @@ function erzeugeSaalBuehne(leinwand) {
   let angetippt = false;
   const lage = new Map(); // id -> { x, y, vonX, vonY, t }
   const gezeigt = new Map(); // id -> Farbe, wie sie gerade gemalt wird
-  const wechsel = new Map(); // id -> { alt, t, kraeftig }
+  const wechsel = new Map(); // id -> { alt, t, nach }
+  const ruck = new Map(); // id -> wie weit er gerade zur Seite gerückt ist, in Pixeln
+  let letzteZeit = 0;
   const glanz = new Map(); // id -> t
   let gehen = []; // geräumte Gäste auf dem Weg hinaus: { farbe, x, y, t }
   let fensterAn = []; // t je leuchtendem Fenster
@@ -1507,9 +1545,11 @@ function erzeugeSaalBuehne(leinwand) {
       } else if (e.typ === 'schimmer') {
         for (const id of e.ids) glanz.set(id, jetzt);
         klinge('schimmer');
+      } else if (e.typ === 'abruecken') {
+        klinge('abruecken');
       } else if (e.typ === 'aufgeflogen') {
         pauseBis = Math.max(pauseBis, jetzt + PAUSE);
-        for (const f of e.gaeste) wechsel.set(f.id, { alt: gezeigt.get(f.id), t: jetzt + PAUSE, kraeftig: 1 });
+        for (const f of e.gaeste) wechsel.set(f.id, { alt: gezeigt.get(f.id), t: jetzt + PAUSE });
         klinge('aufgeflogen');
       } else if (e.typ === 'geraeumt') {
         pauseBis = Math.max(pauseBis, jetzt + PAUSE);
@@ -1527,7 +1567,7 @@ function erzeugeSaalBuehne(leinwand) {
         klinge('ende');
         // der Saal, wie er ist: Wer noch eine falsche Farbe zeigt, zeigt am Ende seine echte
         const spaeter = Math.max(jetzt, pauseBis) + 250;
-        for (const g of [...z.tuer, ...z.baenke.flat()]) if (istFalsch(g)) wechsel.set(g.id, { alt: g.zeigt, t: spaeter, kraeftig: 1, nach: g.echt });
+        for (const g of [...z.tuer, ...z.baenke.flat()]) if (istFalsch(g)) wechsel.set(g.id, { alt: g.zeigt, t: spaeter, nach: g.echt });
       }
     }
     grundAuswahl();
@@ -1579,25 +1619,22 @@ function erzeugeSaalBuehne(leinwand) {
       l.t = jetzt;
     }
     const p = begrenze((jetzt - l.t) / WEG, 0, 1);
-    const x = l.vonX + (l.x - l.vonX) * sanft(p);
+    const x = l.vonX + (l.x - l.vonX) * sanft(p) + (ruck.get(g.id) || 0);
     const y = l.vonY + (l.y - l.vonY) * sanft(p);
 
-    let farbe = g.zeigt;
+    let farbe = aussehen(g).farbe;
     let alt = null;
     let w = 1;
-    let kraeftig = istFalsch(g) ? 1 : 0;
     const wx = wechsel.get(g.id);
     if (wx) {
       const q = begrenze((jetzt - wx.t) / WECHSEL, 0, 1);
       if (wx.nach !== undefined) farbe = q > 0 ? wx.nach : g.zeigt;
       alt = wx.alt;
       w = q > 0 ? sanft(q) : 0;
-      kraeftig = wx.kraeftig * (1 - w);
       if (q <= 0) {
         farbe = wx.alt;
         w = 1;
         alt = null;
-        kraeftig = 1;
       }
     }
     gezeigt.set(g.id, g.zeigt);
@@ -1613,13 +1650,26 @@ function erzeugeSaalBuehne(leinwand) {
       stift.fill();
       stift.restore();
     }
-    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, kraeftig, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
+    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
   }
 
   function zeichne(jetzt) {
     if (!m || !z) return;
     stift.setTransform(dichte, 0, 0, dichte, 0, 0);
     stift.drawImage(grund, 0, 0, m.breite, m.hoehe);
+    // Rücken: jeder Gast gleitet zu seinem Versatz neben seinen Nachbarn; an der Tür und angehoben steht er gerade
+    const schritt = Math.min(1, Math.max(0, jetzt - letzteZeit) / RUCKZEIT);
+    letzteZeit = jetzt;
+    const ziel = new Map();
+    z.baenke.forEach((bank, b) => {
+      const v = rueckVersatz(bank);
+      bank.forEach((g, k) => ziel.set(g.id, auswahl === b && k === bank.length - 1 ? 0 : v[k] * RUCK * m.s));
+    });
+    for (const g of z.tuer) ziel.set(g.id, 0);
+    for (const [id, soll] of ziel) {
+      const ist = ruck.get(id) || 0;
+      ruck.set(id, ist + (soll - ist) * schritt);
+    }
     m.fenster.forEach((f, i) => {
       const t = fensterAn[i];
       if (t !== undefined) maleLichtFenster(stift, f, begrenze((jetzt - t) / FENSTERZEIT, 0, 1));
@@ -1715,7 +1765,7 @@ function erzeugeSaalBuehne(leinwand) {
 }
 
 // --- ../prototyp/falsche-farben/src/ton.js
-// Geräusche des Prototyps "Falsche Farben", erzeugt über Web Audio, keine Dateien, erst nach der ersten
+// Geräusche des Prototyps "Falsche Farben" (Zusammenrücken hell, Abrücken dumpf), erzeugt über Web Audio, keine Dateien, erst nach der ersten
 // Berührung. Dazu die Tonschichten: Jede geräumte Bank fügt dem Saal einen leisen, gehaltenen Ton hinzu,
 // bis zu einer für jedes Fenster. Ohne Ton fehlt nichts: Jedes Geräusch hat ein sichtbares Gegenstück.
 
@@ -1851,6 +1901,11 @@ function erzeugeSaalTon() {
     schimmer: () => {
       klang(1318.5, 1318.5, 0.4, 0.06);
       klang(1760, 1760, 0.45, 0.045, 'sine', 0.06);
+    },
+    // Abrücken: ein dumpfer, kurzer Ton nach unten
+    abruecken: () => {
+      klang(150, 105, 0.22, 0.28, 'triangle');
+      hauch(260, 0.12, 0.18);
     },
     // eigener Klang beim Auffliegen: zwei tiefe Töne, die sich reiben und absinken
     aufgeflogen: () => {

@@ -10,8 +10,9 @@
 // Eine Bank ist eine Liste vom inneren zum äußeren Platz. Umgesetzt wird nur der äußerste Gast.
 //
 // Regeln:
-//   Schimmern: Wer gesetzt wird, kommt neben den bisher äußersten Gast. Haben beide dieselbe echte Farbe,
-//     schimmern beide. Ein Falscher schimmert also nicht neben der Farbe, die er zeigt, sondern neben seiner echten.
+//   Nachbarn: Wer gesetzt wird, kommt neben den bisher äußersten Gast. Haben beide dieselbe echte Farbe,
+//     schimmern beide und rücken zusammen, auch wenn einer eine andere Farbe zeigt. Zeigen beide dieselbe
+//     Farbe und sind verschieden, rücken sie ab. Sonst geschieht nichts. Ein Falscher sieht aus wie jeder andere.
 //   Räumen: Zeigen vier auf einer Bank dieselbe Farbe und sind alle ehrlich, gehen sie, die Bank wird frei,
 //     ein Fenster leuchtet auf. Ist ein Falscher darunter, räumt die Bank nicht: Er fliegt auf.
 //   Tür: Nach jedem zweiten Zug kommt ein Gast an die Tür. Kommt ein vierter zu dreien, endet der Abend.
@@ -19,8 +20,8 @@
 //   Es kommen immer weitere Gäste, mit der Zeit mehr Falsche. Der Abend endet, wenn an der Tür ein vierter
 //     dazukäme, wenn kein Zug mehr möglich ist oder wenn alle Fenster des Saals leuchten. So hat jeder
 //     Abend ein Ende.
-//   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, und erst wenn
-//     er aufgeflogen ist, weitere, langsam mehr.
+//   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, in einem Moment,
+//     in dem genau zwei Bänke Platz haben (einstiegsMoment), und erst wenn er aufgeflogen ist, weitere.
 
 import { wuerfleFarben, naechsteFarbzahl } from './zufall.js';
 
@@ -81,29 +82,46 @@ function alleImSaal(z) {
   return alle;
 }
 
+// Einstieg: Der erste Falsche kommt nur in einem Moment, in dem niemand an der Tür wartet und genau zwei Bänke
+// einen freien Platz haben, beide mit jemandem darauf, deren Äußerste verschiedene Farben haben. Er zeigt die
+// Farbe der einen und ist in Wahrheit die der anderen: Wohin er auch gesetzt wird, er rückt ab oder zusammen.
+// Gibt die beiden Farben { zeigt, echt } zurück oder null, wenn der Moment nicht passt.
+export function einstiegsMoment(z) {
+  if (z.tuer.length) return null;
+  const offen = z.baenke.filter((b) => b.length < PLAETZE);
+  const besetzt = offen.filter((b) => b.length);
+  if (besetzt.length !== 2) return null;
+  const [a, b] = besetzt.map((bank) => bank[bank.length - 1]);
+  if (a.echt === b.echt || istFalsch(a) || istFalsch(b)) return null;
+  return naechsteFarbzahl(z) < 0.5 ? { zeigt: a.echt, echt: b.echt } : { zeigt: b.echt, echt: a.echt };
+}
+
 // Soll der nächste Gast falsch sein? Nach dem Einstieg zuerst genau einer, dann langsam mehr.
 function wirdFalsch(z) {
-  if (z.geraeumt < 1) return false;
-  if (z.ersterFalscher === null) return true;
-  if (z.ersterFalscher === 'unterwegs') return false;
+  if (z.geraeumt < 1 || z.ersterFalscher !== 'aufgeflogen') return false;
   const anteil = Math.min(FALSCH_HOECHSTENS, FALSCH_ANFANG + FALSCH_STEIGT * (z.geraeumt - 1));
   return naechsteFarbzahl(z) < anteil;
 }
 
 function neuerGast(z) {
+  if (z.geraeumt >= 1 && z.ersterFalscher === null) {
+    const moment = einstiegsMoment(z);
+    if (moment) {
+      z.ersterFalscher = 'unterwegs';
+      z.gekommen += 1;
+      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt };
+    }
+  }
   const echt = echteFarbe(z);
   const gast = { id: z.naechsteId++, zeigt: echt, echt };
   if (wirdFalsch(z)) {
-    // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Schimmern zwischen zwei gleich
-    // Aussehenden, dass beide ehrlich sind, und bleibt es aus, ist genau einer von beiden falsch.
+    // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Zusammenrücken zwischen zwei gleich
+    // Aussehenden, dass beide ehrlich sind, und rücken sie ab, ist genau einer von beiden falsch.
     const verdeckt = alleImSaal(z).filter(istFalsch);
     const zugleich = Math.min(VERDECKT_HOECHSTENS, VERDECKT_ANFANG + Math.floor(z.geraeumt / VERDECKT_ALLE));
     const moeglich = [];
     for (let f = 0; f < FARBEN; f++) if (f !== echt && !verdeckt.some((g) => g.zeigt === f)) moeglich.push(f);
-    if (moeglich.length && verdeckt.length < zugleich) {
-      gast.zeigt = moeglich[Math.floor(naechsteFarbzahl(z) * moeglich.length)];
-      if (z.ersterFalscher === null) z.ersterFalscher = 'unterwegs';
-    }
+    if (moeglich.length && verdeckt.length < zugleich) gast.zeigt = moeglich[Math.floor(naechsteFarbzahl(z) * moeglich.length)];
   }
   z.gekommen += 1;
   return gast;
@@ -157,8 +175,10 @@ function fuehreAus(z, aktion) {
   z.zug += 1;
   ereignisse.push({ typ: 'gesetzt', id: gast.id, von, nach, platz: bank.length - 1 });
 
-  // Schimmern: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
+  // Schimmern und Zusammenrücken: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
   if (nachbar && nachbar.echt === gast.echt) ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
+  // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden
+  else if (nachbar && nachbar.zeigt === gast.zeigt) ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
 
   // vier, die dieselbe Farbe zeigen: räumen oder auffliegen
   if (bank.length === PLAETZE && bank.every((g) => g.zeigt === bank[0].zeigt)) {

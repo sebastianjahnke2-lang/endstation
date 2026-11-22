@@ -1,15 +1,21 @@
 // Gäste im Saal: Mantel, Kopf, Hut. Jede Farbe hat ihren eigenen Hut, damit man sie auch ohne
 // Farbsehen unterscheidet: rot ein runder, blau ein hoher, grün ein breiter, violett eine Mütze mit Bommel.
-// Ein Falscher trägt Farbe und Hut der Gruppe, die er zeigt, nur eine Spur kräftiger, mit hellem Kragen.
+// Ein Falscher trägt Farbe und Hut der Gruppe, die er zeigt, und sieht genauso aus wie ein Ehrlicher dieser Farbe.
+// Erkennen kann man ihn nur am Verhalten: Er rückt ab oder zusammen (buehne.js).
 
 import { rundesRechteck, kreis } from '../../../../src/anzeige/formen.js';
 
 export const GASTFARBEN = [
-  { mantel: '#b5452f', kraeftig: '#d6391c', hut: '#5e2117', kopf: '#ecc9a8' },
-  { mantel: '#33609c', kraeftig: '#1f66d1', hut: '#172c4d', kopf: '#e6c7a6' },
-  { mantel: '#3f8350', kraeftig: '#22a347', hut: '#1c3d24', kopf: '#ebcaa9' },
-  { mantel: '#76508f', kraeftig: '#8f3dc7', hut: '#382449', kopf: '#e8c8a8' },
+  { mantel: '#b5452f', hut: '#5e2117', kopf: '#ecc9a8' },
+  { mantel: '#33609c', hut: '#172c4d', kopf: '#e6c7a6' },
+  { mantel: '#3f8350', hut: '#1c3d24', kopf: '#ebcaa9' },
+  { mantel: '#76508f', hut: '#382449', kopf: '#e8c8a8' },
 ];
+
+// Wie ein Gast gezeichnet wird, hängt nur an der Farbe, die er zeigt. Die echte bleibt unsichtbar.
+export function aussehen(g) {
+  return { farbe: g.zeigt };
+}
 
 // Mischt zwei Farben '#rrggbb', p von 0 (a) bis 1 (b)
 export function mische(a, b, p) {
@@ -55,12 +61,11 @@ function maleHut(stift, form, x, y, k, farbe) {
 }
 
 // (cx, fy): Mitte unter der Figur. s: Größe eines Platzes.
-// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, kraeftig 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
+// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
 export function maleGast(stift, cx, fy, s, o) {
   const farbe = GASTFARBEN[o.farbe];
   const alt = o.alt === undefined || o.alt === null ? farbe : GASTFARBEN[o.alt];
   const w = o.wechsel === undefined ? 1 : o.wechsel;
-  const kr = o.kraeftig || 0;
   const sitzt = o.sitzt === undefined ? 1 : o.sitzt;
   const hoch = s * (0.62 + 0.14 * (1 - sitzt));
   const schulter = s * 0.46;
@@ -69,9 +74,7 @@ export function maleGast(stift, cx, fy, s, o) {
   const schulterY = fy - hoch + k * 1.9;
   const r = schulter * 0.28;
 
-  const mantelVon = mische(alt.mantel, alt.kraeftig, kr);
-  const mantelNach = mische(farbe.mantel, farbe.kraeftig, kr);
-  const mantel = mische(mantelVon, mantelNach, w);
+  const mantel = mische(alt.mantel, farbe.mantel, w);
   const hut = mische(alt.hut, farbe.hut, w);
 
   if (o.glanz > 0.01) schein(stift, cx, fy - hoch * 0.5, s * 0.55, 'rgba(255,240,190,', 0.75 * o.glanz);
@@ -87,9 +90,7 @@ export function maleGast(stift, cx, fy, s, o) {
   stift.closePath();
   stift.fill();
 
-  // Kragen: bei Falschen hell
-  const kragen = mische(mische(mantel, '#000000', 0.25), '#ffe2a0', kr * 0.85);
-  stift.fillStyle = kragen;
+  stift.fillStyle = mische(mantel, '#000000', 0.25);
   stift.beginPath();
   stift.moveTo(cx - k * 1.1, schulterY);
   stift.lineTo(cx, schulterY + k * 1.1);
@@ -112,12 +113,6 @@ export function maleGast(stift, cx, fy, s, o) {
   stift.save();
   stift.globalAlpha *= w;
   maleHut(stift, o.farbe, cx, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
-  if (kr > 0.01) {
-    // eine feine helle Kante am Hut
-    stift.globalAlpha *= 0.7 * kr;
-    stift.fillStyle = '#ffe9b8';
-    stift.fillRect(cx - k * 1.1, kopfY - k * 0.95, k * 2.2, Math.max(1, k * 0.12));
-  }
   stift.restore();
 
   // Leuchten beim Räumen

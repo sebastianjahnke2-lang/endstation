@@ -10,4 +10,8 @@ Aufträge in Reihenfolge, von oben nach unten. Claude arbeitet sie ohne Warten a
 
 ## Abschnitt 2 (bis zum Spieltest, ein Pull Request)
 1. [x] Prototyp „Falsche Farben", wörtlich in `docs/auftraege/falsche-farben.md`. Eigener Ordner `prototyp/falsche-farben/`, nichts am Hauptspiel ändern.
+2. [x] SPIELTEST (Pull Request #9 in `main`)
+
+## Abschnitt 3 (bis zum Spieltest, ein Pull Request)
+1. [x] Nachbesserung „Falsche Farben": Den Falschen am Verhalten lesen, wörtlich in `docs/auftraege/falsche-farben-verhalten.md`. Nur die drei Punkte, nichts an Länge oder Schwierigkeit.
 2. [ ] SPIELTEST (hier angehalten)

@@ -3,38 +3,35 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { erzeugeAbend, istFalsch } from '../src/kern/abend.js';
-import { spieleAbend, erzeugeWissen, lerne, waehle } from './bots.js';
+import { erzeugeAbend } from '../src/kern/abend.js';
+import { spieleAbend } from './bots.js';
 
 const ABENDE = 200;
 
-test('die Probe ist eindeutig: neben einem Ehrlichen seiner gezeigten Farbe schimmert nur, wer ehrlich ist', () => {
-  // in echten Abenden: für jeden Gast, der an die Tür kommt, beide Proben an einer Kopie des Saals
-  let falsche = 0;
-  for (let seed = 1; seed <= 40; seed++) {
-    const abend = erzeugeAbend(seed);
-    const z = abend.zustand;
-    const wissen = erzeugeWissen(false);
-    const merk = {};
-    while (z.status === 'laeuft') {
-      const g = z.tuer[0];
-      if (g) {
-        for (let farbe = 0; farbe < 4; farbe++) {
-          const probe = erzeugeAbend(seed);
-          probe.zustand.tuer = [{ ...g }];
-          probe.zustand.baenke = [[{ id: -1, zeigt: farbe, echt: farbe }], [], [], [], []];
-          probe.zustand.zug = 1; // es kommt niemand nach
-          const e = probe.act({ von: 'tuer', nach: 0 });
-          assert.equal(e.some((x) => x.typ === 'schimmer'), g.echt === farbe);
-        }
-        if (istFalsch(g)) falsche += 1;
+test('allein über Abrücken und Zusammenrücken ist jeder Gast eindeutig: falsch oder nicht, und welche Farbe er ist', () => {
+  // Jeder denkbare Gast wird probeweise neben einen Ehrlichen jeder Farbe gesetzt. Die vier Antworten
+  // (zusammen, ab, nichts) müssen für jede Kombination aus gezeigter und echter Farbe verschieden sein.
+  const antworten = new Map();
+  for (let zeigt = 0; zeigt < 4; zeigt++) {
+    for (let echt = 0; echt < 4; echt++) {
+      const reihe = [];
+      for (let farbe = 0; farbe < 4; farbe++) {
+        const probe = erzeugeAbend(1);
+        probe.zustand.tuer = [{ id: 7, zeigt, echt }];
+        probe.zustand.baenke = [[{ id: -1, zeigt: farbe, echt: farbe }], [], [], [], []];
+        probe.zustand.zug = 0;
+        const e = probe.act({ von: 'tuer', nach: 0 });
+        const zusammen = e.some((x) => x.typ === 'schimmer');
+        const ab = e.some((x) => x.typ === 'abruecken');
+        assert.ok(!(zusammen && ab));
+        assert.equal(zusammen, echt === farbe, 'zusammen genau neben der echten Farbe');
+        assert.equal(ab, zeigt === farbe && echt !== farbe, 'ab genau neben der gezeigten, wenn sie nicht die echte ist');
+        reihe.push(zusammen ? 'z' : ab ? 'a' : '-');
       }
-      const a = waehle(wissen, z, merk);
-      lerne(wissen, z, abend.act(a));
-      merk.letzter = a;
+      antworten.set(`${zeigt}/${echt}`, reihe.join(''));
     }
   }
-  assert.ok(falsche > 100, `zu wenige Falsche geprüft: ${falsche}`);
+  assert.equal(new Set(antworten.values()).size, 16, JSON.stringify([...antworten]));
 });
 
 test('wer hinsieht, erkennt die Falschen, bevor sie auffliegen, und muss fast nie raten', () => {

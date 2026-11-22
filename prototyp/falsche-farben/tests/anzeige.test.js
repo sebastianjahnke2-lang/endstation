@@ -4,8 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { berechneSaal, wasImSaal, SAALRAND_UNTEN } from '../src/anzeige/masse.js';
-import { brichUm, satzRaster, PAUSE } from '../src/anzeige/buehne.js';
-import { GASTFARBEN } from '../src/anzeige/gaeste.js';
+import { brichUm, satzRaster, rueckVersatz, PAUSE } from '../src/anzeige/buehne.js';
+import { GASTFARBEN, aussehen, maleGast } from '../src/anzeige/gaeste.js';
 import { SCHLUSSSAETZE, FARBNAMEN, schlussText } from '../src/texte.js';
 import { schlussSatz } from '../src/kern/schluss.js';
 import { erzeugeAbend } from '../src/kern/abend.js';
@@ -34,10 +34,53 @@ for (const [b, h] of [[360, 600], [375, 548], [390, 664], [390, 844], [430, 739]
   });
 }
 
-test('jede Farbe hat ihren eigenen Hut: vier Farben, vier Formen, Falsche kräftiger', () => {
+test('jede Farbe hat ihre eigene Farbe und ihren eigenen Hut, es gibt keinen kräftigeren Ton mehr', () => {
   assert.equal(GASTFARBEN.length, 4);
   assert.equal(new Set(GASTFARBEN.map((f) => f.mantel)).size, 4);
-  for (const f of GASTFARBEN) assert.notEqual(f.kraeftig, f.mantel);
+  for (const f of GASTFARBEN) assert.deepEqual(Object.keys(f).sort(), ['hut', 'kopf', 'mantel']);
+});
+
+// ein Stift, der jeden Aufruf mitschreibt, statt zu malen
+function mitschreiber() {
+  const log = [];
+  return new Proxy({ log }, {
+    get(ziel, name) {
+      if (name === 'log') return log;
+      if (name === 'createRadialGradient' || name === 'createLinearGradient') return () => ({ addColorStop: () => {} });
+      return (...werte) => log.push([name, ...werte]);
+    },
+    set(ziel, name, wert) {
+      log.push(['=', name, wert]);
+      return true;
+    },
+  });
+}
+
+test('ein Falscher und ein Ehrlicher derselben gezeigten Farbe werden gleich gezeichnet', () => {
+  for (let zeigt = 0; zeigt < 4; zeigt++) {
+    const ehrlich = { id: 1, zeigt, echt: zeigt };
+    for (let echt = 0; echt < 4; echt++) {
+      if (echt === zeigt) continue;
+      const falsch = { id: 2, zeigt, echt };
+      assert.deepEqual(aussehen(falsch), aussehen(ehrlich));
+      for (const sitzt of [0, 1]) {
+        const a = mitschreiber();
+        const b = mitschreiber();
+        maleGast(a, 100, 200, 70, { ...aussehen(ehrlich), sitzt });
+        maleGast(b, 100, 200, 70, { ...aussehen(falsch), sitzt });
+        assert.deepEqual(b.log, a.log);
+      }
+    }
+  }
+});
+
+test('Rücken: gleiche echte Farbe zusammen, gleiche gezeigte bei verschiedener echter ab, sonst gerade', () => {
+  const g = (zeigt, echt = zeigt) => ({ zeigt, echt });
+  assert.deepEqual(rueckVersatz([g(0), g(0)]), [1, -1], 'zwei Ehrliche gleicher Farbe rücken zusammen');
+  assert.deepEqual(rueckVersatz([g(2), g(0, 2)]), [1, -1], 'auch wenn einer eine andere Farbe zeigt');
+  assert.deepEqual(rueckVersatz([g(0), g(0, 2)]), [-1, 1], 'gleiche gezeigte, verschiedene echte: ab');
+  assert.deepEqual(rueckVersatz([g(0), g(1)]), [0, 0], 'verschieden und verschieden: nichts');
+  assert.deepEqual(rueckVersatz([g(0), g(0), g(0, 3)]), [1, -2, 1], 'in der Mitte: zur einen Seite zusammen, von der anderen ab');
 });
 
 test('nur Schlusssätze, keine Zahl, kein Lob, keine Wertung, nur Zeichen der Punktschrift', () => {
