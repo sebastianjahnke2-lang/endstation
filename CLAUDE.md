@@ -38,6 +38,7 @@ Nichts an Schwierigkeit und Abwechslung ändern.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
 - Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, in `main` (Pull Request #7), wartet auf den Test am iPhone.
 - Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut, Halt ohne Sperre gebaut (Entscheidung vom 19.11. geändert), Leerlauf vor der Tür gebaut. **Wartet auf den Spieltest.**
+- Prototyp „Falsche Farben" (22.11., `docs/auftraege/falsche-farben.md`, Warteschlange Abschnitt 2): **gebaut, wartet auf den Spieltest.** Eigener Ordner `prototyp/falsche-farben/`. Für ihn gelten nur CLAUDE.md und die Auftragsdatei, nicht Vision, Fahrplan und Ideen.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -161,6 +162,13 @@ prototyp/kontrolle/      Prototyp „Kontrolle": ein Wagen, der Spieler ist der 
   src/              texte.js (mit Stationsnamen), ton.js, speicher.js (Lernhalt geschafft, weiteste Station), main.js
   tests/            Regeln, Maschen, Schicht, Lösbarkeit jedes ausgelosten Halts, Lernhalt, Speicher, Anzeige, Build
   werkzeug/         fotos.mjs: Lernhalt und eine Schicht im Browser mit Bildern
+prototyp/falsche-farben/ Prototyp „Falsche Farben": ein Saal, fünf Bänke, Gäste mit falscher Farbe
+  build.js, index.html    wie beim freien Platz
+  src/kern/         abend.js (Regeln, Ankunft, Einstieg, Ende), zufall.js, schluss.js (welcher Satz am Ende)
+  src/anzeige/      masse.js (Aufteilung), saal.js (Saalbild), gaeste.js (Figuren mit Hüten), buehne.js (Ablauf, Auswahl)
+  src/              texte.js (nur die Schlusssätze), ton.js (Klänge, Tonschichten), main.js
+  tests/            Regeln, Einstieg, Erkennen ohne Raten, blind verliert, Aufteilung, Texte, Build; bots.js (hinsehend, blind)
+  werkzeug/         fotos.mjs: ein ganzer Abend im Browser mit Bildern
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
 
@@ -201,6 +209,7 @@ node werkzeug/leerlauf.mjs 390x844     Leerlauf: Tipp auf die Tür und gehaltene
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
 node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: Lernhalt und eine Schicht im Browser mit Bildern
+node prototyp/falsche-farben/werkzeug/fotos.mjs 390x844 [seed] [blind]    Falsche Farben: ein Abend im Browser mit Bildern
 ```
 
 `index.html` nie von Hand ändern. Nach jeder Änderung in `src/` bauen, sonst schlägt `npm test` fehl.
@@ -215,4 +224,4 @@ Mit `#seed=Zahl` an der Adresse verläuft eine Fahrt immer gleich, dann wird nic
 6. Dem Auftraggeber melden: was neu ist, was er antippen muss, worauf er achten soll.
 
 ## Veröffentlichung
-GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. Die Prototypen liegen dann unter derselben Adresse mit `prototyp/freier-platz/` und `prototyp/kontrolle/` dahinter. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
+GitHub Pages liefert `index.html` aus dem Zweig `main`, Ordner `/ (root)`. Spielbar ist also immer der Stand, der in `main` übernommen wurde. Die Prototypen liegen dann unter derselben Adresse mit `prototyp/freier-platz/`, `prototyp/kontrolle/` und `prototyp/falsche-farben/` dahinter. `.nojekyll` sorgt dafür, dass GitHub die Dateien unverändert ausliefert.
