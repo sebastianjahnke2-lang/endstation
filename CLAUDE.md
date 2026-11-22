@@ -38,7 +38,7 @@ Nichts an Schwierigkeit und Abwechslung ändern.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
 - Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, in `main` (Pull Request #7), wartet auf den Test am iPhone.
 - Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut, Halt ohne Sperre gebaut (Entscheidung vom 19.11. geändert), Leerlauf vor der Tür gebaut. **Wartet auf den Spieltest.**
-- Prototyp „Falsche Farben" (22.11., `docs/auftraege/falsche-farben.md`, Warteschlange Abschnitt 2): **gebaut (Pull Request #9 in `main`), Nachbesserung „Verhalten statt Aussehen" gebaut, wartet auf den Spieltest.** Eigener Ordner `prototyp/falsche-farben/`. Für ihn gelten nur CLAUDE.md und die Auftragsdatei, nicht Vision, Fahrplan und Ideen.
+- Prototyp „Falsche Farben" (22.11., `docs/auftraege/falsche-farben.md`, Warteschlange Abschnitt 2): **gebaut (Pull Request #9 in `main`), Nachbesserungen „Verhalten statt Aussehen" (Pull Request #10 in `main`) und „Spur und Verhör" gebaut, wartet auf den Spieltest.** Eigener Ordner `prototyp/falsche-farben/`. Für ihn gelten nur CLAUDE.md und die Auftragsdatei, nicht Vision, Fahrplan und Ideen.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -167,7 +167,8 @@ prototyp/falsche-farben/ Prototyp „Falsche Farben": ein Saal, fünf Bänke, G�
   src/kern/         abend.js (Regeln, Ankunft, Einstieg, Ende), zufall.js, schluss.js (welcher Satz am Ende)
   src/anzeige/      masse.js (Aufteilung), saal.js (Saalbild), gaeste.js (Figuren mit Hüten), buehne.js (Ablauf, Auswahl)
   src/              texte.js (nur die Schlusssätze), ton.js (Klänge, Tonschichten), main.js
-  tests/            Regeln, Einstieg, Erkennen ohne Raten, blind verliert, Aufteilung, Texte, Build; bots.js (hinsehend, blind)
+  tests/            Regeln, Einstieg, Erkennen ohne Raten, blind verliert, Spur und Verhör, Aufteilung, Texte, Build;
+                    bots.js (hinsehend, blind, langsam mit und ohne Verhör)
   werkzeug/         fotos.mjs: ein ganzer Abend im Browser mit Bildern
 .claude/skills/     neue-szene, balance-pruefen, ton-check
 ```
