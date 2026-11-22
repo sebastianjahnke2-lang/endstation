@@ -52,13 +52,25 @@ test('Schimmern: zwei Ehrliche gleicher Farbe nebeneinander, verschiedene nicht'
   assert.ok(!g.some((x) => x.typ === 'schimmer'), 'neben einer anderen Farbe');
 });
 
-test('ein Falscher schimmert nicht neben der Farbe, die er zeigt, sondern neben seiner echten', () => {
+test('ein Falscher rückt von der Farbe ab, die er zeigt, und rückt zu seiner echten zusammen', () => {
   const falsch = gast(0, 2); // zeigt rot, ist grün
-  const abend = saal([falsch], [[gast(0)], [gast(2)], [], [], []]);
+  const abend = saal([falsch], [[gast(0)], [gast(2)], [gast(3)], [], []]);
   const e = abend.act({ von: 'tuer', nach: 0 });
-  assert.ok(!e.some((x) => x.typ === 'schimmer'), 'neben einem echten Roten: nichts');
+  assert.ok(!e.some((x) => x.typ === 'schimmer'));
+  assert.ok(e.some((x) => x.typ === 'abruecken' && x.ids.includes(falsch.id)), 'neben einem echten Roten: Abrücken');
   const f = abend.act({ von: 0, nach: 1 });
-  assert.ok(f.some((x) => x.typ === 'schimmer' && x.ids.includes(falsch.id)), 'neben einem echten Grünen: Schimmern');
+  assert.ok(f.some((x) => x.typ === 'schimmer' && x.ids.includes(falsch.id)), 'neben einem echten Grünen: Zusammenrücken');
+  assert.ok(!f.some((x) => x.typ === 'abruecken'));
+  const g = abend.act({ von: 1, nach: 2 });
+  assert.ok(!g.some((x) => x.typ === 'schimmer' || x.typ === 'abruecken'), 'neben einem Violetten: nichts');
+});
+
+test('zwei Ehrliche verschiedener Farbe: nichts; zwei gleicher Farbe: zusammen, nie ab', () => {
+  const abend = saal([gast(1), gast(1)], [[gast(2)], [gast(1)], [], [], []]);
+  const e = abend.act({ von: 'tuer', nach: 0 });
+  assert.ok(!e.some((x) => x.typ === 'schimmer' || x.typ === 'abruecken'));
+  const f = abend.act({ von: 'tuer', nach: 1 });
+  assert.ok(f.some((x) => x.typ === 'schimmer') && !f.some((x) => x.typ === 'abruecken'));
 });
 
 test('Räumen: vier Ehrliche derselben Farbe gehen, die Bank wird frei, ein Fenster leuchtet', () => {

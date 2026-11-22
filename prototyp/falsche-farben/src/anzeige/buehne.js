@@ -8,7 +8,7 @@
 
 import { berechneSaal, wasImSaal } from './masse.js';
 import { maleSaalGrund, maleSitz, maleLichtFenster, SAALFARBE } from './saal.js';
-import { maleGast } from './gaeste.js';
+import { maleGast, aussehen } from './gaeste.js';
 import { maleTonschalter } from '../../../freier-platz/src/anzeige/gestalten.js';
 import { hinUndHer, sanft, begrenze } from '../../../../src/anzeige/formen.js';
 import { neuesPunktfeld, schreibe, zeichnePunktfeld, textBreite, ZEILENHOEHE } from '../../../../src/anzeige/matrix.js';
@@ -18,11 +18,32 @@ export const PAUSE = 150; // so lange hält das Bild beim Auffliegen und beim R�
 const WEG = 140; // so lange gleitet ein Gast auf seinen neuen Platz
 const GLANZ = 520;
 const WECHSEL = 420;
+const RUCK = 0.14; // so weit rücken Nachbarn zusammen oder ab, in Plätzen
+const RUCKZEIT = 90; // Zeitkonstante des Rückens in ms
 const RAEUMEN = 900;
 const FENSTERZEIT = 700;
 const SCHLUSS_WARTET = 650; // nach dem letzten Zug, bis der Satz steht und ein Tipp neu beginnt
 
 // Zeilen eines Satzes für die Punktschrift, höchstens spalten Punkte breit
+// Wie weit jeder Gast einer Bank zur Seite rückt, in Vielfachen von RUCK (negativ: nach innen, links).
+// Nachbarn mit gleicher echter Farbe rücken zusammen, auch wenn einer eine andere zeigt. Zeigen beide dieselbe
+// Farbe und sind verschieden, rücken sie ab. Sonst bleiben beide, wo sie sind.
+export function rueckVersatz(bank) {
+  const v = bank.map(() => 0);
+  for (let i = 0; i + 1 < bank.length; i++) {
+    const a = bank[i];
+    const b = bank[i + 1];
+    if (a.echt === b.echt) {
+      v[i] += 1;
+      v[i + 1] -= 1;
+    } else if (a.zeigt === b.zeigt) {
+      v[i] -= 1;
+      v[i + 1] += 1;
+    }
+  }
+  return v;
+}
+
 // Punktabstand der Schrift am Ende: so groß wie möglich, aber gut 28 Zeichen je Zeile
 export function satzRaster(breite) {
   return Math.max(1.8, Math.min(3, (breite - 24) / 170));
@@ -61,7 +82,9 @@ export function erzeugeSaalBuehne(leinwand) {
   let angetippt = false;
   const lage = new Map(); // id -> { x, y, vonX, vonY, t }
   const gezeigt = new Map(); // id -> Farbe, wie sie gerade gemalt wird
-  const wechsel = new Map(); // id -> { alt, t, kraeftig }
+  const wechsel = new Map(); // id -> { alt, t, nach }
+  const ruck = new Map(); // id -> wie weit er gerade zur Seite gerückt ist, in Pixeln
+  let letzteZeit = 0;
   const glanz = new Map(); // id -> t
   let gehen = []; // geräumte Gäste auf dem Weg hinaus: { farbe, x, y, t }
   let fensterAn = []; // t je leuchtendem Fenster
@@ -133,9 +156,11 @@ export function erzeugeSaalBuehne(leinwand) {
       } else if (e.typ === 'schimmer') {
         for (const id of e.ids) glanz.set(id, jetzt);
         klinge('schimmer');
+      } else if (e.typ === 'abruecken') {
+        klinge('abruecken');
       } else if (e.typ === 'aufgeflogen') {
         pauseBis = Math.max(pauseBis, jetzt + PAUSE);
-        for (const f of e.gaeste) wechsel.set(f.id, { alt: gezeigt.get(f.id), t: jetzt + PAUSE, kraeftig: 1 });
+        for (const f of e.gaeste) wechsel.set(f.id, { alt: gezeigt.get(f.id), t: jetzt + PAUSE });
         klinge('aufgeflogen');
       } else if (e.typ === 'geraeumt') {
         pauseBis = Math.max(pauseBis, jetzt + PAUSE);
@@ -153,7 +178,7 @@ export function erzeugeSaalBuehne(leinwand) {
         klinge('ende');
         // der Saal, wie er ist: Wer noch eine falsche Farbe zeigt, zeigt am Ende seine echte
         const spaeter = Math.max(jetzt, pauseBis) + 250;
-        for (const g of [...z.tuer, ...z.baenke.flat()]) if (istFalsch(g)) wechsel.set(g.id, { alt: g.zeigt, t: spaeter, kraeftig: 1, nach: g.echt });
+        for (const g of [...z.tuer, ...z.baenke.flat()]) if (istFalsch(g)) wechsel.set(g.id, { alt: g.zeigt, t: spaeter, nach: g.echt });
       }
     }
     grundAuswahl();
@@ -205,25 +230,22 @@ export function erzeugeSaalBuehne(leinwand) {
       l.t = jetzt;
     }
     const p = begrenze((jetzt - l.t) / WEG, 0, 1);
-    const x = l.vonX + (l.x - l.vonX) * sanft(p);
+    const x = l.vonX + (l.x - l.vonX) * sanft(p) + (ruck.get(g.id) || 0);
     const y = l.vonY + (l.y - l.vonY) * sanft(p);
 
-    let farbe = g.zeigt;
+    let farbe = aussehen(g).farbe;
     let alt = null;
     let w = 1;
-    let kraeftig = istFalsch(g) ? 1 : 0;
     const wx = wechsel.get(g.id);
     if (wx) {
       const q = begrenze((jetzt - wx.t) / WECHSEL, 0, 1);
       if (wx.nach !== undefined) farbe = q > 0 ? wx.nach : g.zeigt;
       alt = wx.alt;
       w = q > 0 ? sanft(q) : 0;
-      kraeftig = wx.kraeftig * (1 - w);
       if (q <= 0) {
         farbe = wx.alt;
         w = 1;
         alt = null;
-        kraeftig = 1;
       }
     }
     gezeigt.set(g.id, g.zeigt);
@@ -239,13 +261,26 @@ export function erzeugeSaalBuehne(leinwand) {
       stift.fill();
       stift.restore();
     }
-    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, kraeftig, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
+    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
   }
 
   function zeichne(jetzt) {
     if (!m || !z) return;
     stift.setTransform(dichte, 0, 0, dichte, 0, 0);
     stift.drawImage(grund, 0, 0, m.breite, m.hoehe);
+    // Rücken: jeder Gast gleitet zu seinem Versatz neben seinen Nachbarn; an der Tür und angehoben steht er gerade
+    const schritt = Math.min(1, Math.max(0, jetzt - letzteZeit) / RUCKZEIT);
+    letzteZeit = jetzt;
+    const ziel = new Map();
+    z.baenke.forEach((bank, b) => {
+      const v = rueckVersatz(bank);
+      bank.forEach((g, k) => ziel.set(g.id, auswahl === b && k === bank.length - 1 ? 0 : v[k] * RUCK * m.s));
+    });
+    for (const g of z.tuer) ziel.set(g.id, 0);
+    for (const [id, soll] of ziel) {
+      const ist = ruck.get(id) || 0;
+      ruck.set(id, ist + (soll - ist) * schritt);
+    }
     m.fenster.forEach((f, i) => {
       const t = fensterAn[i];
       if (t !== undefined) maleLichtFenster(stift, f, begrenze((jetzt - t) / FENSTERZEIT, 0, 1));

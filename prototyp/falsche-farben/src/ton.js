@@ -1,4 +1,4 @@
-// Geräusche des Prototyps "Falsche Farben", erzeugt über Web Audio, keine Dateien, erst nach der ersten
+// Geräusche des Prototyps "Falsche Farben" (Zusammenrücken hell, Abrücken dumpf), erzeugt über Web Audio, keine Dateien, erst nach der ersten
 // Berührung. Dazu die Tonschichten: Jede geräumte Bank fügt dem Saal einen leisen, gehaltenen Ton hinzu,
 // bis zu einer für jedes Fenster. Ohne Ton fehlt nichts: Jedes Geräusch hat ein sichtbares Gegenstück.
 
@@ -134,6 +134,11 @@ export function erzeugeSaalTon() {
     schimmer: () => {
       klang(1318.5, 1318.5, 0.4, 0.06);
       klang(1760, 1760, 0.45, 0.045, 'sine', 0.06);
+    },
+    // Abrücken: ein dumpfer, kurzer Ton nach unten
+    abruecken: () => {
+      klang(150, 105, 0.22, 0.28, 'triangle');
+      hauch(260, 0.12, 0.18);
     },
     // eigener Klang beim Auffliegen: zwei tiefe Töne, die sich reiben und absinken
     aufgeflogen: () => {

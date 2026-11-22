@@ -1,14 +1,14 @@
 // Zwei Spieler für die Tests. Beide sehen nur, was auf dem Bildschirm steht: gezeigte Farben, wer wo sitzt,
-// wann zwei schimmern, wer auffliegt. Die echte Farbe lesen sie nie.
-//   hinseher: merkt sich das Schimmern und schließt daraus, wer ehrlich ist und wer nicht.
-//   blind:    setzt nur nach der gezeigten Farbe und achtet nicht aufs Schimmern.
+// wer zusammenrückt (und schimmert), wer abrückt, wer auffliegt. Die echte Farbe lesen sie nie.
+//   hinseher: merkt sich Zusammen- und Abrücken und schließt daraus, wer ehrlich ist und wer nicht.
+//   blind:    setzt nur nach der gezeigten Farbe und achtet nicht aufs Rücken.
 // Beide wählen gleich: jeden möglichen Zug durchdenken und den Saal danach nach ihrem Wissen bewerten.
 // Der Unterschied liegt nur im Wissen. Der Blinde hält jeden für ehrlich.
 
 import { erzeugeAbend, zuege, PLAETZE } from '../src/kern/abend.js';
 
 // Wissen über einen Gast: art 'e' ehrlich, 'f' falsch, '?' unbekannt; echt: bekannte echte Farbe oder null
-// verdacht: Paare gleich Aussehender, die nicht geschimmert haben: Genau einer von beiden ist falsch.
+// verdacht: Paare gleich Aussehender, die abgerückt sind: Genau einer von beiden ist falsch.
 export function erzeugeWissen(blind) {
   const w = new Map();
   const verdacht = [];
@@ -42,7 +42,8 @@ function setze(wissen, z, g, echt) {
 export function lerne(wissen, z, ereignisse) {
   if (wissen.blind) return;
   const gesetzt = ereignisse.find((e) => e.typ === 'gesetzt');
-  const schimmer = ereignisse.find((e) => e.typ === 'schimmer');
+  const zusammen = ereignisse.find((e) => e.typ === 'schimmer');
+  const ab = ereignisse.find((e) => e.typ === 'abruecken');
   const auf = ereignisse.find((e) => e.typ === 'aufgeflogen');
   if (auf) {
     for (const f of auf.gaeste) wissen.hole(z, f.id).art = 'e'; // zeigt jetzt die echte Farbe
@@ -56,14 +57,14 @@ export function lerne(wissen, z, ereignisse) {
     if (!a || !b || b.id !== gesetzt.id) return;
     const ka = bekannt(wissen, z, a);
     const kb = bekannt(wissen, z, b);
-    if (schimmer) {
+    if (zusammen) {
       if (ka !== null && kb === null) setze(wissen, z, b, ka);
       else if (kb !== null && ka === null) setze(wissen, z, a, kb);
       else if (ka === null && kb === null && a.zeigt === b.zeigt) {
         wissen.hole(z, a.id).art = 'e';
         wissen.hole(z, b.id).art = 'e';
       }
-    } else {
+    } else if (ab) {
       if (ka !== null && kb === null && b.zeigt === ka) wissen.hole(z, b.id).art = 'f';
       if (kb !== null && ka === null && a.zeigt === kb) wissen.hole(z, a.id).art = 'f';
       if (ka === null && kb === null && a.zeigt === b.zeigt) wissen.verdacht.push([a.id, b.id]);
