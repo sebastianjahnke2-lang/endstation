@@ -2,6 +2,10 @@
 // wer zusammenrückt (und schimmert), wer abrückt, wer auffliegt. Die echte Farbe lesen sie nie.
 //   hinseher: merkt sich Zusammen- und Abrücken und schließt daraus, wer ehrlich ist und wer nicht.
 //   blind:    setzt nur nach der gezeigten Farbe und achtet nicht aufs Rücken.
+//   langsam:  merkt sich nichts. Er sieht nur, was gerade im Saal zu sehen ist: wer neben wem zusammen- oder
+//             abgerückt sitzt und wer abgewandt sitzt (die Spur). Alle anderen hält er für ehrlich.
+//   langsamVerhoer: derselbe, verhört aber unter Druck einen Verdächtigen (siehe verhoerFuer).
+//   langsamOhneSpur: derselbe ohne Spur, nur zum Vergleich: So ging es dem Spieler vor dieser Nachbesserung.
 // Beide wählen gleich: jeden möglichen Zug durchdenken und den Saal danach nach ihrem Wissen bewerten.
 // Der Unterschied liegt nur im Wissen. Der Blinde hält jeden für ehrlich.
 
@@ -136,6 +140,60 @@ export function waehle(wissen, z, merk) {
   return best ? best.a : zuege(z)[0];
 }
 
+// Was der langsame Spieler in diesem Augenblick weiß, ganz aus dem Bild. Gleiche Form wie erzeugeWissen().
+// Sicher ehrlich: wer neben einem Gleichaussehenden zusammengerückt sitzt (zwei unentdeckte Falsche zeigen nie
+// dieselbe Farbe). Sicher falsch: wer von einem sicher Ehrlichen abgerückt sitzt. Verdächtig: wer abgerückt
+// sitzt oder, mit Spur, abgewandt am Rand oder an der Tür steht, also gerade gesetzt werden könnte.
+// Wer abgewandt tief in einer Bank sitzt, zählt nicht: An ihn kommt man ohnehin nicht heran.
+export function wissenAusBild(z, mitSpur) {
+  const w = new Map();
+  const art = (g) => (w.get(g.id) || { art: 'e' }).art;
+  const setze = (g, a) => w.set(g.id, { art: a, echt: null });
+  const sicher = new Set();
+  for (const bank of z.baenke) {
+    for (let i = 0; i + 1 < bank.length; i++) {
+      const [a, b] = [bank[i], bank[i + 1]];
+      if (a.echt === b.echt && a.zeigt === b.zeigt) {
+        sicher.add(a.id);
+        sicher.add(b.id);
+      }
+    }
+  }
+  for (const bank of z.baenke) {
+    for (let i = 0; i + 1 < bank.length; i++) {
+      const [a, b] = [bank[i], bank[i + 1]];
+      if (a.echt === b.echt || a.zeigt !== b.zeigt) continue;
+      // sichtbar abgerückt
+      if (sicher.has(a.id)) setze(b, 'f');
+      else if (sicher.has(b.id)) setze(a, 'f');
+      else {
+        if (art(a) === 'e') setze(a, '?');
+        if (art(b) === 'e') setze(b, '?');
+      }
+    }
+  }
+  if (mitSpur) {
+    const raender = z.tuer.slice(0, 1);
+    for (const bank of z.baenke) if (bank.length) raender.push(bank[bank.length - 1]);
+    for (const g of raender) if (g.abgewandt && !sicher.has(g.id) && art(g) === 'e') setze(g, '?');
+  }
+  return { w, blind: false, verdacht: [], hole: (zz, id) => w.get(id) || { art: 'e', echt: null } };
+}
+
+// Wen der langsame Spieler verhört: nur unter Druck (mindestens zwei warten an der Tür) und nur, wenn eine Bank
+// gleich räumen könnte: Ein Verdächtiger am Rand oder an der Tür zeigt die Farbe einer Bank mit drei sicher
+// Ehrlichen. Dann klärt das Verhör, ob er dazugehört.
+function verhoerFuer(z, wissen) {
+  if (z.licht < 1) return null;
+  const quellen = [];
+  if (z.tuer.length) quellen.push(z.tuer[0]);
+  for (const b of z.baenke) if (b.length) quellen.push(b[b.length - 1]);
+  const reinDrei = (farbe) => z.baenke.some((b) => b.length === PLAETZE - 1 && b.every((x) => x.zeigt === farbe && wissen.hole(z, x.id).art === 'e'));
+  if (z.tuer.length < 2) return null;
+  const g = quellen.find((x) => wissen.hole(z, x.id).art === '?' && reinDrei(x.zeigt));
+  return g ? { verhoer: g.id } : null;
+}
+
 // Spielt einen Abend. Gibt den Endzustand und Zählungen zurück.
 //   geraten: Ein Falscher flog auf, den der Spieler für ehrlich hielt oder unter anderen begraben hatte.
 //     Als vierter am Rand zu drei bekannt Ehrlichen aufzufliegen ist eine Prüfung, kein Raten.
@@ -143,11 +201,22 @@ export function waehle(wissen, z, merk) {
 export function spieleAbend(seed, wie, hoechstens = 3000) {
   const abend = erzeugeAbend(seed);
   const z = abend.zustand;
-  const wissen = erzeugeWissen(wie === 'blind');
+  const langsam = wie.startsWith('langsam');
+  let wissen = erzeugeWissen(wie === 'blind');
   const merk = {};
   let geraten = 0;
   let erkannt = 0;
+  let verhoert = 0;
   for (let i = 0; i < hoechstens && z.status === 'laeuft'; i++) {
+    if (langsam) wissen = wissenAusBild(z, wie !== 'langsamOhneSpur');
+    if (wie === 'langsamVerhoer') {
+      const v = verhoerFuer(z, wissen);
+      if (v) {
+        abend.act(v);
+        verhoert += 1;
+        wissen = wissenAusBild(z, true);
+      }
+    }
     const aktion = waehle(wissen, z, merk);
     if (!aktion) break;
     const vorher = new Map();
@@ -163,7 +232,7 @@ export function spieleAbend(seed, wie, hoechstens = 3000) {
       }
     }
     merk.letzter = aktion;
-    lerne(wissen, z, e);
+    if (!langsam) lerne(wissen, z, e);
   }
-  return { z, geraten, erkannt };
+  return { z, geraten, erkannt, verhoert };
 }

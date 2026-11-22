@@ -3,11 +3,15 @@
 // nächsten Tipp auf eine Bank. Standard ist der Gast an der Tür. Wer den äußersten Gast einer Bank antippt
 // (oder irgendwen auf einer vollen Bank), hebt ihn an; ein Tipp auf die Bank daneben setzt ihn um.
 //
+// Die Glocke: Ein Tipp wählt das Verhör an, ein leuchtendes Fenster flackert. Der nächste Tipp auf einen Gast
+// verhört ihn, ein Tipp woandershin bricht ab. Ohne leuchtendes Fenster ist die Glocke matt und tut nichts.
+// Sie erscheint, sobald das erste Fenster leuchtet, mit kurzem Aufblinken.
+//
 // Angehalten wird nur beim Auffliegen und beim Räumen, je höchstens PAUSE ms. Alles andere läuft, während
 // schon der nächste Tipp angenommen wird.
 
 import { berechneSaal, wasImSaal } from './masse.js';
-import { maleSaalGrund, maleSitz, maleLichtFenster, SAALFARBE } from './saal.js';
+import { maleSaalGrund, maleSitz, maleLichtFenster, maleGlocke, SAALFARBE } from './saal.js';
 import { maleGast, aussehen } from './gaeste.js';
 import { maleTonschalter } from '../../../freier-platz/src/anzeige/gestalten.js';
 import { hinUndHer, sanft, begrenze } from '../../../../src/anzeige/formen.js';
@@ -19,7 +23,9 @@ const WEG = 140; // so lange gleitet ein Gast auf seinen neuen Platz
 const GLANZ = 520;
 const WECHSEL = 420;
 const RUCK = 0.14; // so weit rücken Nachbarn zusammen oder ab, in Plätzen
-const RUCKZEIT = 90; // Zeitkonstante des Rückens in ms
+const RUCKZEIT = 90; // Zeitkonstante des Rückens und Abwendens in ms
+const AUSZEIT = 450; // so lange erlischt ein Fenster nach dem Verhör
+const BLINKEN = 700; // so lange blinkt die Glocke, wenn sie erscheint
 const RAEUMEN = 900;
 const FENSTERZEIT = 700;
 const SCHLUSS_WARTET = 650; // nach dem letzten Zug, bis der Satz steht und ein Tipp neu beginnt
@@ -87,7 +93,10 @@ export function erzeugeSaalBuehne(leinwand) {
   let letzteZeit = 0;
   const glanz = new Map(); // id -> t
   let gehen = []; // geräumte Gäste auf dem Weg hinaus: { farbe, x, y, t }
-  let fensterAn = []; // t je leuchtendem Fenster
+  let fenster = []; // je Fenster { an, t }: seit wann es angeht oder ausgeht
+  let verhoer = false; // die Glocke ist angetippt, der nächste Tipp auf einen Gast verhört ihn
+  let glockeSeit = null; // seit wann die Glocke zu sehen ist
+  const dreh = new Map(); // id -> wie weit er gerade abgewandt sitzt, -1..1
   const melder = { klang: null, schicht: null };
 
   function klinge(name) {
@@ -117,7 +126,10 @@ export function erzeugeSaalBuehne(leinwand) {
     wechsel.clear();
     glanz.clear();
     gehen = [];
-    fensterAn = [];
+    fenster = [];
+    verhoer = false;
+    glockeSeit = zustand.licht >= 1 || zustand.geraeumt >= 1 ? 0 : null;
+    dreh.clear();
     schluss = null;
     pauseBis = 0;
     grundAuswahl();
@@ -170,8 +182,15 @@ export function erzeugeSaalBuehne(leinwand) {
           gehen.push({ farbe: e.farbe, x: l ? l.x : p.cx, y: l ? l.y : p.fy, t: jetzt });
           lage.delete(id);
         });
-        fensterAn[e.fenster - 1] = jetzt + PAUSE;
+        fenster[e.fenster - 1] = { an: true, t: jetzt + PAUSE };
+        if (glockeSeit === null) glockeSeit = jetzt + PAUSE;
         klinge('raeumen');
+        if (melder.schicht) melder.schicht(e.fenster);
+      } else if (e.typ === 'verhoer') {
+        wechsel.set(e.id, { alt: e.zeigte, t: jetzt });
+        fenster[e.fenster] = { an: false, t: jetzt };
+        verhoer = false;
+        klinge('verhoer');
         if (melder.schicht) melder.schicht(e.fenster);
       } else if (e.typ === 'ende') {
         schluss = { t: Math.max(jetzt, pauseBis) + SCHLUSS_WARTET, satz: e.satz, zeilen: null };
@@ -190,6 +209,19 @@ export function erzeugeSaalBuehne(leinwand) {
     const ziel = wasImSaal(m, x, y);
     if (ziel.art === 'ton') return { ton: true };
     if (schluss) return jetzt >= schluss.t ? { neu: true } : null;
+    if (ziel.art === 'glocke' && glockeSeit !== null) {
+      // matt: kein Ton, keine Wirkung
+      if (z.licht < 1) return null;
+      verhoer = !verhoer;
+      if (verhoer) klinge('glocke');
+      return null;
+    }
+    if (verhoer) {
+      // jetzt zählt nur ein Gast; alles andere bricht ab und kostet nichts
+      verhoer = false;
+      const g = gastBei(ziel);
+      return g ? { verhoer: g.id } : null;
+    }
     if (ziel.art === 'tuer') {
       if (z.tuer.length) auswahl = 'tuer';
       else stups = { wo: 'tuer', t: jetzt };
@@ -211,6 +243,13 @@ export function erzeugeSaalBuehne(leinwand) {
       return null;
     }
     return { von: auswahl, nach: b };
+  }
+
+  // der Gast unter dem Finger, oder null
+  function gastBei(ziel) {
+    if (ziel.art === 'tuer') return z.tuer[ziel.platz] || null;
+    if (ziel.art === 'bank') return z.baenke[ziel.bank][ziel.platz] || null;
+    return null;
   }
 
   function gast(g, jetzt, o) {
@@ -261,7 +300,7 @@ export function erzeugeSaalBuehne(leinwand) {
       stift.fill();
       stift.restore();
     }
-    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
+    maleGast(stift, x, y - hebe, m.s, { farbe, alt, wechsel: w, dreh: dreh.get(g.id) || 0, sitzt: soll.sitzt * (o.hebe ? 0.6 : 1), glanz: gl });
   }
 
   function zeichne(jetzt) {
@@ -281,10 +320,24 @@ export function erzeugeSaalBuehne(leinwand) {
       const ist = ruck.get(id) || 0;
       ruck.set(id, ist + (soll - ist) * schritt);
     }
+    // Spur: wer abgerückt ist, sitzt abgewandt, bis er neben seiner echten Farbe zusammenrückt
+    for (const g of [...z.tuer, ...z.baenke.flat()]) {
+      const ist = dreh.get(g.id) || 0;
+      dreh.set(g.id, ist + (g.abgewandt - ist) * schritt);
+    }
     m.fenster.forEach((f, i) => {
-      const t = fensterAn[i];
-      if (t !== undefined) maleLichtFenster(stift, f, begrenze((jetzt - t) / FENSTERZEIT, 0, 1));
+      const fe = fenster[i];
+      if (!fe) return;
+      let hell = fe.an ? begrenze((jetzt - fe.t) / FENSTERZEIT, 0, 1) : 1 - begrenze((jetzt - fe.t) / AUSZEIT, 0, 1);
+      // der Preis des Verhörs: das letzte leuchtende Fenster flackert
+      if (verhoer && fe.an && i === z.licht - 1) hell *= 0.55 + 0.45 * Math.abs(Math.sin(jetzt / 70) * Math.sin(jetzt / 163));
+      maleLichtFenster(stift, f, hell);
     });
+    if (glockeSeit !== null && jetzt >= glockeSeit) {
+      const b = (jetzt - glockeSeit) / BLINKEN;
+      const blink = b < 1 ? Math.abs(Math.sin(b * Math.PI * 3)) * (1 - b) : 0;
+      maleGlocke(stift, m.glocke, m.s, { matt: z.licht < 1, an: verhoer, blink, zeit: jetzt });
+    }
     maleTonschalter(stift, m.ton, tonAn);
 
     // Stups: eine Stelle, an der ein Tipp nichts bewirkt hat, zuckt kurz
@@ -371,6 +424,7 @@ export function erzeugeSaalBuehne(leinwand) {
     },
     masse: () => m,
     auswahl: () => auswahl,
+    verhoerAn: () => verhoer,
     schlussSteht: (jetzt) => !!schluss && jetzt >= schluss.t,
   };
 }

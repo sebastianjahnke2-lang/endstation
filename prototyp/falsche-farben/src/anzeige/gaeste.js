@@ -61,14 +61,17 @@ function maleHut(stift, form, x, y, k, farbe) {
 }
 
 // (cx, fy): Mitte unter der Figur. s: Größe eines Platzes.
-// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1 }
+// o: { farbe, alt (vorige Farbe beim Wechsel), wechsel 0..1, sitzt 0..1, glanz 0..1, licht 0..1,
+//      dreh -1..1 (abgewandt: nach innen oder außen; Kopf zur Seite, Schultern schmal, Kragen an der Seite) }
 export function maleGast(stift, cx, fy, s, o) {
   const farbe = GASTFARBEN[o.farbe];
   const alt = o.alt === undefined || o.alt === null ? farbe : GASTFARBEN[o.alt];
   const w = o.wechsel === undefined ? 1 : o.wechsel;
   const sitzt = o.sitzt === undefined ? 1 : o.sitzt;
   const hoch = s * (0.62 + 0.14 * (1 - sitzt));
-  const schulter = s * 0.46;
+  const d = o.dreh || 0;
+  const ad = Math.abs(d);
+  const schulter = s * 0.46 * (1 - 0.18 * ad);
   const saum = s * 0.56;
   const k = s * 0.13;
   const schulterY = fy - hoch + k * 1.9;
@@ -82,37 +85,41 @@ export function maleGast(stift, cx, fy, s, o) {
   stift.fillStyle = mantel;
   stift.beginPath();
   stift.moveTo(cx - saum / 2, fy);
-  stift.lineTo(cx - schulter / 2, schulterY + r);
-  stift.quadraticCurveTo(cx - schulter / 2, schulterY, cx - schulter / 2 + r, schulterY);
-  stift.lineTo(cx + schulter / 2 - r, schulterY);
-  stift.quadraticCurveTo(cx + schulter / 2, schulterY, cx + schulter / 2, schulterY + r);
+  const sx = cx + d * k * 0.35; // die Schultern lehnen zur Seite
+  stift.lineTo(sx - schulter / 2, schulterY + r);
+  stift.quadraticCurveTo(sx - schulter / 2, schulterY, sx - schulter / 2 + r, schulterY);
+  stift.lineTo(sx + schulter / 2 - r, schulterY);
+  stift.quadraticCurveTo(sx + schulter / 2, schulterY, sx + schulter / 2, schulterY + r);
   stift.lineTo(cx + saum / 2, fy);
   stift.closePath();
   stift.fill();
 
   stift.fillStyle = mische(mantel, '#000000', 0.25);
   stift.beginPath();
-  stift.moveTo(cx - k * 1.1, schulterY);
-  stift.lineTo(cx, schulterY + k * 1.1);
-  stift.lineTo(cx + k * 1.1, schulterY);
+  const kx = sx + d * k * 1.25;
+  const kb = k * 1.1 * (1 - 0.6 * ad);
+  stift.moveTo(kx - kb, schulterY);
+  stift.lineTo(kx, schulterY + k * 1.1 * (1 - 0.3 * ad));
+  stift.lineTo(kx + kb, schulterY);
   stift.closePath();
   stift.fill();
 
-  const kopfY = schulterY - k * 0.85;
+  const kopfY = schulterY - k * 0.85 + ad * k * 0.15;
+  const kopfX = cx + d * k * 0.8;
   stift.fillStyle = farbe.kopf;
-  kreis(stift, cx, kopfY, k);
+  kreis(stift, kopfX, kopfY, k);
   stift.fill();
 
   // Beim Wechsel schrumpft der alte Hut und der neue wächst
   if (w < 1) {
     stift.save();
     stift.globalAlpha *= 1 - w;
-    maleHut(stift, o.alt, cx, kopfY - k * 0.55, k * (1 - w * 0.5), hut);
+    maleHut(stift, o.alt, kopfX, kopfY - k * 0.55, k * (1 - w * 0.5), hut);
     stift.restore();
   }
   stift.save();
   stift.globalAlpha *= w;
-  maleHut(stift, o.farbe, cx, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
+  maleHut(stift, o.farbe, kopfX, kopfY - k * 0.55, k * (0.5 + w * 0.5), hut);
   stift.restore();
 
   // Leuchten beim Räumen

@@ -5,9 +5,11 @@ Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt baue
 ## Aktueller Auftrag
 Arbeitsweise seit 22.11.: `docs/WARTESCHLANGE.md` von oben abarbeiten, Regeln in `docs/auftraege/arbeitsweise.md`.
 
-Abschnitt 3 (ein Pull Request bis zum Spieltest):
-1. **Nachbesserung „Falsche Farben": Verhalten statt Aussehen, gebaut.** Falsche sehen aus wie Ehrliche. Gleiche echte Farbe: schimmern und rücken zusammen (heller Ton). Gleiche gezeigte, verschiedene echte Farbe: rücken ab (dumpfer Ton). Erster Falscher in einem Moment mit genau zwei besetzten Bänken mit Platz. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („Nachbesserung Falsche Farben").
-2. **SPIELTEST: hier angehalten.** Pull Request für Abschnitt 3 ist offen.
+Abschnitt 4 (ein Pull Request bis zum Spieltest):
+1. **Nachbesserung „Falsche Farben": Spur und Verhör, gebaut.** Wer abrückt, sitzt abgewandt, bis er neben seiner echten Farbe zusammenrückt, auffliegt oder verhört wird. Die Glocke rechts neben der Tür erscheint mit dem ersten Fenster. Ein Verhör kostet ein Fenster und keinen Zug. „Druck, den man abbauen kann" liegt nicht vor. Entscheidungen und Zahlen in `docs/ENTSCHEIDUNGEN.md` („Spur und Verhör").
+2. **SPIELTEST: hier angehalten.** Pull Request für Abschnitt 4 ist offen.
+
+Abschnitt 3 (Pull Request #10, in `main`): Verhalten statt Aussehen.
 
 Abschnitt 2 (Pull Request #9, in `main`): Prototyp „Falsche Farben".
 
@@ -21,7 +23,7 @@ Davor:
 - „Leitsätze und die ersten zehn Minuten": Schritt 1 bis 3 gebaut. Schritt 4 und 6 stehen jetzt in der Warteschlange, Schritt 5 und 7 noch nicht.
 
 ## Nächster Schritt
-Warten auf den Spieltest der Nachbesserung „Falsche Farben" (und weiter von Abschnitt 1). Danach neue Aufträge unten in `docs/WARTESCHLANGE.md` anhängen.
+Warten auf den Spieltest von „Spur und Verhör" (und weiter von Abschnitt 1). Danach neue Aufträge unten in `docs/WARTESCHLANGE.md` anhängen.
 
 ## Was gebaut ist (Hauptspiel in `src/`, gebaut nach `index.html`)
 - `kern/spiel.js`: Zugablauf, Aufbrechen, Stärken, Sprint, Rückhalt, Gönnen, Halt, Wiederholung
@@ -35,7 +37,7 @@ Warten auf den Spieltest der Nachbesserung „Falsche Farben" (und weiter von Ab
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests, mit Musik
 
 ## Tests
-- `npm run build`, dann `npm test`: 376 Tests, alle grün (davon 39 für „Falsche Farben": Regeln, Einstieg, Erkennen ohne Raten, blind verliert, Aufteilung, Schlusssatz, Build).
+- `npm run build`, dann `npm test`: 387 Tests, alle grün (davon 50 für „Falsche Farben": Regeln, Einstieg, Erkennen ohne Raten, blind verliert, Aufteilung, Schlusssatz, Build).
 - Falsche Farben im Browser (Chromium mit iPhone-Profil): ganzer Abend hinsehend bei 390x844 und 360x600, blind bei 360x600, jeder Zug gleich mit dem Kern, keine Mängel.
 - `npm run balance` vorher und nachher gleich: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
 - Kontrolle im Browser: `prototyp/kontrolle/werkzeug/fotos.mjs` (Lernhalt und eine Schicht) bei 390x844 und 360x600 ohne Mängel.

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { erzeugeAbend, gueltig, FENSTER, PLAETZE } from '../src/kern/abend.js';
 
 let naechste = 1000;
-const gast = (zeigt, echt = zeigt) => ({ id: naechste++, zeigt, echt });
+const gast = (zeigt, echt = zeigt) => ({ id: naechste++, zeigt, echt, abgewandt: 0 });
 
 // ein Abend mit leerem Saal und genau diesen Gästen an der Tür
 function saal(tuer = [], baenke = [[], [], [], [], []]) {
@@ -14,6 +14,7 @@ function saal(tuer = [], baenke = [[], [], [], [], []]) {
   z.tuer = tuer;
   z.baenke = baenke;
   z.geraeumt = 2; // nach dem Einstieg
+  z.licht = 2;
   z.ersterFalscher = 'aufgeflogen';
   return abend;
 }
@@ -125,6 +126,7 @@ test('Tür: nach jedem zweiten Zug kommt ein Gast; kommt ein vierter zu dreien, 
 test('Ende, wenn alle Fenster leuchten', () => {
   const abend = saal([gast(0)], [[gast(0), gast(0), gast(0)], [], [], [], []]);
   abend.zustand.geraeumt = FENSTER - 1;
+  abend.zustand.licht = FENSTER - 1;
   const e = abend.act({ von: 'tuer', nach: 0 });
   assert.ok(e.some((x) => x.typ === 'ende' && x.wie === 'hell'));
   assert.equal(abend.zustand.status, 'ende');

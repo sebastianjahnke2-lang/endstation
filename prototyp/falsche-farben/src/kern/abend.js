@@ -20,6 +20,10 @@
 //   Es kommen immer weitere Gäste, mit der Zeit mehr Falsche. Der Abend endet, wenn an der Tür ein vierter
 //     dazukäme, wenn kein Zug mehr möglich ist oder wenn alle Fenster des Saals leuchten. So hat jeder
 //     Abend ein Ende.
+//   Spur: Wer abrückt, bleibt abgewandt sitzen, beide Beteiligten (g.abgewandt: -1 nach innen, 1 nach außen).
+//     Das endet, sobald er neben seiner echten Farbe zusammenrückt, auffliegt oder verhört wird.
+//   Verhör: { verhoer: id } kostet ein leuchtendes Fenster und keinen Zug. Der Gast zeigt danach seine echte
+//     Farbe und behält sie. Ohne leuchtendes Fenster geht es nicht. Zum Ende „hell" müssen alle Fenster leuchten.
 //   Einstieg: Bis die erste Bank geräumt ist, kommen nur Ehrliche. Dann ein Falscher allein, in einem Moment,
 //     in dem genau zwei Bänke Platz haben (einstiegsMoment), und erst wenn er aufgeflogen ist, weitere.
 
@@ -53,14 +57,16 @@ export function erzeugeAbend(seed) {
     zug: 0,
     gekommen: 0,
     naechsteId: 1,
-    geraeumt: 0,
+    geraeumt: 0, // geräumte Bänke, sie bestimmen, wie viele Falsche kommen
+    licht: 0, // leuchtende Fenster: eines je geräumter Bank, eines weniger je Verhör
     beutel: [],
     ersterFalscher: null, // 'unterwegs' | 'aufgeflogen'
     // für den Satz am Ende, was der Spieler mit Falschen getan hat:
     //   aufgeflogen: in Reihenfolge { id, zeigte, echt, wie }; wie 'geglaubt': flog unter anderen auf, es saß
     //     schon jemand auf ihm; 'zuletzt': flog als äußerster auf, als vierter zu drei Gleichen
     //   umgesetzt: ids der Falschen, die umgesetzt wurden, bevor sie aufflogen
-    verlauf: { aufgeflogen: [], umgesetzt: [] },
+    //   verhoert: Falsche, die verhört wurden, { id, zeigte, echt }
+    verlauf: { aufgeflogen: [], umgesetzt: [], verhoert: [] },
   };
   for (let b = 0; b < BAENKE; b++) z.baenke.push([]);
   kommt(z, []);
@@ -109,11 +115,11 @@ function neuerGast(z) {
     if (moment) {
       z.ersterFalscher = 'unterwegs';
       z.gekommen += 1;
-      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt };
+      return { id: z.naechsteId++, zeigt: moment.zeigt, echt: moment.echt, abgewandt: 0 };
     }
   }
   const echt = echteFarbe(z);
-  const gast = { id: z.naechsteId++, zeigt: echt, echt };
+  const gast = { id: z.naechsteId++, zeigt: echt, echt, abgewandt: 0 };
   if (wirdFalsch(z)) {
     // Nie zwei unaufgeflogene Falsche, die dieselbe Farbe zeigen. So beweist Zusammenrücken zwischen zwei gleich
     // Aussehenden, dass beide ehrlich sind, und rücken sie ab, ist genau einer von beiden falsch.
@@ -145,8 +151,19 @@ function beende(z, wie, ereignisse) {
   ereignisse.push({ typ: 'ende', wie, geraeumt: z.geraeumt });
 }
 
+export function finde(z, id) {
+  for (const g of z.tuer) if (g.id === id) return g;
+  for (const b of z.baenke) for (const g of b) if (g.id === id) return g;
+  return null;
+}
+
+export function darfVerhoeren(z, id) {
+  return z.status === 'laeuft' && z.licht >= 1 && finde(z, id) !== null;
+}
+
 export function gueltig(z, aktion) {
   if (!aktion || z.status !== 'laeuft') return false;
+  if (aktion.verhoer !== undefined) return darfVerhoeren(z, aktion.verhoer);
   const { von, nach } = aktion;
   if (!Number.isInteger(nach) || nach < 0 || nach >= BAENKE) return false;
   if (z.baenke[nach].length >= PLAETZE) return false;
@@ -163,8 +180,23 @@ export function zuege(z) {
   return liste;
 }
 
+// Verhör: kein Zug, niemand kommt an die Tür, ein Fenster geht aus
+function verhoere(z, id) {
+  const g = finde(z, id);
+  const zeigte = g.zeigt;
+  if (istFalsch(g)) {
+    z.verlauf.verhoert.push({ id: g.id, zeigte, echt: g.echt });
+    if (z.ersterFalscher === 'unterwegs') z.ersterFalscher = 'aufgeflogen';
+  }
+  g.zeigt = g.echt;
+  g.abgewandt = 0;
+  z.licht -= 1;
+  return [{ typ: 'verhoer', id: g.id, zeigte, echt: g.echt, fenster: z.licht }];
+}
+
 function fuehreAus(z, aktion) {
   if (!gueltig(z, aktion)) return [];
+  if (aktion.verhoer !== undefined) return verhoere(z, aktion.verhoer);
   const ereignisse = [];
   const { von, nach } = aktion;
   const gast = von === 'tuer' ? z.tuer.shift() : z.baenke[von].pop();
@@ -176,9 +208,17 @@ function fuehreAus(z, aktion) {
   ereignisse.push({ typ: 'gesetzt', id: gast.id, von, nach, platz: bank.length - 1 });
 
   // Schimmern und Zusammenrücken: neben dem bisher äußersten, wenn beide dieselbe echte Farbe haben
-  if (nachbar && nachbar.echt === gast.echt) ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
-  // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden
-  else if (nachbar && nachbar.zeigt === gast.zeigt) ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
+  // Wer neben seiner echten Farbe zusammenrückt, wendet sich nicht mehr ab.
+  if (nachbar && nachbar.echt === gast.echt) {
+    nachbar.abgewandt = 0;
+    gast.abgewandt = 0;
+    ereignisse.push({ typ: 'schimmer', ids: [nachbar.id, gast.id], bank: nach });
+  } else if (nachbar && nachbar.zeigt === gast.zeigt) {
+    // Abrücken: beide zeigen dieselbe Farbe, sind aber verschieden. Beide bleiben abgewandt sitzen.
+    nachbar.abgewandt = -1;
+    gast.abgewandt = 1;
+    ereignisse.push({ typ: 'abruecken', ids: [nachbar.id, gast.id], bank: nach });
+  }
 
   // vier, die dieselbe Farbe zeigen: räumen oder auffliegen
   if (bank.length === PLAETZE && bank.every((g) => g.zeigt === bank[0].zeigt)) {
@@ -188,14 +228,16 @@ function fuehreAus(z, aktion) {
         const wie = bank.indexOf(f) === PLAETZE - 1 ? 'zuletzt' : 'geglaubt';
         z.verlauf.aufgeflogen.push({ id: f.id, zeigte: f.zeigt, echt: f.echt, wie });
         f.zeigt = f.echt;
+        f.abgewandt = 0;
         if (z.ersterFalscher === 'unterwegs') z.ersterFalscher = 'aufgeflogen';
       }
       ereignisse.push({ typ: 'aufgeflogen', bank: nach, gaeste: falsche.map((f) => ({ id: f.id, platz: bank.indexOf(f), echt: f.echt })) });
     } else {
       z.geraeumt += 1;
-      ereignisse.push({ typ: 'geraeumt', bank: nach, farbe: bank[0].zeigt, ids: bank.map((g) => g.id), fenster: z.geraeumt });
+      z.licht += 1;
+      ereignisse.push({ typ: 'geraeumt', bank: nach, farbe: bank[0].zeigt, ids: bank.map((g) => g.id), fenster: z.licht });
       z.baenke[nach] = [];
-      if (z.geraeumt >= FENSTER) {
+      if (z.licht >= FENSTER) {
         beende(z, 'hell', ereignisse);
         return ereignisse;
       }
