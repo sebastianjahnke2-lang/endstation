@@ -13,10 +13,21 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
 3. docs/PRINZIPIEN.md lesen. Jede Änderung nennt den Leitsatz, dem sie dient.
 
+## Arbeitsweise (Dauerauftrag vom 22.11., wörtlich in `docs/auftraege/arbeitsweise.md`)
+1. Aufträge stehen in Reihenfolge in `docs/WARTESCHLANGE.md`. Nacheinander abarbeiten, ohne zu warten. Neue Aufträge des Auftraggebers unten anhängen.
+2. Nur anhalten bei „SPIELTEST" in der Warteschlange, bei Tests, die rot bleiben, oder bei einer Entscheidung, die das Spielgefühl ändert und nicht aus Auftrag, Vision oder Leitsätzen folgt.
+3. Kleine Fragen selbst nach den Leitsätzen entscheiden und in `docs/ENTSCHEIDUNGEN.md` notieren.
+4. Jeder Auftrag: eigene Commits, grüne Tests, aktualisierter `docs/STAND.md`.
+5. Ein Pull Request je Abschnitt bis zum nächsten SPIELTEST, nicht je Auftrag.
+6. Vor jedem Bericht das Neue selbst im Browser in iPhone-Größe durchspielen und prüfen, dass es wirklich vorkommt.
+7. Bericht höchstens acht Zeilen, immer in dieser Form: Gebaut / Abweichungen / Selbst entschieden / Worauf ich beim Spielen achten soll / Link zum Pull Request.
+
+Nichts an Schwierigkeit und Abwechslung ändern.
+
 ## Weiterarbeiten
-- Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
+- Zu Beginn jedes Chats zuerst `docs/STAND.md` und `docs/WARTESCHLANGE.md` lesen, dann den nächsten offenen Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
 - Nach jedem abgeschlossenen Teilschritt: `docs/STAND.md` aktualisieren, committen, pushen.
-- Bei „Weiter" ohne weitere Angabe: den nächsten Schritt aus `docs/STAND.md` ausführen.
+- Bei „Weiter" ohne weitere Angabe: den nächsten offenen Auftrag aus `docs/WARTESCHLANGE.md` ausführen.
 - Arbeitsaufträge liegen wörtlich in `docs/auftraege/`. Einen neuen Auftrag dort ablegen, bevor gebaut wird.
 
 ## Etappenstand
