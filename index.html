@@ -229,7 +229,7 @@ const WAGENPLAENE = [
       '.....',
     ],
     gegner: [
-      { typ: 'pendler', langsam: true, orte: [[2, 2], [1, 2], [3, 2]] },
+      { typ: 'pendler', langsam: true, holtAus: true, orte: [[2, 2], [1, 2], [3, 2]] },
     ],
   },
   {
@@ -374,7 +374,7 @@ function baueWagen(nr, z) {
       kette.forEach(([x, y], rang) => gegner.push({ typ: 'gruppe', x: sx(x), y, gruppe, rang }));
     } else {
       const [x, y] = vorgabe.orte[wuerfle(z, vorgabe.orte.length)];
-      gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
+      gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true, holtAus: vorgabe.holtAus === true });
     }
   }
   const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
@@ -421,6 +421,10 @@ const PUENKTLICH_ZUEGE = 12;
 const HALT_VERLANGT = 3; // so viele helle Lochungen verlangt der Schaffner am Halt
 const TODESARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
 const SONDER_HOECHSTENS = 6;
+// Einführung: Solange die Fahrkarte keine Prüfung trägt, liegt das erste Angebot in Wagen 1 auf dem Feld
+// vor der Tür. Daran kommt niemand vorbei, und dort ist der Wagen schon ruhig. "Erst aussteigen lassen"
+// passt an die Tür und verlangt nur dreimal Stehen, das ist dort ohne Gefahr zu schaffen.
+const EINFUEHRUNG = 'aussteigen';
 
 function neueFahrkarte() {
   return { lochungen: [] };
@@ -472,6 +476,13 @@ function stelleAngebot(z) {
   const id = offen[wuerfle(z.kartenzufall, offen.length)];
   const feld = felder[wuerfle(z.kartenzufall, felder.length)];
   z.angebot = { id, x: feld.x, y: feld.y };
+  // gewürfelt wird trotzdem, damit die Angebote der späteren Wagen dieselben bleiben
+  if (istEinfuehrung(z)) z.angebot = { id: EINFUEHRUNG, x: TUERFELD.x, y: TUERFELD.y };
+}
+
+// Gilt beim Einrichten von Wagen 1, solange noch keine Prüfung gelocht ist.
+function istEinfuehrung(z) {
+  return z.wagenNr === 0 && !z.fahrkarte.lochungen.some((l) => l.art === 'pruefung');
 }
 
 // Der Spieler ist auf das Feld des Angebots getreten.
@@ -658,6 +669,7 @@ function neuerGegner(id, vorgabe) {
   const g = { id, typ: vorgabe.typ, x: vorgabe.x, y: vorgabe.y, hp: GEGNERWERTE[vorgabe.typ].hp, ansage: null };
   if (g.typ === 'pendler') {
     g.langsam = vorgabe.langsam === true;
+    g.holtAus = vorgabe.holtAus === true; // holt einmal ins Leere aus, siehe planePendler
     g.pause = 0;
   } else if (g.typ === 'gruppe') {
     g.gruppe = vorgabe.gruppe;
@@ -789,6 +801,13 @@ function planePendler(z, g, ereignisse) {
   if (abstand(g, z.spieler) === 1) {
     sagAn(z, g, [z.spieler], ereignisse);
     return;
+  }
+  // Einführung des roten Felds: Der langsame Pendler in Wagen 1 holt zu Beginn einmal ins Leere aus,
+  // auf das Feld vor sich. Der Spieler ist da noch weit weg und sieht gefahrlos, was ein rotes Feld tut.
+  if (g.holtAus) {
+    g.holtAus = false;
+    const vor = schrittZumSpieler(z, g);
+    if (vor && istFrei(z, vor.x, vor.y) && abstand(vor, z.spieler) > 1 && sagAn(z, g, [vor], ereignisse)) return;
   }
   if (geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse) && g.langsam) g.pause = 1;
 }
@@ -1179,6 +1198,7 @@ function fuehreAus(z, aktion) {
     bewegt = ergebnis.bewegt;
     tat = ergebnis.tat;
     zielRot = bewegt && istMarkiert(z, s.x, s.y);
+    if (zielRot) ereignisse.find((e) => e.typ === 'sprint').rot = true;
     if (bewegt) {
       nimmAn(z, ereignisse);
       nochmal = sprichMitBegleiter(z, ereignisse);
@@ -1251,7 +1271,7 @@ function fuehreAus(z, aktion) {
     } else {
       tat = { art: 'schritt', von: { x: s.x, y: s.y } };
       zielRot = istMarkiert(z, x, y);
-      ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y } });
+      ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y }, rot: zielRot });
       s.x = x;
       s.y = y;
       bewegt = true;
@@ -2439,7 +2459,8 @@ function maleTuer(stift, layout, offen, t, ox, oy, spalt) {
 }
 
 // Warmes Licht fällt durch die offene Tür auf den Boden, zwei Winkel zeigen nach oben.
-function maleTuerlicht(stift, layout, offen, t, ruhig) {
+// ohneWinkel: Liegt ein Symbol auf dem Feld vor der Tür, bleiben die Winkel weg, damit es lesbar bleibt.
+function maleTuerlicht(stift, layout, offen, t, ruhig, ohneWinkel) {
   if (offen < 0.01) return;
   const { boden, s } = layout;
   const cx = boden.x + (TUERFELD.x + 0.5) * s;
@@ -2448,6 +2469,7 @@ function maleTuerlicht(stift, layout, offen, t, ruhig) {
   schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
   stift.fillStyle = schein;
   stift.fillRect(boden.x, boden.y, boden.b, s * 1.8);
+  if (ohneWinkel) return;
   const wandern = ruhig ? 0 : ((t * 0.9) % 1) * s * 0.12;
   stift.strokeStyle = FARBE.bernstein;
   stift.lineWidth = Math.max(2, s * 0.05);
@@ -3398,6 +3420,7 @@ function erzeugeAnzeige(leinwand) {
       bild.angebot = null;
       bild.pruefung = e.id;
       rede = { text: TEXTE.pruefung[e.id], x: s.x, y: s.y };
+      wirkung.leuchten = jetzt; // das Symbol antwortet sofort: ein warmer Ring um die Figur
     } else if (e.typ === 'gespraech') {
       if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
     } else if (e.typ === 'antwort') {
@@ -3589,6 +3612,19 @@ function erzeugeAnzeige(leinwand) {
       stift.lineWidth = 2;
       rundesRechteck(stift, x + 3, y + 3, s - 6, s - 6, s * 0.09);
       stift.stroke();
+      // Schraffur: Gefahr ist eckig und gestreift, Nutzen rund und weich, auch ohne Farbe zu unterscheiden
+      stift.save();
+      rundesRechteck(stift, x + 3, y + 3, s - 6, s - 6, s * 0.09);
+      stift.clip();
+      stift.strokeStyle = `rgba(255, 150, 130, ${(0.3 + 0.2 * puls) * zeigen})`;
+      stift.lineWidth = Math.max(2, s * 0.07);
+      stift.beginPath();
+      for (let k = -s; k < s; k += s * 0.28) {
+        stift.moveTo(x + k, y + s);
+        stift.lineTo(x + k + s, y);
+      }
+      stift.stroke();
+      stift.restore();
       if (pfeil && (dx || dy)) {
         // kleiner Winkel: aus dieser Richtung kommt er
         const cx = x + s / 2;
@@ -3763,7 +3799,8 @@ function erzeugeAnzeige(leinwand) {
       maleLichtschein(stift, layout, lichter, klar);
       maleRot(t);
       if (bild.angebot) maleAngebot(bild.angebot, t);
-      maleTuerlicht(stift, layout, bild.tuer, t, ruhig);
+      const vorDerTuer = bild.angebot && bild.angebot.x === TUERFELD.x && bild.angebot.y === TUERFELD.y;
+      maleTuerlicht(stift, layout, bild.tuer, t, ruhig, vorDerTuer);
     }
 
     // Figuren von hinten nach vorn
@@ -3820,11 +3857,7 @@ function erzeugeAnzeige(leinwand) {
     const { boden, s } = layout;
     const cx = boden.x + (a.x + 0.5) * s;
     const cy = boden.y + (a.y + 0.5) * s + oy;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
-    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, 1);
     if (a.id === 'pech') {
       maleSchild(TEXTE.begleiter.pech, cx, cy);
     } else if (a.id === 'tuer') {
@@ -3843,14 +3876,25 @@ function erzeugeAnzeige(leinwand) {
     const { boden, s } = layout;
     const cx = boden.x + (f.x + 0.5) * s;
     const cy = boden.y + (f.y + 0.5) * s + oy;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
-    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, 1);
     const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
     const seite = Math.sign(b.x - f.x);
     maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
+  }
+
+  // Was nützt, liegt rund auf dem Boden: ein weicher Schein und ein dünner Kreis, nie Streifen.
+  function maleNutzschein(cx, cy, puls) {
+    const { s } = layout;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
+    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    stift.strokeStyle = `rgba(255, 217, 160, ${0.5 * puls})`;
+    stift.lineWidth = Math.max(1.5, s * 0.03);
+    stift.beginPath();
+    stift.arc(cx, cy, s * 0.4, 0, Math.PI * 2);
+    stift.stroke();
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
@@ -3859,11 +3903,7 @@ function erzeugeAnzeige(leinwand) {
     const cx = boden.x + (a.x + 0.5) * s;
     const cy = boden.y + (a.y + 0.5) * s;
     const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
-    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, puls);
     stift.globalAlpha = puls;
     maleSymbol(stift, a.id, cx, cy, s * 0.42, FARBE.warm);
     stift.globalAlpha = 1;
@@ -4306,6 +4346,20 @@ function erzeugeTon() {
       hauch(260, 0.3, 0.35);
       klang(330, 440, 0.3, 0.12, 'sine', 0.04);
     },
+    // Bodensymbole: Was man betritt, antwortet sofort. Hell und steigend, was nützt; tief, was droht.
+    angenommen: () => {
+      klang(659, 659, 0.12, 0.16, 'sine');
+      klang(880, 880, 0.2, 0.16, 'sine', 0.09);
+    },
+    gelocht: () => {
+      klang(2600, 2400, 0.02, 0.14, 'square');
+      klang(988, 988, 0.22, 0.14, 'sine', 0.05);
+    },
+    antwort: () => klang(587, 784, 0.18, 0.14, 'sine'),
+    aufRot: () => {
+      klang(220, 208, 0.09, 0.22, 'square');
+      klang(220, 208, 0.09, 0.22, 'square', 0.13);
+    },
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);
       klang(659, 659, 0.3, 0.3, 'sine', 0.38);
@@ -4318,7 +4372,11 @@ function erzeugeTon() {
     spiele(ereignisse) {
       const schon = new Set();
       for (const e of ereignisse) {
-        const name = e.typ === 'schlag' && e.besiegt ? 'besiegt' : e.typ;
+        const name = e.typ === 'schlag' && e.besiegt ? 'besiegt' : e.typ === 'gelocht' && !e.hell ? '' : e.typ;
+        if ((e.typ === 'schritt' || e.typ === 'sprint') && e.rot && !schon.has('aufRot')) {
+          KLAENGE.aufRot();
+          schon.add('aufRot');
+        }
         if (e.typ === 'schlag') KLAENGE.schlag();
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);

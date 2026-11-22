@@ -25,6 +25,7 @@ export function neuerGegner(id, vorgabe) {
   const g = { id, typ: vorgabe.typ, x: vorgabe.x, y: vorgabe.y, hp: GEGNERWERTE[vorgabe.typ].hp, ansage: null };
   if (g.typ === 'pendler') {
     g.langsam = vorgabe.langsam === true;
+    g.holtAus = vorgabe.holtAus === true; // holt einmal ins Leere aus, siehe planePendler
     g.pause = 0;
   } else if (g.typ === 'gruppe') {
     g.gruppe = vorgabe.gruppe;
@@ -156,6 +157,13 @@ function planePendler(z, g, ereignisse) {
   if (abstand(g, z.spieler) === 1) {
     sagAn(z, g, [z.spieler], ereignisse);
     return;
+  }
+  // Einführung des roten Felds: Der langsame Pendler in Wagen 1 holt zu Beginn einmal ins Leere aus,
+  // auf das Feld vor sich. Der Spieler ist da noch weit weg und sieht gefahrlos, was ein rotes Feld tut.
+  if (g.holtAus) {
+    g.holtAus = false;
+    const vor = schrittZumSpieler(z, g);
+    if (vor && istFrei(z, vor.x, vor.y) && abstand(vor, z.spieler) > 1 && sagAn(z, g, [vor], ereignisse)) return;
   }
   if (geheEinenSchritt(z, g, schrittZumSpieler(z, g), ereignisse) && g.langsam) g.pause = 1;
 }

@@ -123,6 +123,20 @@ export function erzeugeTon() {
       hauch(260, 0.3, 0.35);
       klang(330, 440, 0.3, 0.12, 'sine', 0.04);
     },
+    // Bodensymbole: Was man betritt, antwortet sofort. Hell und steigend, was nützt; tief, was droht.
+    angenommen: () => {
+      klang(659, 659, 0.12, 0.16, 'sine');
+      klang(880, 880, 0.2, 0.16, 'sine', 0.09);
+    },
+    gelocht: () => {
+      klang(2600, 2400, 0.02, 0.14, 'square');
+      klang(988, 988, 0.22, 0.14, 'sine', 0.05);
+    },
+    antwort: () => klang(587, 784, 0.18, 0.14, 'sine'),
+    aufRot: () => {
+      klang(220, 208, 0.09, 0.22, 'square');
+      klang(220, 208, 0.09, 0.22, 'square', 0.13);
+    },
     halt: () => {
       klang(523, 523, 0.3, 0.3, 'sine', 0.1);
       klang(659, 659, 0.3, 0.3, 'sine', 0.38);
@@ -135,7 +149,11 @@ export function erzeugeTon() {
     spiele(ereignisse) {
       const schon = new Set();
       for (const e of ereignisse) {
-        const name = e.typ === 'schlag' && e.besiegt ? 'besiegt' : e.typ;
+        const name = e.typ === 'schlag' && e.besiegt ? 'besiegt' : e.typ === 'gelocht' && !e.hell ? '' : e.typ;
+        if ((e.typ === 'schritt' || e.typ === 'sprint') && e.rot && !schon.has('aufRot')) {
+          KLAENGE.aufRot();
+          schon.add('aufRot');
+        }
         if (e.typ === 'schlag') KLAENGE.schlag();
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);

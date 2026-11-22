@@ -42,6 +42,8 @@ while (z.status === 'faehrt' && z.zug < 600) {
   await seite.waitForTimeout(50);
   const w = z.wagenNr + 1;
   if (z.zuegeImWagen === 3) await bild(`wagen${w}`);
+  if (w === 1 && z.gegner.some((g) => g.ansage)) await bild('wagen1-rot', 120);
+  if (ereignisse.some((e) => e.typ === 'angenommen')) await bild(`wagen${w}-symbol`, 200);
   if (z.gegner.some((g) => g.typ === 'draengler' && g.ansage)) await bild(`wagen${w}-linie`);
   if (z.gegner.some((g) => g.typ === 'draengler' && g.erschoepft)) await bild(`wagen${w}-erschoepft`);
   if (z.gegner.some((g) => g.typ === 'gruppe' && g.ansage)) await bild(`wagen${w}-gruppe`);

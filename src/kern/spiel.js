@@ -238,6 +238,7 @@ function fuehreAus(z, aktion) {
     bewegt = ergebnis.bewegt;
     tat = ergebnis.tat;
     zielRot = bewegt && istMarkiert(z, s.x, s.y);
+    if (zielRot) ereignisse.find((e) => e.typ === 'sprint').rot = true;
     if (bewegt) {
       nimmAn(z, ereignisse);
       nochmal = sprichMitBegleiter(z, ereignisse);
@@ -310,7 +311,7 @@ function fuehreAus(z, aktion) {
     } else {
       tat = { art: 'schritt', von: { x: s.x, y: s.y } };
       zielRot = istMarkiert(z, x, y);
-      ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y } });
+      ereignisse.push({ typ: 'schritt', phase: 0, richtung: aktion, von: { x: s.x, y: s.y }, nach: { x, y }, rot: zielRot });
       s.x = x;
       s.y = y;
       bewegt = true;

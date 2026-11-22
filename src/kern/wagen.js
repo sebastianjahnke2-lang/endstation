@@ -29,7 +29,7 @@ export const WAGENPLAENE = [
       '.....',
     ],
     gegner: [
-      { typ: 'pendler', langsam: true, orte: [[2, 2], [1, 2], [3, 2]] },
+      { typ: 'pendler', langsam: true, holtAus: true, orte: [[2, 2], [1, 2], [3, 2]] },
     ],
   },
   {
@@ -174,7 +174,7 @@ export function baueWagen(nr, z) {
       kette.forEach(([x, y], rang) => gegner.push({ typ: 'gruppe', x: sx(x), y, gruppe, rang }));
     } else {
       const [x, y] = vorgabe.orte[wuerfle(z, vorgabe.orte.length)];
-      gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true });
+      gegner.push({ typ: vorgabe.typ, x: sx(x), y, langsam: vorgabe.langsam === true, holtAus: vorgabe.holtAus === true });
     }
   }
   const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));

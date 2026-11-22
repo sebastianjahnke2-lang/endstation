@@ -25,6 +25,7 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Pull Request #3 ist ebenfalls in `main`: Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
 - Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
+- Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, wartet auf den Test am iPhone.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -120,6 +121,7 @@ tests/
   fuzz.test.js      Zufallsfahrten, Regelprüfung nach jeder Eingabe
   wagen.test.js     jede Auslosung jedes Wagens
   bots.test.js      Abnahme der Schwierigkeit
+  bodensymbole.test.js  jedes Bodensymbol zuerst an seiner Einführungsstelle, Wirkung beim Betreten
   ton.test.js       verbotene Wörter, Schrift, Textlängen
   layout.test.js    passt auf jedes Handy, nichts zum Antippen am unteren Rand
   speicher.test.js  leerer, gesperrter und kaputter Speicher
