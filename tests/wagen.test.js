@@ -75,10 +75,13 @@ for (let nr = 0; nr < WAGENZAHL; nr++) {
 
       // keine Sackgassen, keine einspurigen Gänge: Jedes freie Feld hat einen freien Nachbarn
       // in der Waagerechten und einen in der Senkrechten. Nur so lässt sich jedes Muster verlassen.
+      // Im sicheren Wagen gibt es keine Muster: Dort darf die Engstelle einspurig sein, sonst nichts.
+      const eng = WAGENPLAENE[nr].sicher && WAGENPLAENE[nr].engstelle;
+      const ausnahme = (x, y) => eng && y === eng[1] && (x === eng[0] || x === BREITE - 1 - eng[0]);
       const offen = (x, y) => x >= 0 && x < BREITE && y >= 0 && y < HOEHE && !hindernis(x, y);
       for (let y = 0; y < HOEHE; y++) {
         for (let x = 0; x < BREITE; x++) {
-          if (hindernis(x, y)) continue;
+          if (hindernis(x, y) || ausnahme(x, y)) continue;
           assert.ok(offen(x - 1, y) || offen(x + 1, y), `${wo}: Feld ${x},${y} hat links und rechts keinen Ausweg`);
           assert.ok(offen(x, y - 1) || offen(x, y + 1), `${wo}: Feld ${x},${y} hat oben und unten keinen Ausweg`);
         }

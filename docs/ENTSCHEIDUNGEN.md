@@ -363,3 +363,14 @@ Leitsätze 2, 5 und 7. Am Boden liegen vier Arten: Angebot (Prüfungssymbol), ro
 - **Wirkung beim Betreten:** Angebot: Worte, warmer Ring um die Figur, eigener Klang, beim Lochen ein Zangenklick. Rotes Feld: Ausrufezeichen wie bisher, dazu ein tiefer doppelter Ton. Antwort: ein kurzer steigender Ton. „Noch mal" hatte schon einen.
 - **Ohne Farbe unterscheidbar:** Gefahr ist eckig und schräg gestreift, Nutzen ist rund mit dünnem Kreis und weichem Schein. Liegt ein Symbol vor der Tür, fehlen die Winkel des Türlichts, damit es lesbar bleibt.
 - **Zahlen:** `npm run balance` vorher und nachher gleich (86 / 55 / 73 %, Ausweicher 60 %, Kämpfer 0 %). Wagen 1 ist fast unverändert, nur der Kämpfer bekommt dort jetzt im Schnitt 0,3 Treffer, weil er in das Ausholen hineinläuft.
+
+## Sprint einführen (22.11., Warteschlange Abschnitt 1, Auftrag 1)
+Leitsätze 2 (gelernt wird im Spiel), 6 (Hilfe zeigt die Richtung) und 8 (jede Belohnung hat sofort eine Verwendung).
+- **Ort: die Engstelle im Speisewagen.** Er ist der einzige sichere Wagen und kommt in jeder Fahrt nach dem Verdienen des Sprints (Wagen 6) als Nächstes vor. In Reihe 5 des Wagens stehen jetzt Koffer bis auf ein Feld in der Mitte (`KK.KK`). Die Bauregel gilt dort nicht: Sie sichert das Ausweichen, und im sicheren Wagen wird nichts angekündigt. Der Test nimmt nur dieses eine Feld aus.
+- **Wer dort steht: der verstandene Drängler.** Nur wer den Sprint hat, findet ihn stehend in der Engstelle statt an seinem Tisch. Ohne Sprint ist die Engstelle frei, Erstspieler merken nichts außer den Koffern.
+- **Brauchen ohne Zwang.** Ein Sprint führt durch ihn hindurch, ohne Schaden, danach setzt er sich an seinen Tisch. Wer stattdessen vor ihm wartet oder ihn anstößt, dem macht er nach zwei Zügen Platz. Niemand hängt fest (Leitsatz 6), Abwarten kostet zwei Züge (Leitsatz 1). Anstoßen ist ein Zug, keine ungültige Eingabe, so wie das Stoßen gegen die Tür.
+- **Gefahrlos ausprobieren:** Im Speisewagen kostet ein Sprint keine Ruhe. Sonst könnte man ihn dort oft gar nicht ausprobieren, weil man mit leerer Ruhe ankommt. Überall sonst kostet er weiter eine.
+- **Hilfe ohne Wort:** Steht man direkt vor ihm, leuchtet das Feld hinter ihm rund auf, in der Form für Nutzen. Ein Tipp darauf ist der Sprint. Kein Hinweiswort.
+- **Wirkung:** Anstoßen: er schwankt, ein tiefer kurzer Ton. Platz machen: er geht an seinen Tisch, ein kleiner steigender Ton.
+- **Zahlen:** `npm run balance` ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 % wie vorher. Mit Fehlern 56 % statt 55 %: Die zufälligen Züge treffen im engeren Speisewagen anders, gefährlich ist er nicht.
+- **Für die Rückmeldung:** Am Rechner gibt es weiter keinen Sprint (nur Tippen). Dort macht er nach zwei Zügen Platz.

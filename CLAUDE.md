@@ -36,7 +36,8 @@ Nichts an Schwierigkeit und Abwechslung ändern.
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Pull Request #3 ist ebenfalls in `main`: Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
 - Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
-- Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, wartet auf den Test am iPhone.
+- Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, in `main` (Pull Request #7), wartet auf den Test am iPhone.
+- Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut.
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -192,6 +193,7 @@ node werkzeug/bedienung.mjs 390x844 47,34    dasselbe mit Notch und Home-Balken
 node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
 node werkzeug/begleiter.mjs 390x844    Tod, Begleiter, „Noch mal", Wiederholung im Browser mit Bildern
 node werkzeug/fortsetzen.mjs 390x844   Fahrt fortsetzen nach dem Neuladen, kaputter Speicher
+node werkzeug/sprint.mjs 390x844       Sprint an der Engstelle im Speisewagen, beide Wege, mit Bildern
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
 node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: Lernhalt und eine Schicht im Browser mit Bildern

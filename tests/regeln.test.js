@@ -642,7 +642,69 @@ test('Speisewagen: An den Tischen sitzt, wen der Spieler verstanden hat', () => 
   assert.deepEqual(ohne.wagen.fahrgaeste, []);
   const mit = erzeugeSpiel(9, { startWagen: 3, staerken: { warten: true, sprint: true } }).zustand;
   assert.deepEqual(mit.wagen.fahrgaeste.map((f) => f.typ).sort(), ['draengler', 'pendler']);
-  for (const f of mit.wagen.fahrgaeste) assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
+  for (const f of mit.wagen.fahrgaeste) {
+    if (f.typ === 'draengler') continue; // er steht zuerst in der Engstelle, siehe unten
+    assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
+  }
+});
+
+// ---------------------------------------------------------------- Sprint einführen (22.11.)
+
+function vorDerEngstelle(staerken = { sprint: true }) {
+  const spiel = erzeugeSpiel(9, { startWagen: 3, staerken });
+  const z = spiel.zustand;
+  for (const r of ['hoch', 'hoch']) spiel.act(r); // vom Start (2,7) bis unter die Engstelle (2,5)
+  return { spiel, z };
+}
+
+test('Sprint einführen: Wer den Drängler verstanden hat, findet ihn stehend in der Engstelle des Speisewagens', () => {
+  const ohne = erzeugeSpiel(9, { startWagen: 3 }).zustand;
+  assert.equal(ohne.wagen.imWeg, null, 'ohne Sprint steht dort niemand');
+  assert.equal(ohne.wagen.plan[4], 'KK.KK', 'die Engstelle ist eng');
+  const { z } = vorDerEngstelle();
+  assert.deepEqual([z.wagen.imWeg.x, z.wagen.imWeg.y], [2, 4]);
+  const d = z.wagen.fahrgaeste.find((f) => f.typ === 'draengler');
+  assert.deepEqual([d.x, d.y], [2, 4]);
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5]);
+});
+
+test('Sprint einführen: Ein Sprint führt an ihm vorbei, kostet im Speisewagen keine Ruhe, dann setzt er sich', () => {
+  const { spiel, z } = vorDerEngstelle();
+  assert.equal(z.spieler.ruhe, 0, 'auch ohne Ruhe');
+  const herzen = z.spieler.herzen;
+  const e = spiel.act('sprint-hoch');
+  assert.ok(e.some((x) => x.typ === 'sprint'));
+  const platz = e.find((x) => x.typ === 'platzGemacht');
+  assert.equal(platz.wie, 'sprint');
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 3]);
+  assert.equal(z.spieler.ruhe, 0);
+  assert.equal(z.spieler.herzen, herzen);
+  assert.equal(z.wagen.imWeg, null);
+  const d = z.wagen.fahrgaeste.find((f) => f.typ === 'draengler');
+  assert.notEqual(z.wagen.plan[d.y][d.x], '.', 'er sitzt wieder');
+});
+
+test('Sprint einführen: Wer wartet oder ihn anstößt, dem macht er nach zwei Zügen Platz', () => {
+  const { spiel, z } = vorDerEngstelle();
+  const e1 = spiel.act('hoch');
+  assert.ok(e1.some((x) => x.typ === 'angestossen'));
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5], 'man kommt nicht durch ihn hindurch');
+  assert.ok(z.wagen.imWeg);
+  const e2 = spiel.act('warten');
+  assert.equal(e2.find((x) => x.typ === 'platzGemacht').wie, 'geduld');
+  assert.equal(z.wagen.imWeg, null);
+  spiel.act('hoch');
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 4], 'jetzt ist die Engstelle frei');
+});
+
+test('Sprint einführen: Außerhalb des Speisewagens kostet ein Sprint weiter eine Ruhe', () => {
+  const spiel = erzeugeSpiel(9, { staerken: { sprint: true } });
+  const z = spiel.zustand;
+  z.spieler.ruhe = 0;
+  assert.equal(spiel.act('sprint-hoch')[0].typ, 'ungueltig');
+  z.spieler.ruhe = 2;
+  spiel.act('sprint-hoch');
+  assert.equal(z.spieler.ruhe, 1);
 });
 
 // ---------------------------------------------------------------- Gönnen (Etappe 2)

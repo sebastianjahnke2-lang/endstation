@@ -34,7 +34,11 @@ export const AUFBRECHEN_KOSTET = 1; // Herzen
 export const STAERKEN = ['warten', 'sprint', 'rueckhalt'];
 export const VERSTEHEN_NACH = 3; // so oft neben dem Pendler warten oder dem Drängler ausweichen
 export const SPRINT_WEITE = 2;
-export const SPRINT_KOSTET = 1; // Ruhe
+export const SPRINT_KOSTET = 1; // Ruhe, im sicheren Wagen nichts: Dort probiert man ihn gefahrlos aus
+// Sprint einführen: Wer den Drängler verstanden hat, findet ihn im Speisewagen stehend in der Engstelle.
+// Ein Sprint führt an ihm vorbei. Wer stattdessen vor ihm wartet oder ihn anstößt, dem macht er nach
+// so vielen Zügen Platz. Danach sitzt er an seinem Tisch.
+export const PLATZ_NACH = 2;
 
 // Gönnen: Im Speisewagen kann man an einem Tisch ein Herz lassen. Meistens kommt nichts zurück,
 // manchmal sitzt bei einer späteren Fahrt jemand mehr am Tisch.
@@ -59,6 +63,16 @@ function richteWagenEin(z, szene) {
   const mehr = Math.min(z.mehrAmTisch, wagen.mehrPlaetze.length);
   for (let i = 0; i < mehr; i++) z.wagen.fahrgaeste.push({ typ: MEHR_TYPEN[i % MEHR_TYPEN.length], x: wagen.mehrPlaetze[i].x, y: wagen.mehrPlaetze[i].y });
   z.wagen.gegoennt = null;
+  z.wagen.imWeg = null;
+  if (!szene && wagen.engstelle) {
+    const f = z.wagen.fahrgaeste.find((x) => x.typ === 'draengler');
+    if (f) {
+      f.sitz = { x: f.x, y: f.y };
+      f.x = wagen.engstelle.x;
+      f.y = wagen.engstelle.y;
+      z.wagen.imWeg = { x: f.x, y: f.y, geduld: 0 };
+    }
+  }
   z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))]; // für das Aufhellen dunkler Lochungen
   z.getroffenVon = [];
   if (szene) {
@@ -97,6 +111,30 @@ function verstehe(z, staerke, gegner, phase) {
   if (z.probe || z.staerken[staerke]) return null;
   z.staerken[staerke] = true;
   return { typ: 'verstanden', phase, staerke, gegner };
+}
+
+// Der stehende Drängler in der Engstelle des Speisewagens
+function imWegAuf(z, x, y) {
+  const w = z.wagen.imWeg;
+  return w && w.x === x && w.y === y ? w : null;
+}
+
+function nebenImWeg(z) {
+  const w = z.wagen.imWeg;
+  return !!w && Math.abs(w.x - z.spieler.x) + Math.abs(w.y - z.spieler.y) === 1;
+}
+
+// Er geht an seinen Tisch und setzt sich.
+function machtPlatz(z, ereignisse, phase, wie) {
+  const w = z.wagen.imWeg;
+  const f = z.wagen.fahrgaeste.find((x) => x.typ === 'draengler' && x.sitz);
+  z.wagen.imWeg = null;
+  if (!f) return;
+  const von = { x: f.x, y: f.y };
+  f.x = f.sitz.x;
+  f.y = f.sitz.y;
+  delete f.sitz;
+  ereignisse.push({ typ: 'platzGemacht', phase, wie, von, nach: { x: f.x, y: f.y }, geduld: w ? w.geduld : 0 });
 }
 
 function nebenGegner(z, typ) {
@@ -185,6 +223,7 @@ function sprinte(z, richtung, ereignisse) {
   }
   if (!weg.length) return null;
   const getroffen = [];
+  const imWeg = weg.some((f) => imWegAuf(z, f.x, f.y));
   for (const f of weg) {
     const g = gegnerAuf(z, f.x, f.y);
     if (!g) continue;
@@ -198,9 +237,9 @@ function sprinte(z, richtung, ereignisse) {
     }
   }
   let nach = null;
-  for (const f of weg) if (!gegnerAuf(z, f.x, f.y)) nach = f;
+  for (const f of weg) if (!gegnerAuf(z, f.x, f.y) && !imWegAuf(z, f.x, f.y)) nach = f;
   const von = { x: s.x, y: s.y };
-  s.ruhe -= SPRINT_KOSTET;
+  if (!z.wagen.sicher) s.ruhe -= SPRINT_KOSTET;
   s.praesenz = false;
   ereignisse.push({ typ: 'sprint', phase: 0, richtung, von, nach, getroffen, ruhe: s.ruhe });
   if (nach) {
@@ -208,6 +247,7 @@ function sprinte(z, richtung, ereignisse) {
     s.y = nach.y;
     z.zaehler.schritte += 1;
   }
+  if (imWeg && nach) machtPlatz(z, ereignisse, 0, 'sprint'); // vorbeigedrängelt, er setzt sich
   oeffneTuer(z, ereignisse, 0);
   const kontrolleur = getroffen.find((t) => t.gegner === 'kontrolleur');
   const tat = kontrolleur ? { art: 'schlag', id: kontrolleur.id } : nach ? { art: 'schritt', von } : { art: 'stoss' };
@@ -226,13 +266,14 @@ function fuehreAus(z, aktion) {
   const neben = nebenGegner(z); // für die Ruhe fürs Warten
   const draenglerRot = z.gegner.some((g) => g.typ === 'draengler' && g.ansage && g.ansage.some((f) => f.x === s.x && f.y === s.y));
   const spaeter = []; // Stärken, die in diesem Zug verstanden werden: [staerke, gegner]
+  const vorIhm = nebenImWeg(z); // stand schon vor dem in der Engstelle
   let nochmal = false; // auf „Noch mal" getreten: Die Wiederholung beginnt nach diesem Schritt
 
   // Phase 0: der Spieler
   if (typeof aktion === 'string' && aktion.startsWith('sprint-')) {
     const richtung = aktion.slice(7);
     if (!RICHTUNG[richtung] || !z.staerken.sprint) return [];
-    if (s.ruhe < SPRINT_KOSTET) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
+    if (s.ruhe < SPRINT_KOSTET && !z.wagen.sicher) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
     const ergebnis = sprinte(z, richtung, ereignisse);
     if (!ergebnis) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
     bewegt = ergebnis.bewegt;
@@ -273,9 +314,15 @@ function fuehreAus(z, aktion) {
       ereignisse.push({ typ: 'gegoennt', phase: 0, x, y, herzen: s.herzen, zurueck, mehrAmTisch: z.mehrAmTisch });
       tat = { art: 'stoss' };
     }
-    if (!amTisch && !anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
-    const g = anDerTuer || amTisch ? null : gegnerAuf(z, x, y);
-    if (amTisch) {
+    const stehtImWeg = !amTisch && !anDerTuer && imWegAuf(z, x, y);
+    if (stehtImWeg) {
+      // gegen den, der in der Engstelle steht: Er rührt sich nicht gleich, der Zug ist vertan
+      tat = { art: 'stoss' };
+      ereignisse.push({ typ: 'angestossen', phase: 0, richtung: aktion, x, y });
+    }
+    if (!stehtImWeg && !amTisch && !anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+    const g = anDerTuer || amTisch || stehtImWeg ? null : gegnerAuf(z, x, y);
+    if (amTisch || stehtImWeg) {
       // schon erledigt
     } else if (anDerTuer) {
       // Aufbrechen: Jede Tür gibt nach dreimal Dagegenlaufen nach und kostet ein Herz.
@@ -322,6 +369,11 @@ function fuehreAus(z, aktion) {
   }
   z.zug += 1;
   z.zuegeImWagen += 1;
+  // wer vor ihm wartet oder ihn anstößt, dem macht er nach PLATZ_NACH Zügen Platz
+  if (vorIhm && nebenImWeg(z)) {
+    z.wagen.imWeg.geduld += 1;
+    if (z.wagen.imWeg.geduld >= PLATZ_NACH) machtPlatz(z, ereignisse, 0, 'geduld');
+  }
   if (nochmal) {
     beginneProbe(z, ereignisse); // im Speisewagen geschieht in diesem Zug sonst nichts
     return ereignisse;
