@@ -9,7 +9,7 @@ Abschnitt 1 (ein Pull Request bis zum Spieltest):
 1. **Sprint einführen: gebaut.** Engstelle im Speisewagen (`KK.KK` in Reihe 5), dort steht, wer den Sprint hat, der verstandene Drängler. Sprint führt vorbei (im Speisewagen ohne Ruhe), sonst macht er nach zwei Zügen Platz. Feld hinter ihm leuchtet rund. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („Sprint einführen"). Browser: `node werkzeug/sprint.mjs`.
 2. **Halt ohne Sperre: gebaut.** Jeder steigt aus, der Schaffner locht oder nickt, „Noch n helle Lochungen" ist gestrichen. Verstehen locht (neue Lochungsart `verstanden`). Entscheidung vom 19.11. geändert, in ENTSCHEIDUNGEN und FAHRPLAN eingetragen. Browser: `node werkzeug/halt.mjs`.
 3. **Leerlauf vor der Tür: gebaut.** Zwei Varianten, umschaltbar mit `#leerlauf=tuer` (Anfang) und `#leerlauf=halten`, nur ohne Gegner im Wagen. `src/kern/leerlauf.js`, Browser: `node werkzeug/leerlauf.mjs`.
-4. **SPIELTEST: hier angehalten.** Pull Request für Abschnitt 1 ist offen, Bericht ist gegeben.
+4. **SPIELTEST: hier angehalten.** Pull Request #8 für Abschnitt 1 ist offen, Bericht ist gegeben.
 
 Davor:
 - **Bodensymbole lesbar machen** (22.11.): in `main` (Pull Request #7), wartet auf den Test am iPhone.
