@@ -440,6 +440,7 @@ export function erzeugeAnzeige(leinwand) {
       bild.angebot = null;
       bild.pruefung = e.id;
       rede = { text: TEXTE.pruefung[e.id], x: s.x, y: s.y };
+      wirkung.leuchten = jetzt; // das Symbol antwortet sofort: ein warmer Ring um die Figur
     } else if (e.typ === 'gespraech') {
       if (bild.begleiter) bild.begleiter.antworten = e.antworten.map((a) => ({ ...a }));
     } else if (e.typ === 'antwort') {
@@ -631,6 +632,19 @@ export function erzeugeAnzeige(leinwand) {
       stift.lineWidth = 2;
       rundesRechteck(stift, x + 3, y + 3, s - 6, s - 6, s * 0.09);
       stift.stroke();
+      // Schraffur: Gefahr ist eckig und gestreift, Nutzen rund und weich, auch ohne Farbe zu unterscheiden
+      stift.save();
+      rundesRechteck(stift, x + 3, y + 3, s - 6, s - 6, s * 0.09);
+      stift.clip();
+      stift.strokeStyle = `rgba(255, 150, 130, ${(0.3 + 0.2 * puls) * zeigen})`;
+      stift.lineWidth = Math.max(2, s * 0.07);
+      stift.beginPath();
+      for (let k = -s; k < s; k += s * 0.28) {
+        stift.moveTo(x + k, y + s);
+        stift.lineTo(x + k + s, y);
+      }
+      stift.stroke();
+      stift.restore();
       if (pfeil && (dx || dy)) {
         // kleiner Winkel: aus dieser Richtung kommt er
         const cx = x + s / 2;
@@ -805,7 +819,8 @@ export function erzeugeAnzeige(leinwand) {
       maleLichtschein(stift, layout, lichter, klar);
       maleRot(t);
       if (bild.angebot) maleAngebot(bild.angebot, t);
-      maleTuerlicht(stift, layout, bild.tuer, t, ruhig);
+      const vorDerTuer = bild.angebot && bild.angebot.x === TUERFELD.x && bild.angebot.y === TUERFELD.y;
+      maleTuerlicht(stift, layout, bild.tuer, t, ruhig, vorDerTuer);
     }
 
     // Figuren von hinten nach vorn
@@ -862,11 +877,7 @@ export function erzeugeAnzeige(leinwand) {
     const { boden, s } = layout;
     const cx = boden.x + (a.x + 0.5) * s;
     const cy = boden.y + (a.y + 0.5) * s + oy;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
-    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, 1);
     if (a.id === 'pech') {
       maleSchild(TEXTE.begleiter.pech, cx, cy);
     } else if (a.id === 'tuer') {
@@ -885,14 +896,25 @@ export function erzeugeAnzeige(leinwand) {
     const { boden, s } = layout;
     const cx = boden.x + (f.x + 0.5) * s;
     const cy = boden.y + (f.y + 0.5) * s + oy;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.5);
-    schein.addColorStop(0, 'rgba(255, 217, 160, 0.26)');
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, 1);
     const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
     const seite = Math.sign(b.x - f.x);
     maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
+  }
+
+  // Was nützt, liegt rund auf dem Boden: ein weicher Schein und ein dünner Kreis, nie Streifen.
+  function maleNutzschein(cx, cy, puls) {
+    const { s } = layout;
+    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
+    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
+    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
+    stift.fillStyle = schein;
+    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    stift.strokeStyle = `rgba(255, 217, 160, ${0.5 * puls})`;
+    stift.lineWidth = Math.max(1.5, s * 0.03);
+    stift.beginPath();
+    stift.arc(cx, cy, s * 0.4, 0, Math.PI * 2);
+    stift.stroke();
   }
 
   // Das Angebot: ein Symbol leuchtet auf dem Boden eines Feldes.
@@ -901,11 +923,7 @@ export function erzeugeAnzeige(leinwand) {
     const cx = boden.x + (a.x + 0.5) * s;
     const cy = boden.y + (a.y + 0.5) * s;
     const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
-    const schein = stift.createRadialGradient(cx, cy, 0, cx, cy, s * 0.48);
-    schein.addColorStop(0, `rgba(255, 217, 160, ${0.34 * puls})`);
-    schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
-    stift.fillStyle = schein;
-    stift.fillRect(cx - s * 0.5, cy - s * 0.5, s, s);
+    maleNutzschein(cx, cy, puls);
     stift.globalAlpha = puls;
     maleSymbol(stift, a.id, cx, cy, s * 0.42, FARBE.warm);
     stift.globalAlpha = 1;

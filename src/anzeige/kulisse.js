@@ -120,7 +120,8 @@ export function maleTuer(stift, layout, offen, t, ox, oy, spalt) {
 }
 
 // Warmes Licht fällt durch die offene Tür auf den Boden, zwei Winkel zeigen nach oben.
-export function maleTuerlicht(stift, layout, offen, t, ruhig) {
+// ohneWinkel: Liegt ein Symbol auf dem Feld vor der Tür, bleiben die Winkel weg, damit es lesbar bleibt.
+export function maleTuerlicht(stift, layout, offen, t, ruhig, ohneWinkel) {
   if (offen < 0.01) return;
   const { boden, s } = layout;
   const cx = boden.x + (TUERFELD.x + 0.5) * s;
@@ -129,6 +130,7 @@ export function maleTuerlicht(stift, layout, offen, t, ruhig) {
   schein.addColorStop(1, 'rgba(255, 217, 160, 0)');
   stift.fillStyle = schein;
   stift.fillRect(boden.x, boden.y, boden.b, s * 1.8);
+  if (ohneWinkel) return;
   const wandern = ruhig ? 0 : ((t * 0.9) % 1) * s * 0.12;
   stift.strokeStyle = FARBE.bernstein;
   stift.lineWidth = Math.max(2, s * 0.05);

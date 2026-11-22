@@ -1,8 +1,12 @@
-# Stand (21.11.)
+# Stand (22.11.)
 
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
+- **Bodensymbole lesbar machen** (22.11.), wörtlich in `docs/auftraege/bodensymbole.md`: gebaut, Pull Request offen, wartet auf den Test am iPhone. Angebot „Erst aussteigen lassen" vor der Tür in Wagen 1, solange keine Prüfung gelocht ist; der langsame Pendler holt in Wagen 1 einmal ins Leere aus; Gefahr gestreift und eckig, Nutzen rund; Klänge beim Betreten. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („Bodensymbole"). Tests in `tests/bodensymbole.test.js`.
+- Der Prototyp „Kontrolle" bleibt liegen (Wunsch des Auftraggebers vom 22.11.).
+
+Davor:
 - **Prototyp „Kontrolle": die Schicht** (21.11.), wörtlich in `docs/auftraege/kontrolle-schicht.md`: gebaut. Halt folgt auf Halt, drei Entkommene beenden die Schicht, Platzwechsler, Scheinschläfer, Toilettengänger, Stationsnamen, Haken mit Mützen, weiteste Station gemerkt. Wartet auf den Test am iPhone. Nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („die Schicht"). Pull Request #5 (Einstieg) ist in `main`.
 
 Davor:
@@ -31,7 +35,7 @@ Vorher und nachher `npm run balance`, Zahlen in den Bericht.
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests, mit Musik
 
 ## Tests
-- `npm run build`, dann `npm test`: 315 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
+- `npm run build`, dann `npm test`: 322 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
 - `npm run balance` vorher und nachher gleich: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
 - Kontrolle im Browser: `prototyp/kontrolle/werkzeug/fotos.mjs` (Lernhalt und eine Schicht) bei 390x844 und 360x600 ohne Mängel.
 - Browser (nur Chromium mit iPhone-Profil): `bedienung.mjs` bei sechs Größen 0 Mängel, `begleiter.mjs` 0 Mängel, `fortsetzen.mjs` bei 390x844 und 360x600 0 Mängel.

@@ -35,6 +35,10 @@ export const PUENKTLICH_ZUEGE = 12;
 export const HALT_VERLANGT = 3; // so viele helle Lochungen verlangt der Schaffner am Halt
 const TODESARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
 const SONDER_HOECHSTENS = 6;
+// Einführung: Solange die Fahrkarte keine Prüfung trägt, liegt das erste Angebot in Wagen 1 auf dem Feld
+// vor der Tür. Daran kommt niemand vorbei, und dort ist der Wagen schon ruhig. "Erst aussteigen lassen"
+// passt an die Tür und verlangt nur dreimal Stehen, das ist dort ohne Gefahr zu schaffen.
+export const EINFUEHRUNG = 'aussteigen';
 
 export function neueFahrkarte() {
   return { lochungen: [] };
@@ -86,6 +90,13 @@ export function stelleAngebot(z) {
   const id = offen[wuerfle(z.kartenzufall, offen.length)];
   const feld = felder[wuerfle(z.kartenzufall, felder.length)];
   z.angebot = { id, x: feld.x, y: feld.y };
+  // gewürfelt wird trotzdem, damit die Angebote der späteren Wagen dieselben bleiben
+  if (istEinfuehrung(z)) z.angebot = { id: EINFUEHRUNG, x: TUERFELD.x, y: TUERFELD.y };
+}
+
+// Gilt beim Einrichten von Wagen 1, solange noch keine Prüfung gelocht ist.
+export function istEinfuehrung(z) {
+  return z.wagenNr === 0 && !z.fahrkarte.lochungen.some((l) => l.art === 'pruefung');
 }
 
 // Der Spieler ist auf das Feld des Angebots getreten.
