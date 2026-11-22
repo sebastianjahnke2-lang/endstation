@@ -21,11 +21,13 @@ function wischrichtung(dx, dy) {
   return dy > 0 ? 'runter' : 'hoch';
 }
 
-// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen() }
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen(), finger(richtung oder null) }
+// finger: Nach einem Wisch, solange der Finger liegt, die Richtung des Wischs; null, sobald er weg ist.
 export function verbindeEingabe(flaeche, melde) {
   let finger = null;
 
   flaeche.addEventListener('pointerdown', (e) => {
+    melde.beruehrt();
     if (finger) return;
     finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
     if (flaeche.setPointerCapture) {
@@ -44,7 +46,9 @@ export function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
     finger.erledigt = true;
-    melde.aktion(wischrichtung(dx, dy), 'wisch');
+    const richtung = wischrichtung(dx, dy);
+    melde.aktion(richtung, 'wisch');
+    melde.finger(richtung);
   });
 
   const loslassen = (e) => {
@@ -53,6 +57,7 @@ export function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     const fertig = finger.erledigt;
     finger = null;
+    melde.finger(null);
     if (e.type === 'pointerup') melde.losgelassen();
     if (fertig || e.type !== 'pointerup') return;
     if (Math.hypot(dx, dy) < TIPPWEG) {
@@ -81,6 +86,7 @@ export function verbindeEingabe(flaeche, melde) {
     const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
     if (!name) return;
     e.preventDefault();
+    melde.beruehrt();
     if (e.code === 'Enter' && !melde.karteOffen()) return;
     melde.aktion(name, 'taste');
   });

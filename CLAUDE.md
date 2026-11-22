@@ -13,10 +13,21 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 2. Beim Etappenstand weitermachen. Gebaut wird nur die aktuelle Etappe.
 3. docs/PRINZIPIEN.md lesen. Jede Änderung nennt den Leitsatz, dem sie dient.
 
+## Arbeitsweise (Dauerauftrag vom 22.11., wörtlich in `docs/auftraege/arbeitsweise.md`)
+1. Aufträge stehen in Reihenfolge in `docs/WARTESCHLANGE.md`. Nacheinander abarbeiten, ohne zu warten. Neue Aufträge des Auftraggebers unten anhängen.
+2. Nur anhalten bei „SPIELTEST" in der Warteschlange, bei Tests, die rot bleiben, oder bei einer Entscheidung, die das Spielgefühl ändert und nicht aus Auftrag, Vision oder Leitsätzen folgt.
+3. Kleine Fragen selbst nach den Leitsätzen entscheiden und in `docs/ENTSCHEIDUNGEN.md` notieren.
+4. Jeder Auftrag: eigene Commits, grüne Tests, aktualisierter `docs/STAND.md`.
+5. Ein Pull Request je Abschnitt bis zum nächsten SPIELTEST, nicht je Auftrag.
+6. Vor jedem Bericht das Neue selbst im Browser in iPhone-Größe durchspielen und prüfen, dass es wirklich vorkommt.
+7. Bericht höchstens acht Zeilen, immer in dieser Form: Gebaut / Abweichungen / Selbst entschieden / Worauf ich beim Spielen achten soll / Link zum Pull Request.
+
+Nichts an Schwierigkeit und Abwechslung ändern.
+
 ## Weiterarbeiten
-- Zu Beginn jedes Chats zuerst `docs/STAND.md` lesen, dann den dort genannten Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
+- Zu Beginn jedes Chats zuerst `docs/STAND.md` und `docs/WARTESCHLANGE.md` lesen, dann den nächsten offenen Auftrag. Nicht von vorn anfangen, nichts doppelt bauen.
 - Nach jedem abgeschlossenen Teilschritt: `docs/STAND.md` aktualisieren, committen, pushen.
-- Bei „Weiter" ohne weitere Angabe: den nächsten Schritt aus `docs/STAND.md` ausführen.
+- Bei „Weiter" ohne weitere Angabe: den nächsten offenen Auftrag aus `docs/WARTESCHLANGE.md` ausführen.
 - Arbeitsaufträge liegen wörtlich in `docs/auftraege/`. Einen neuen Auftrag dort ablegen, bevor gebaut wird.
 
 ## Etappenstand
@@ -25,7 +36,8 @@ Taktikspiel im Nachtzug für das Handy im Hochformat. Ausgeliefert wird eine ein
 - Etappe 2, Fahrkarte, Autorität, Speisewagen: **vollständig gebaut, wartet auf Rückmeldung.** Pull Request #2 ist in `main` übernommen. Pull Request #3 ist ebenfalls in `main`: Der Begleiter wiederholt nach der Antwort auf Wunsch die letzte Szene gefahrlos („Noch mal"). Am 19.11. hat der Auftraggeber nur den Kontrolleur freigegeben: Mittelwagen mit Kontrolleur und Aufbrechen jeder Tür sind gebaut und warten auf seinen Test (Pull Request #2). Danach sagte er „Mach jetzt weiter": Präsenz, Stärken aus Schatten und der Speisewagen mit Gönnen und Gesichtern für verstandene Fahrgäste sind gebaut. Am 19.11. entschieden: Fahrkarte wie im Fahrplan, Gesichter ja, kein Lob vom Begleiter, Prototyp bleibt eigener Versuch bis zum Spieltest (siehe `docs/ENTSCHEIDUNGEN.md`, „Entschieden am 19.11."). Danach gebaut: Fahrkarte mit sechs Prüfungen, Angeboten, hellen und dunklen Lochungen; Begleiter im Speisewagen nach einem Tod; Halt mit Schaffner, Rückblick und Schlussbild.
 - Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
-- Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, wartet auf den Test am iPhone.
+- Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, in `main` (Pull Request #7), wartet auf den Test am iPhone.
+- Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut, Halt ohne Sperre gebaut (Entscheidung vom 19.11. geändert), Leerlauf vor der Tür gebaut. **Wartet auf den Spieltest.**
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -103,9 +115,10 @@ src/
     wagen.js        die sieben Wagen: Plan, Gegner, Bauregel; der dritte ist der Mittelwagen, der vierte der Speisewagen
     lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
     gegner.js       Verhalten von Pendler, Reisegruppe, Drängler, Kontrolleur
-    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen
+    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen, Verstehen locht, keine Sperre am Halt
     begleiter.js    der Begleiter im Speisewagen nach einem Tod, „Noch mal" (die Wiederholung selbst in spiel.js)
     reise.js        was eine neue Fahrt mitnimmt (für main.js und die Werkzeuge)
+    leerlauf.js     Leerlauf vor der Tür: Lauf zur Tür, gehaltener Finger, nur ohne Gegner
     fortsetzen.js   Fahrt fortsetzen: Seed und Eingaben aufzeichnen, beim Öffnen nachspielen
     spiel.js        erzeugeSpiel(seed, optionen) -> { zustand, act(aktion) }
   anzeige/          Canvas, spielt Ereignisse ab
@@ -126,6 +139,7 @@ tests/
   layout.test.js    passt auf jedes Handy, nichts zum Antippen am unteren Rand
   speicher.test.js  leerer, gesperrter und kaputter Speicher
   fortsetzen.test.js gespeicherte Fahrt nachspielen, kaputte Aufzeichnung
+  leerlauf.test.js  Lauf zur Tür, gehaltener Finger, hält vor Entscheidungen an
   build.test.js     index.html aktuell, eine Datei, kein Netz, iPhone-Vorgaben, Build-Regeln
   bots.js           die drei Bots und fahre()
   balance.js        Balance-Bericht
@@ -181,6 +195,9 @@ node werkzeug/bedienung.mjs 390x844 47,34    dasselbe mit Notch und Home-Balken
 node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bildern
 node werkzeug/begleiter.mjs 390x844    Tod, Begleiter, „Noch mal", Wiederholung im Browser mit Bildern
 node werkzeug/fortsetzen.mjs 390x844   Fahrt fortsetzen nach dem Neuladen, kaputter Speicher
+node werkzeug/sprint.mjs 390x844       Sprint an der Engstelle im Speisewagen, beide Wege, mit Bildern
+node werkzeug/halt.mjs 390x844         Halt ohne Sperre: Schaffner nickt (leere Karte) und locht, mit Bildern
+node werkzeug/leerlauf.mjs 390x844     Leerlauf: Tipp auf die Tür und gehaltener Finger, mit Bildern
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
 node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: Lernhalt und eine Schicht im Browser mit Bildern

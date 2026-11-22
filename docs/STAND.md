@@ -3,31 +3,27 @@
 Zu Beginn jedes Chats zuerst lesen. Nicht von vorn anfangen, nichts doppelt bauen.
 
 ## Aktueller Auftrag
-- **Bodensymbole lesbar machen** (22.11.), wörtlich in `docs/auftraege/bodensymbole.md`: gebaut, Pull Request offen, wartet auf den Test am iPhone. Angebot „Erst aussteigen lassen" vor der Tür in Wagen 1, solange keine Prüfung gelocht ist; der langsame Pendler holt in Wagen 1 einmal ins Leere aus; Gefahr gestreift und eckig, Nutzen rund; Klänge beim Betreten. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („Bodensymbole"). Tests in `tests/bodensymbole.test.js`.
-- Der Prototyp „Kontrolle" bleibt liegen (Wunsch des Auftraggebers vom 22.11.).
+Arbeitsweise seit 22.11.: `docs/WARTESCHLANGE.md` von oben abarbeiten, Regeln in `docs/auftraege/arbeitsweise.md`.
+
+Abschnitt 1 (ein Pull Request bis zum Spieltest):
+1. **Sprint einführen: gebaut.** Engstelle im Speisewagen (`KK.KK` in Reihe 5), dort steht, wer den Sprint hat, der verstandene Drängler. Sprint führt vorbei (im Speisewagen ohne Ruhe), sonst macht er nach zwei Zügen Platz. Feld hinter ihm leuchtet rund. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („Sprint einführen"). Browser: `node werkzeug/sprint.mjs`.
+2. **Halt ohne Sperre: gebaut.** Jeder steigt aus, der Schaffner locht oder nickt, „Noch n helle Lochungen" ist gestrichen. Verstehen locht (neue Lochungsart `verstanden`). Entscheidung vom 19.11. geändert, in ENTSCHEIDUNGEN und FAHRPLAN eingetragen. Browser: `node werkzeug/halt.mjs`.
+3. **Leerlauf vor der Tür: gebaut.** Zwei Varianten, umschaltbar mit `#leerlauf=tuer` (Anfang) und `#leerlauf=halten`, nur ohne Gegner im Wagen. `src/kern/leerlauf.js`, Browser: `node werkzeug/leerlauf.mjs`.
+4. **SPIELTEST: hier angehalten.** Pull Request #8 für Abschnitt 1 ist offen, Bericht ist gegeben.
 
 Davor:
-- **Prototyp „Kontrolle": die Schicht** (21.11.), wörtlich in `docs/auftraege/kontrolle-schicht.md`: gebaut. Halt folgt auf Halt, drei Entkommene beenden die Schicht, Platzwechsler, Scheinschläfer, Toilettengänger, Stationsnamen, Haken mit Mützen, weiteste Station gemerkt. Wartet auf den Test am iPhone. Nichts Neues, bis der Auftraggeber sich meldet. Entscheidungen in `docs/ENTSCHEIDUNGEN.md` („die Schicht"). Pull Request #5 (Einstieg) ist in `main`.
-
-Davor:
-- „Leitsätze und die ersten zehn Minuten", wörtlich in `docs/auftraege/leitsaetze.md`. Leitsätze in `docs/PRINZIPIEN.md`.
-- Schritt 1 bis 3 sind gebaut: Leitsätze abgelegt (auch in CLAUDE.md und im Skill `neue-szene`), `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen (`src/kern/fortsetzen.js`). Alles liegt in Pull Request #4, zusammen mit der Musik im Prototyp (nur ein Arbeitszweig).
-- Dazu eingetragen: offene Punkte in `docs/ENTSCHEIDUNGEN.md` („Leitsätze und die ersten zehn Minuten"), zwei Ideen in `docs/IDEEN.md`, Spieltestplan `docs/SPIELTEST-hauptspiel.md`.
-- Vorher am 21.11.: Prototyp „Der freie Platz" mit Musik, ebenfalls in Pull Request #4.
+- **Bodensymbole lesbar machen** (22.11.): in `main` (Pull Request #7), wartet auf den Test am iPhone.
+- **Prototyp „Kontrolle": die Schicht** (21.11.): in `main`, wartet auf den Test am iPhone, bleibt liegen.
+- „Leitsätze und die ersten zehn Minuten": Schritt 1 bis 3 gebaut. Schritt 4 und 6 stehen jetzt in der Warteschlange, Schritt 5 und 7 noch nicht.
 
 ## Nächster Schritt
-Nichts bauen, bis der Auftraggeber sich zum Prototyp „Kontrolle" und zu Schritt 1 bis 3 der Leitsätze meldet. Danach Schritt 4 bis 7 in dieser Reihenfolge:
-4. Halt ohne Sperre, Verstehen locht (Entscheidung vom 19.11. ändern, in ENTSCHEIDUNGEN und FAHRPLAN eintragen).
-5. Augenblick des Verstehens (Stillstand unter 150 ms, Reaktion der Figur, eigener Ton, kein Text).
-6. Leerlauf vor der Tür, zwei umschaltbare Varianten, nur im gefahrlosen Wagen.
-7. Wagen 1 zuletzt neu fassen (Befund in `docs/WAGEN-PRUEFUNG.md`).
-Vorher und nachher `npm run balance`, Zahlen in den Bericht.
+Warten auf den Spieltest des Auftraggebers. Danach neue Aufträge unten in `docs/WARTESCHLANGE.md` anhängen.
 
 ## Was gebaut ist (Hauptspiel in `src/`, gebaut nach `index.html`)
 - `kern/spiel.js`: Zugablauf, Aufbrechen, Stärken, Sprint, Rückhalt, Gönnen, Halt, Wiederholung
 - `kern/gegner.js`: Pendler, Reisegruppe, Drängler, Kontrolleur, Präsenz
 - `kern/wagen.js`: sieben Wagen, Wagen 3 Mittelwagen, Wagen 4 Speisewagen
-- `kern/fahrkarte.js`: sechs Prüfungen, Angebote, helle und dunkle Lochungen, am Halt drei helle verlangt (noch, bis Schritt 4)
+- `kern/fahrkarte.js`: sechs Prüfungen, Angebote, helle und dunkle Lochungen, Halt ohne Sperre, Verstehen locht
 - `kern/begleiter.js`: Gespräch im Speisewagen nach einem Tod, danach „Noch mal"
 - `kern/reise.js`: was eine neue Fahrt mitnimmt
 - `kern/fortsetzen.js`: Aufzeichnung und Nachspielen der laufenden Fahrt
@@ -35,14 +31,13 @@ Vorher und nachher `npm run balance`, Zahlen in den Bericht.
 - Prototyp: `prototyp/freier-platz/`, eigene Seite und eigene Tests, mit Musik
 
 ## Tests
-- `npm run build`, dann `npm test`: 322 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
+- `npm run build`, dann `npm test`: 337 Tests, alle grün (davon Prototyp Kontrolle: Regeln, Lösbarkeit, Anzeige, Build).
 - `npm run balance` vorher und nachher gleich: ausgewogen mit Fehlern 55 %, ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 %.
 - Kontrolle im Browser: `prototyp/kontrolle/werkzeug/fotos.mjs` (Lernhalt und eine Schicht) bei 390x844 und 360x600 ohne Mängel.
 - Browser (nur Chromium mit iPhone-Profil): `bedienung.mjs` bei sechs Größen 0 Mängel, `begleiter.mjs` 0 Mängel, `fortsetzen.mjs` bei 390x844 und 360x600 0 Mängel.
 
 ## Abweichungen vom Auftrag (Gründe in `docs/ENTSCHEIDUNGEN.md`)
 - Tod vor dem Speisewagen: Die nächste Fahrt beginnt vorn, nicht im Speisewagen.
-- Halt mit weniger als drei hellen Lochungen: weiter ab dem Speisewagen (fällt mit Schritt 4 weg).
 - Drei der sechs Prüfungen sind von Claude: „Nicht drängeln", „Pünktlich", „Ruhe bewahren".
 - Ein Treffer des Kontrolleurs kostet 2 Herzen, wie im Fahrplan.
 - Antworten an den Begleiter sind Figuren statt Wörter.

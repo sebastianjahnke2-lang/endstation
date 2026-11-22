@@ -163,7 +163,7 @@ function eineFahrt(seed, waehle, optionen) {
       assert.equal(typen.includes('ausgewichen'), ausgewichen, `${wo}: Ausweichen falsch erkannt`);
       const ruhigGewartet = typen.includes('ruhigGewartet');
       if (ruhigGewartet) assert.ok(aktion === 'warten' && alt.warten, `${wo}: Ruhe fürs Warten ohne Stärke`);
-      const kosten = typen.includes('sprint') ? 1 : 0; // ein Sprint kostet eine Ruhe
+      const kosten = typen.includes('sprint') && !z.wagen.sicher ? 1 : 0; // ein Sprint kostet eine Ruhe, im sicheren Wagen nichts
       const basis = alt.ruhe - kosten;
       const erwartet = basis + ((ausgewichen || ruhigGewartet) && basis < RUHE_VOLL ? 1 : 0);
       assert.equal(z.spieler.ruhe, erwartet, `${wo}: Ruhe von ${alt.ruhe} auf ${z.spieler.ruhe}`);

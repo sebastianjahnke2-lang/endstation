@@ -3,6 +3,7 @@
 //
 // Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand, T Tisch. Alles außer "." ist ein Hindernis.
 // Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
+// Ausnahme: Im sicheren Wagen gibt es keine Ankündigungen, dort darf eine Engstelle einspurig sein.
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
 // Alle Angaben gelten ungespiegelt, der Wagen wird zufällig gespiegelt.
@@ -84,12 +85,15 @@ export const WAGENPLAENE = [
       'S...S',
       'T...T',
       'S...S',
-      'K...K',
+      'KK.KK',
       'S...S',
       'T...T',
       'S...S',
     ],
     gegner: [],
+    // Engstelle zwischen den Koffern. Wer den Drängler verstanden hat, findet ihn hier stehend:
+    // Mit einem Sprint kommt man an ihm vorbei, sonst macht er nach zwei Zügen Platz. Siehe spiel.js.
+    engstelle: [2, 4],
     fahrgaeste: [
       { typ: 'pendler', staerke: 'warten', x: 0, y: 1 },
       { typ: 'gruppe', staerke: 'rueckhalt', x: 4, y: 3 },
@@ -179,6 +183,7 @@ export function baueWagen(nr, z) {
   }
   const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
   const mehrPlaetze = (vorlage.mehrPlaetze || []).map(([x, y]) => ({ x: sx(x), y }));
+  const engstelle = vorlage.engstelle ? { x: sx(vorlage.engstelle[0]), y: vorlage.engstelle[1] } : null;
   const begleiterPlatz = vorlage.begleiterPlatz ? { x: sx(vorlage.begleiterPlatz[0]), y: vorlage.begleiterPlatz[1] } : null;
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, engstelle, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }

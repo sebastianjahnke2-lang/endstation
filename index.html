@@ -203,6 +203,7 @@ function wuerfle(z, n) {
 //
 // Plan: . frei, S Sitz, F Fahrrad, K Koffer, W Wand, T Tisch. Alles außer "." ist ein Hindernis.
 // Jeder Plan hat 8 Zeilen mit 5 Zeichen. Start unten Mitte, Tür oben Mitte.
+// Ausnahme: Im sicheren Wagen gibt es keine Ankündigungen, dort darf eine Engstelle einspurig sein.
 // Gegner: "orte" sind mögliche Startfelder, eines wird ausgelost.
 // Eine Reisegruppe hat "ketten": mögliche Aufstellungen, der Vorderste zuerst.
 // Alle Angaben gelten ungespiegelt, der Wagen wird zufällig gespiegelt.
@@ -284,12 +285,15 @@ const WAGENPLAENE = [
       'S...S',
       'T...T',
       'S...S',
-      'K...K',
+      'KK.KK',
       'S...S',
       'T...T',
       'S...S',
     ],
     gegner: [],
+    // Engstelle zwischen den Koffern. Wer den Drängler verstanden hat, findet ihn hier stehend:
+    // Mit einem Sprint kommt man an ihm vorbei, sonst macht er nach zwei Zügen Platz. Siehe spiel.js.
+    engstelle: [2, 4],
     fahrgaeste: [
       { typ: 'pendler', staerke: 'warten', x: 0, y: 1 },
       { typ: 'gruppe', staerke: 'rueckhalt', x: 4, y: 3 },
@@ -379,8 +383,9 @@ function baueWagen(nr, z) {
   }
   const fahrgaeste = (vorlage.fahrgaeste || []).map((f) => ({ typ: f.typ, staerke: f.staerke, x: sx(f.x), y: f.y }));
   const mehrPlaetze = (vorlage.mehrPlaetze || []).map(([x, y]) => ({ x: sx(x), y }));
+  const engstelle = vorlage.engstelle ? { x: sx(vorlage.engstelle[0]), y: vorlage.engstelle[1] } : null;
   const begleiterPlatz = vorlage.begleiterPlatz ? { x: sx(vorlage.begleiterPlatz[0]), y: vorlage.begleiterPlatz[1] } : null;
-  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
+  return { nr, art: vorlage.art, plan, gespiegelt, gegner, fahrgaeste, mehrPlaetze, begleiterPlatz, engstelle, sicher: vorlage.sicher === true, heilt: vorlage.heilt || 0 };
 }
 
 // --- kern/fahrkarte.js
@@ -391,6 +396,9 @@ function baueWagen(nr, z) {
 //   { art: 'pruefung', id, hell: true }            eine erfüllte Prüfung
 //   { art: 'tod', durch, hell: false }             ein Tod; wird hell, wenn man es einmal anders macht
 //   { art: 'ehrlich', durch, hell: true }          die ehrliche Antwort an den Begleiter, je Ursache eine
+//   { art: 'verstanden', durch, hell: true }       den Kontrolleur durchschaut oder eine Stärke verdient, je Gegner eine
+//
+// Lochungen sind eine Spur, keine Sperre: Am Halt steigt jeder aus. Sie bestimmen nur, was der Rückblick zeigt.
 //
 // Angebot: In jedem Wagen außer dem sicheren leuchtet ein Symbol auf einem Feld. Drauftreten heißt
 // annehmen. Die Prüfung gilt bis zum Verlassen des Wagens, dann wird ausgewertet. Vorbeigehen kostet nichts,
@@ -418,8 +426,8 @@ function ort(l, roh) {
 const PRUEFUNGEN = ['aufregen', 'aussteigen', 'rempeln', 'draengeln', 'puenktlich', 'ruhe'];
 const AUSSTEIGEN_ZUEGE = 3;
 const PUENKTLICH_ZUEGE = 12;
-const HALT_VERLANGT = 3; // so viele helle Lochungen verlangt der Schaffner am Halt
 const TODESARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
+const VERSTEHBAR = ['pendler', 'gruppe', 'draengler', 'kontrolleur'];
 const SONDER_HOECHSTENS = 6;
 // Einführung: Solange die Fahrkarte keine Prüfung trägt, liegt das erste Angebot in Wagen 1 auf dem Feld
 // vor der Tür. Daran kommt niemand vorbei, und dort ist der Wagen schon ruhig. "Erst aussteigen lassen"
@@ -442,6 +450,8 @@ function bereinigeFahrkarte(roh) {
       karte.lochungen.push(ort({ art: 'tod', durch: l.durch, hell: l.hell === true }, l));
     } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
       karte.lochungen.push(ort({ art: 'ehrlich', durch: l.durch, hell: true }, l));
+    } else if (l.art === 'verstanden' && VERSTEHBAR.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'verstanden' && x.durch === l.durch)) {
+      karte.lochungen.push(ort({ art: 'verstanden', durch: l.durch, hell: true }, l));
     }
   }
   return karte;
@@ -542,6 +552,16 @@ function lochungFuerTod(z, durch, ereignisse, phase) {
   if (karte.lochungen.filter((l) => l.art === 'tod').length >= SONDER_HOECHSTENS) return;
   karte.lochungen.push({ art: 'tod', durch, hell: false, wagen: z.wagen.art });
   ereignisse.push({ typ: 'gelocht', phase, art: 'tod', durch, hell: false });
+}
+
+// Verstehen locht: wer den Kontrolleur durchschaut oder eine Stärke verdient, bekommt eine helle Lochung,
+// je Gegner eine auf der Karte. In der Wiederholung zählt nichts.
+function lochungFuerVerstehen(z, durch, ereignisse, phase) {
+  if (z.probe || !VERSTEHBAR.includes(durch)) return;
+  const karte = z.fahrkarte;
+  if (karte.lochungen.some((l) => l.art === 'verstanden' && l.durch === durch)) return;
+  karte.lochungen.push({ art: 'verstanden', durch, hell: true, wagen: z.wagen.art });
+  ereignisse.push({ typ: 'gelocht', phase, art: 'verstanden', durch, hell: true });
 }
 
 // --- kern/begleiter.js
@@ -994,7 +1014,11 @@ const AUFBRECHEN_KOSTET = 1; // Herzen
 const STAERKEN = ['warten', 'sprint', 'rueckhalt'];
 const VERSTEHEN_NACH = 3; // so oft neben dem Pendler warten oder dem Drängler ausweichen
 const SPRINT_WEITE = 2;
-const SPRINT_KOSTET = 1; // Ruhe
+const SPRINT_KOSTET = 1; // Ruhe, im sicheren Wagen nichts: Dort probiert man ihn gefahrlos aus
+// Sprint einführen: Wer den Drängler verstanden hat, findet ihn im Speisewagen stehend in der Engstelle.
+// Ein Sprint führt an ihm vorbei. Wer stattdessen vor ihm wartet oder ihn anstößt, dem macht er nach
+// so vielen Zügen Platz. Danach sitzt er an seinem Tisch.
+const PLATZ_NACH = 2;
 
 // Gönnen: Im Speisewagen kann man an einem Tisch ein Herz lassen. Meistens kommt nichts zurück,
 // manchmal sitzt bei einer späteren Fahrt jemand mehr am Tisch.
@@ -1019,6 +1043,16 @@ function richteWagenEin(z, szene) {
   const mehr = Math.min(z.mehrAmTisch, wagen.mehrPlaetze.length);
   for (let i = 0; i < mehr; i++) z.wagen.fahrgaeste.push({ typ: MEHR_TYPEN[i % MEHR_TYPEN.length], x: wagen.mehrPlaetze[i].x, y: wagen.mehrPlaetze[i].y });
   z.wagen.gegoennt = null;
+  z.wagen.imWeg = null;
+  if (!szene && wagen.engstelle) {
+    const f = z.wagen.fahrgaeste.find((x) => x.typ === 'draengler');
+    if (f) {
+      f.sitz = { x: f.x, y: f.y };
+      f.x = wagen.engstelle.x;
+      f.y = wagen.engstelle.y;
+      z.wagen.imWeg = { x: f.x, y: f.y, geduld: 0 };
+    }
+  }
   z.wagen.typen = [...new Set(z.gegner.map((g) => g.typ))]; // für das Aufhellen dunkler Lochungen
   z.getroffenVon = [];
   if (szene) {
@@ -1057,6 +1091,30 @@ function verstehe(z, staerke, gegner, phase) {
   if (z.probe || z.staerken[staerke]) return null;
   z.staerken[staerke] = true;
   return { typ: 'verstanden', phase, staerke, gegner };
+}
+
+// Der stehende Drängler in der Engstelle des Speisewagens
+function imWegAuf(z, x, y) {
+  const w = z.wagen.imWeg;
+  return w && w.x === x && w.y === y ? w : null;
+}
+
+function nebenImWeg(z) {
+  const w = z.wagen.imWeg;
+  return !!w && Math.abs(w.x - z.spieler.x) + Math.abs(w.y - z.spieler.y) === 1;
+}
+
+// Er geht an seinen Tisch und setzt sich.
+function machtPlatz(z, ereignisse, phase, wie) {
+  const w = z.wagen.imWeg;
+  const f = z.wagen.fahrgaeste.find((x) => x.typ === 'draengler' && x.sitz);
+  z.wagen.imWeg = null;
+  if (!f) return;
+  const von = { x: f.x, y: f.y };
+  f.x = f.sitz.x;
+  f.y = f.sitz.y;
+  delete f.sitz;
+  ereignisse.push({ typ: 'platzGemacht', phase, wie, von, nach: { x: f.x, y: f.y }, geduld: w ? w.geduld : 0 });
 }
 
 function nebenGegner(z, typ) {
@@ -1109,13 +1167,16 @@ function wechsleWagen(z) {
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
   const gruppe = z.wagen.mitGruppe && z.spieler.herzen === 1 ? verstehe(z, 'rueckhalt', 'gruppe', 0) : null;
   const karte = [];
+  if (gruppe) {
+    karte.push(gruppe);
+    lochungFuerVerstehen(z, 'gruppe', karte, 0); // noch im Wagen der Reisegruppe
+  }
   werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
-    // Halt: Der Schaffner verlangt drei helle Lochungen, egal welche.
+    // Halt: Jeder steigt aus. Der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er.
     z.status = 'halt';
-    const hell = helleLochungen(z.fahrkarte);
-    z.halt = { genug: hell >= HALT_VERLANGT, hell, fehlt: Math.max(0, HALT_VERLANGT - hell) };
+    z.halt = { hell: helleLochungen(z.fahrkarte) };
     ereignisse.push({ typ: 'halt', phase: 0, ...z.halt });
   } else {
     z.wagenNr += 1;
@@ -1127,7 +1188,6 @@ function wechsleWagen(z) {
       ereignisse.push({ typ: 'geheilt', phase: 0, herzen: z.spieler.herzen, plus: z.spieler.herzen - vorher });
     }
   }
-  if (gruppe) ereignisse.push(gruppe);
   return ereignisse.concat(karte);
 }
 
@@ -1145,6 +1205,7 @@ function sprinte(z, richtung, ereignisse) {
   }
   if (!weg.length) return null;
   const getroffen = [];
+  const imWeg = weg.some((f) => imWegAuf(z, f.x, f.y));
   for (const f of weg) {
     const g = gegnerAuf(z, f.x, f.y);
     if (!g) continue;
@@ -1158,9 +1219,9 @@ function sprinte(z, richtung, ereignisse) {
     }
   }
   let nach = null;
-  for (const f of weg) if (!gegnerAuf(z, f.x, f.y)) nach = f;
+  for (const f of weg) if (!gegnerAuf(z, f.x, f.y) && !imWegAuf(z, f.x, f.y)) nach = f;
   const von = { x: s.x, y: s.y };
-  s.ruhe -= SPRINT_KOSTET;
+  if (!z.wagen.sicher) s.ruhe -= SPRINT_KOSTET;
   s.praesenz = false;
   ereignisse.push({ typ: 'sprint', phase: 0, richtung, von, nach, getroffen, ruhe: s.ruhe });
   if (nach) {
@@ -1168,6 +1229,7 @@ function sprinte(z, richtung, ereignisse) {
     s.y = nach.y;
     z.zaehler.schritte += 1;
   }
+  if (imWeg && nach) machtPlatz(z, ereignisse, 0, 'sprint'); // vorbeigedrängelt, er setzt sich
   oeffneTuer(z, ereignisse, 0);
   const kontrolleur = getroffen.find((t) => t.gegner === 'kontrolleur');
   const tat = kontrolleur ? { art: 'schlag', id: kontrolleur.id } : nach ? { art: 'schritt', von } : { art: 'stoss' };
@@ -1186,13 +1248,14 @@ function fuehreAus(z, aktion) {
   const neben = nebenGegner(z); // für die Ruhe fürs Warten
   const draenglerRot = z.gegner.some((g) => g.typ === 'draengler' && g.ansage && g.ansage.some((f) => f.x === s.x && f.y === s.y));
   const spaeter = []; // Stärken, die in diesem Zug verstanden werden: [staerke, gegner]
+  const vorIhm = nebenImWeg(z); // stand schon vor dem in der Engstelle
   let nochmal = false; // auf „Noch mal" getreten: Die Wiederholung beginnt nach diesem Schritt
 
   // Phase 0: der Spieler
   if (typeof aktion === 'string' && aktion.startsWith('sprint-')) {
     const richtung = aktion.slice(7);
     if (!RICHTUNG[richtung] || !z.staerken.sprint) return [];
-    if (s.ruhe < SPRINT_KOSTET) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
+    if (s.ruhe < SPRINT_KOSTET && !z.wagen.sicher) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
     const ergebnis = sprinte(z, richtung, ereignisse);
     if (!ergebnis) return [{ typ: 'ungueltig', phase: 0, richtung, tuer: false }];
     bewegt = ergebnis.bewegt;
@@ -1233,9 +1296,15 @@ function fuehreAus(z, aktion) {
       ereignisse.push({ typ: 'gegoennt', phase: 0, x, y, herzen: s.herzen, zurueck, mehrAmTisch: z.mehrAmTisch });
       tat = { art: 'stoss' };
     }
-    if (!amTisch && !anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
-    const g = anDerTuer || amTisch ? null : gegnerAuf(z, x, y);
-    if (amTisch) {
+    const stehtImWeg = !amTisch && !anDerTuer && imWegAuf(z, x, y);
+    if (stehtImWeg) {
+      // gegen den, der in der Engstelle steht: Er rührt sich nicht gleich, der Zug ist vertan
+      tat = { art: 'stoss' };
+      ereignisse.push({ typ: 'angestossen', phase: 0, richtung: aktion, x, y });
+    }
+    if (!stehtImWeg && !amTisch && !anDerTuer && (!imFeld(x, y) || istHindernis(z, x, y))) return [{ typ: 'ungueltig', phase: 0, richtung: aktion, tuer: false }];
+    const g = anDerTuer || amTisch || stehtImWeg ? null : gegnerAuf(z, x, y);
+    if (amTisch || stehtImWeg) {
       // schon erledigt
     } else if (anDerTuer) {
       // Aufbrechen: Jede Tür gibt nach dreimal Dagegenlaufen nach und kostet ein Herz.
@@ -1282,6 +1351,11 @@ function fuehreAus(z, aktion) {
   }
   z.zug += 1;
   z.zuegeImWagen += 1;
+  // wer vor ihm wartet oder ihn anstößt, dem macht er nach PLATZ_NACH Zügen Platz
+  if (vorIhm && nebenImWeg(z)) {
+    z.wagen.imWeg.geduld += 1;
+    if (z.wagen.imWeg.geduld >= PLATZ_NACH) machtPlatz(z, ereignisse, 0, 'geduld');
+  }
   if (nochmal) {
     beginneProbe(z, ereignisse); // im Speisewagen geschieht in diesem Zug sonst nichts
     return ereignisse;
@@ -1330,10 +1404,15 @@ function fuehreAus(z, aktion) {
   // Phase 2: Gegner bewegen sich oder kündigen an
   planeGegner(z, dran, ereignisse, tat);
   oeffneTuer(z, ereignisse, 2); // der Kontrolleur kann gegangen sein
-  // neue Stärken gelten ab dem nächsten Zug
+  // Verstehen locht: den Kontrolleur durchschaut
+  if (ereignisse.some((e) => e.typ === 'durchgewinkt')) lochungFuerVerstehen(z, 'kontrolleur', ereignisse, 2);
+  // neue Stärken gelten ab dem nächsten Zug, und jede neue locht
   for (const [staerke, gegner] of spaeter) {
     const e = verstehe(z, staerke, gegner, 2);
-    if (e) ereignisse.push(e);
+    if (e) {
+      ereignisse.push(e);
+      lochungFuerVerstehen(z, gegner, ereignisse, 2);
+    }
   }
   return ereignisse;
 }
@@ -1372,7 +1451,7 @@ function erzeugeSpiel(seed, optionen = {}) {
     probe: null, // die Wiederholung: { zurueck } mit allem, was danach wieder gilt
     todDurch: null,
     todSzene: null, // { nr, zufall }: der Wagen, in dem die Fahrt endete
-    halt: null, // { genug, hell, fehlt } am Ende der Fahrt
+    halt: null, // { hell } am Ende der Fahrt: so viele helle Lochungen trägt die Karte
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);
@@ -1384,7 +1463,7 @@ function erzeugeSpiel(seed, optionen = {}) {
 // und für die Prüfwerkzeuge, damit beide dieselbe Fahrt beginnen.
 //
 // Eine Reise geht vom ersten Wagen bis zum Halt. Solange behält die Fahrkarte ihre Lochungen.
-// Am Halt verlangt der Schaffner drei helle Lochungen. Fehlen welche, geht es im Speisewagen weiter.
+// Am Halt steigt jeder aus, danach beginnt eine neue Reise mit leerer Karte.
 // Nach einem Tod sitzt der Begleiter im Speisewagen. Lag der Tod hinter dem Speisewagen,
 // beginnt die nächste Fahrt dort, sonst vorn: Niemand überspringt einen Wagen.
 
@@ -1396,10 +1475,7 @@ const SPEISEWAGEN_NR = WAGENPLAENE.findIndex((w) => w.sicher);
 // stand: { staerken, mehrAmTisch, fahrkarte }, vorige: der Zustand der vorigen Fahrt oder null
 function optionenFuerFahrt(stand, vorige) {
   const optionen = { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch, fahrkarte: stand.fahrkarte };
-  if (vorige && vorige.status === 'halt') {
-    if (vorige.halt && vorige.halt.genug === false) optionen.startWagen = SPEISEWAGEN_NR;
-    else optionen.fahrkarte = neueFahrkarte(); // ausgestiegen: eine neue Reise
-  }
+  if (vorige && vorige.status === 'halt') optionen.fahrkarte = neueFahrkarte(); // ausgestiegen: eine neue Reise
   if (vorige && vorige.status === 'tot') {
     optionen.begleiter = vorige.todDurch;
     optionen.szene = vorige.todSzene; // den Wagen kann er auf Wunsch wiederholen
@@ -1544,9 +1620,6 @@ const TEXTE = {
     einWagen: 'Noch ein Wagen / bis zum Halt',
     mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
     halt: 'Halt / Ankunft {zeit} Uhr',
-    // am Halt, wenn dem Schaffner helle Lochungen fehlen; danach geht es im Speisewagen weiter
-    fehltEine: 'Noch eine helle / Lochung',
-    fehlt: 'Noch {n} helle / Lochungen',
   },
 
   // Knöpfe am Halt
@@ -1560,6 +1633,13 @@ const TEXTE = {
   rueckblick: {
     tod: 'Ende durch {wer}',
     ehrlich: 'Antwort: {wer}',
+  },
+  // Rückblick für „Verstehen locht": die Handlung, durch die man den Gegner verstanden hat
+  verstanden: {
+    kontrolleur: 'Durchgewinkt',
+    pendler: 'Beim Pendler gewartet',
+    draengler: 'Drängler ausgewichen',
+    gruppe: 'Mit einem Herz hinaus',
   },
   wer: {
     pendler: 'Pendler',
@@ -2683,8 +2763,8 @@ function maleTonknopf(stift, ton, an) {
 // --- anzeige/karte.js
 // Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
 // Nach oben wegwischen beginnt die nächste Fahrt.
-// Arten: 'tod'; 'fehlt' (Halt, aber dem Schaffner fehlen helle Lochungen);
-// 'halt' (ausgestiegen: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Arten: 'tod'; 'halt' (jeder steigt aus: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Am Halt locht der Schaffner (karte.schaffner 'locht'), oder er nickt ('nickt'), wenn die Karte keine helle Lochung trägt.
 
 
 
@@ -2724,7 +2804,7 @@ function kartenMasse(layout, art) {
 }
 
 function maleBahnsteig(stift, r, karte, t) {
-  const halt = karte.art === 'halt' || karte.art === 'fehlt';
+  const halt = karte.art === 'halt';
   stift.save();
   rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
   stift.clip();
@@ -2842,7 +2922,15 @@ function maleBahnsteig(stift, r, karte, t) {
 
   maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
   // am Halt steht der Schaffner am Zug: der Begleiter, jetzt mit Mütze
-  if (halt) maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben: karte.art === 'fehlt' ? 0.8 : 0 });
+  if (halt) {
+    // in der ersten Sekunde: Er hebt die Zange und locht, oder er nickt einmal
+    const seit = karte.seit || 0;
+    const zug = Math.max(0, Math.min(1, seit / 900));
+    const auf = Math.sin(zug * Math.PI);
+    const heben = karte.schaffner === 'locht' ? 0.8 * auf : 0;
+    const nicken = karte.schaffner === 'nickt' && !karte.ruhig ? auf * 3 : 0;
+    maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3 + nicken, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben });
+  }
 
   if (halt) {
     // die Uhr am Bahnsteig zeigt die Ankunft
@@ -3031,6 +3119,8 @@ function erzeugeAnzeige(leinwand) {
     schwenk: 0,
     blende: 0, // beim Wechsel in die Wiederholung und zurück: wie viel vom alten Bild noch zu sehen ist
     probe: false, // in der Wiederholung beim Begleiter
+    anstoss: -1e9, // wann man zuletzt den in der Engstelle angestoßen hat
+    platz: null, // er geht an seinen Tisch: { von, nach, seit }
   };
   let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
@@ -3175,6 +3265,7 @@ function erzeugeAnzeige(leinwand) {
     return fahrkarte.lochungen.map((l) => {
       const ort = TEXTE.wagen[l.wagen] || '';
       if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      if (l.art === 'verstanden') return [TEXTE.verstanden[l.durch], ort];
       const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
       return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
     });
@@ -3219,6 +3310,18 @@ function erzeugeAnzeige(leinwand) {
         s.sx = r.x * hinUndHer(p) * 0.13;
         s.sy = r.y * hinUndHer(p) * 0.13;
       });
+    } else if (e.typ === 'angestossen') {
+      // gegen den, der in der Engstelle steht: Man stößt an, er schwankt ein wenig
+      const r = RICHTUNG[e.richtung];
+      bild.zug += 1;
+      bild.anstoss = jetzt;
+      bewege(jetzt, 110, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.2;
+        s.sy = r.y * hinUndHer(p) * 0.2;
+      });
+    } else if (e.typ === 'platzGemacht') {
+      // er geht an seinen Tisch und setzt sich
+      bild.platz = { von: e.von, nach: e.nach, seit: jetzt };
     } else if (e.typ === 'schlag') {
       const r = RICHTUNG[e.richtung];
       bild.zug += 1;
@@ -3287,14 +3390,11 @@ function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      if (e.genug) {
-        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
-        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
-        karte.knopftexte = TEXTE.knopf;
-      } else {
-        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
-        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
-      }
+      // jeder steigt aus; der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er
+      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+      karte.knopftexte = TEXTE.knopf;
+      karte.schaffner = e.hell > 0 ? 'locht' : 'nickt';
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -3781,9 +3881,21 @@ function erzeugeAnzeige(leinwand) {
         stift.fillStyle = FARBE.herz;
         stift.fill();
       }
+      const w = z.wagen.imWeg;
+      if (w && !imWechselNoch()) maleSprintZiel(w, oy, t);
       for (const f of z.wagen.fahrgaeste) {
-        const cx = boden.x + (f.x + 0.5) * s;
-        const fy = boden.y + (f.y + 0.8) * s + oy;
+        let fx = f.x;
+        let fyy = f.y;
+        const pl = bild.platz;
+        if (pl && f.x === pl.nach.x && f.y === pl.nach.y && jetzt - pl.seit < 260) {
+          const q = sanft(Math.min(1, (jetzt - pl.seit) / 260));
+          fx = pl.von.x + (pl.nach.x - pl.von.x) * q;
+          fyy = pl.von.y + (pl.nach.y - pl.von.y) * q;
+        }
+        let schwank = 0;
+        if (w && f.x === w.x && f.y === w.y && jetzt - bild.anstoss < 200 && !ruhig) schwank = Math.sin((jetzt - bild.anstoss) / 20) * s * 0.04;
+        const cx = boden.x + (fx + 0.5) * s + schwank;
+        const fy = boden.y + (fyy + 0.8) * s + oy;
         maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false, gesicht: true });
       }
       const b = bild.begleiter;
@@ -3880,6 +3992,25 @@ function erzeugeAnzeige(leinwand) {
     const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
     const seite = Math.sign(b.x - f.x);
     maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
+  }
+
+  function imWechselNoch() {
+    return bild.schwenk > 0.01;
+  }
+
+  // Sprint einführen: Steht man direkt vor dem in der Engstelle, leuchtet das Feld hinter ihm rund auf.
+  // Ein Tipp darauf ist der Sprint. Es zeigt die Richtung, kein Wort.
+  function maleSprintZiel(w, oy, t) {
+    const p = bild.spieler;
+    const dx = w.x - p.x;
+    const dy = w.y - p.y;
+    if (Math.abs(dx) + Math.abs(dy) !== 1 || p.sx || p.sy || p.px !== p.x || p.py !== p.y) return;
+    const x = w.x + dx;
+    const y = w.y + dy;
+    if (x < 0 || y < 0 || y >= z.wagen.plan.length || x >= z.wagen.plan[y].length || z.wagen.plan[y][x] !== '.') return;
+    const { boden, s } = layout;
+    const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
+    maleNutzschein(boden.x + (x + 0.5) * s, boden.y + (y + 0.5) * s + oy, puls);
   }
 
   // Was nützt, liegt rund auf dem Boden: ein weicher Schein und ein dünner Kreis, nie Streifen.
@@ -4013,6 +4144,7 @@ function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      karte.seit = jetzt - karte.start;
       // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
       if (karte.rueckblick && !karte.rueckblickFertig) {
         const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);
@@ -4106,11 +4238,13 @@ function wischrichtung(dx, dy) {
   return dy > 0 ? 'runter' : 'hoch';
 }
 
-// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen() }
+// melde: { aktion(name, quelle), tipp(x, y), losgelassen(), karteOffen(), finger(richtung oder null) }
+// finger: Nach einem Wisch, solange der Finger liegt, die Richtung des Wischs; null, sobald er weg ist.
 function verbindeEingabe(flaeche, melde) {
   let finger = null;
 
   flaeche.addEventListener('pointerdown', (e) => {
+    melde.beruehrt();
     if (finger) return;
     finger = { id: e.pointerId, x: e.clientX, y: e.clientY, erledigt: false };
     if (flaeche.setPointerCapture) {
@@ -4129,7 +4263,9 @@ function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < WISCHWEG) return;
     finger.erledigt = true;
-    melde.aktion(wischrichtung(dx, dy), 'wisch');
+    const richtung = wischrichtung(dx, dy);
+    melde.aktion(richtung, 'wisch');
+    melde.finger(richtung);
   });
 
   const loslassen = (e) => {
@@ -4138,6 +4274,7 @@ function verbindeEingabe(flaeche, melde) {
     const dy = e.clientY - finger.y;
     const fertig = finger.erledigt;
     finger = null;
+    melde.finger(null);
     if (e.type === 'pointerup') melde.losgelassen();
     if (fertig || e.type !== 'pointerup') return;
     if (Math.hypot(dx, dy) < TIPPWEG) {
@@ -4166,9 +4303,71 @@ function verbindeEingabe(flaeche, melde) {
     const name = TASTEN[e.code] || (e.code === 'Enter' ? 'hoch' : null);
     if (!name) return;
     e.preventDefault();
+    melde.beruehrt();
     if (e.code === 'Enter' && !melde.karteOffen()) return;
     melde.aktion(name, 'taste');
   });
+}
+
+// --- kern/leerlauf.js
+// Leerlauf vor der Tür (Schritt 6 aus docs/auftraege/leitsaetze.md, Leitsatz 1 und „Reibung ist ein Fehler").
+// Ist ein Wagen gefahrlos, sind es bis zur Tür oft acht Schritte ohne Entscheidung, im Speisewagen immer.
+// Zwei Varianten, der Auftraggeber wählt am Gerät (Adresse mit #leerlauf=halten oder #leerlauf=tuer):
+//   'halten'  Finger nach dem Wischen liegen lassen: Der Schritt wiederholt sich.
+//   'tuer'    Tipp auf die offene Tür: Die Figur läuft den kürzesten Weg hin und hindurch.
+// Beide wirken nur, solange kein Gegner im Wagen ist. Jeder Schritt ist ein gewöhnlicher Zug.
+// Reine Logik ohne Browser; den Takt gibt main.js vor.
+
+
+
+
+const LEERLAUF_ARTEN = ['tuer', 'halten'];
+const LEERLAUF_ANFANG = 'tuer';
+const LEERLAUF_TAKT = 160; // ms von Schritt zu Schritt
+const HALTEN_AB = 280; // ms, so lange liegt der Finger nach dem Wischen, bevor es weitergeht
+
+// Gefahrlos heißt: Die Fahrt läuft, und kein Gegner ist im Wagen (auch der Speisewagen).
+function istGefahrlos(z) {
+  return z.status === 'faehrt' && z.gegner.length === 0;
+}
+
+// Felder, auf die der Lauf nicht von selbst tritt: Antworten und „Noch mal" beim Begleiter,
+// das Angebot und der Drängler in der Engstelle. Dort entscheidet der Spieler selbst.
+function gesperrt(z, x, y, ohneImWeg) {
+  const b = z.begleiter;
+  if (b && b.antworten && b.antworten.some((a) => a.x === x && a.y === y)) return true;
+  if (b && b.wiederholen && b.wiederholen.x === x && b.wiederholen.y === y) return true;
+  if (z.angebot && z.angebot.x === x && z.angebot.y === y) return true;
+  if (!ohneImWeg && z.wagen.imWeg && z.wagen.imWeg.x === x && z.wagen.imWeg.y === y) return true;
+  return false;
+}
+
+// Der nächste Schritt zur Tür und durch sie hindurch, oder null, wenn der Weg nicht frei ist.
+function schrittZurTuer(z) {
+  if (!istGefahrlos(z) || !z.tuerOffen) return null;
+  const s = z.spieler;
+  if (s.x === TUERFELD.x && s.y === TUERFELD.y) return 'hoch';
+  // Der Drängler in der Engstelle zählt beim Suchen als Weg: Man läuft bis vor ihn und hält dort an.
+  const weit = entfernungen(TUERFELD, (x, y) => !istHindernis(z, x, y) && !gesperrt(z, x, y, true));
+  const schritt = naechsterSchritt(s, weit, TUERFELD);
+  if (!schritt || gesperrt(z, schritt.x, schritt.y)) return null;
+  return schritt.richtung;
+}
+
+// Darf der gehaltene Finger noch einen Schritt in diese Richtung tun?
+function darfWeiterHalten(z, richtung) {
+  if (!istGefahrlos(z) || !RICHTUNG[richtung]) return false;
+  const s = z.spieler;
+  const x = s.x + RICHTUNG[richtung].x;
+  const y = s.y + RICHTUNG[richtung].y;
+  if (richtung === 'hoch' && s.x === TUERFELD.x && s.y === TUERFELD.y) return z.tuerOffen;
+  return imFeld(x, y) && !istHindernis(z, x, y) && !gesperrt(z, x, y);
+}
+
+// Nach jedem Schritt des Laufs: Ging alles glatt, oder ist etwas geschehen, das der Spieler sehen soll?
+// Glatt sind nur Schritt, Wagenwechsel und das Heilen beim Hineingehen.
+function istGlatt(ereignisse) {
+  return ereignisse.length > 0 && ereignisse.every((e) => e.typ === 'schritt' || e.typ === 'wagenwechsel' || e.typ === 'geheilt');
 }
 
 // --- speicher.js
@@ -4183,7 +4382,8 @@ function leererStand() {
   // mehrAmTisch: so viele sitzen nach dem Gönnen später zusätzlich im Speisewagen
   // fahrkarte: die Lochungen der laufenden Reise, bis zum Halt
   // fahrt: Seed und Eingaben der letzten Fahrt, zum Fortsetzen nach dem Öffnen (kern/fortsetzen.js)
-  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte(), fahrt: null };
+  // leerlauf: welche Variante gegen den Leerlauf vor der Tür gilt (kern/leerlauf.js), gewählt mit #leerlauf=
+  return { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: neueFahrkarte(), fahrt: null, leerlauf: LEERLAUF_ANFANG };
 }
 
 // Nimmt nur, was die erwartete Form hat. Alles andere bleibt auf dem Anfangswert.
@@ -4200,6 +4400,7 @@ function bereinigeStand(roh) {
   if (Number.isInteger(roh.mehrAmTisch) && roh.mehrAmTisch >= 0) stand.mehrAmTisch = Math.min(5, roh.mehrAmTisch);
   stand.fahrkarte = bereinigeFahrkarte(roh.fahrkarte);
   stand.fahrt = bereinigeAufzeichnung(roh.fahrt);
+  if (LEERLAUF_ARTEN.includes(roh.leerlauf)) stand.leerlauf = roh.leerlauf;
   return stand;
 }
 
@@ -4332,6 +4533,9 @@ function erzeugeTon() {
     },
     kontrolle: () => klang(2600, 2400, 0.02, 0.12, 'square'), // die Zange klickt
     sprint: () => hauch(1500, 0.12, 0.35),
+    // Sprint einführen: an den in der Engstelle stoßen, und wie er Platz macht
+    angestossen: () => klang(150, 130, 0.08, 0.3, 'triangle'),
+    platzGemacht: () => klang(392, 523, 0.16, 0.13, 'sine', 0.04),
     geheilt: () => {
       klang(523, 523, 0.3, 0.16, 'sine');
       klang(659, 659, 0.36, 0.14, 'sine', 0.12);
@@ -4378,6 +4582,7 @@ function erzeugeTon() {
           schon.add('aufRot');
         }
         if (e.typ === 'schlag') KLAENGE.schlag();
+        if (e.typ === 'halt' && e.hell > 0) klang(2600, 2400, 0.02, 0.12, 'square', 0.57); // der Schaffner locht
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);
       }
@@ -4406,11 +4611,22 @@ function erzeugeTon() {
 
 
 
+
 const leinwand = document.getElementById('bild');
 const anzeige = erzeugeAnzeige(leinwand);
 const ton = erzeugeTon();
 
 const stand = ladeStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
+
+// Leerlauf vor der Tür: Die Variante wählt der Auftraggeber am Gerät mit #leerlauf=halten oder #leerlauf=tuer.
+// Sie wird gemerkt. Siehe kern/leerlauf.js.
+const leerlaufWahl = /[#&]leerlauf=(\w+)/.exec(window.location.hash);
+if (leerlaufWahl && LEERLAUF_ARTEN.includes(leerlaufWahl[1])) {
+  stand.leerlauf = leerlaufWahl[1];
+  sichereStand(stand);
+}
+let lauf = null; // Tipp auf die offene Tür: { naechster } bis zur Tür und hindurch
+let gehalten = null; // Finger liegt nach dem Wisch: { richtung, naechster }
 
 const grobesZeigen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 let mitTasten = !grobesZeigen;
@@ -4499,10 +4715,11 @@ function gibEin(aktion, quelle) {
   }
   anzeige.beschleunige(jetzt);
   const ereignisse = spiel.act(aktion);
-  if (!ereignisse.length) return;
+  if (!ereignisse.length) return ereignisse;
   anzeige.spiele(ereignisse, jetzt);
   ton.spiele(ereignisse);
   merke(ereignisse, aktion);
+  return ereignisse;
 }
 
 function tippe(x, y) {
@@ -4522,6 +4739,8 @@ function tippe(x, y) {
     sichereStand(stand);
   } else if (ziel.art === 'uhr') {
     gibEin('warten', 'tipp');
+  } else if (ziel.art === 'feld' && ziel.y === -1 && stand.leerlauf === 'tuer' && abstand({ x: ziel.x, y: 0 }, spiel.zustand.spieler) > 1 && schrittZurTuer(spiel.zustand)) {
+    lauf = { naechster: performance.now() }; // Tipp auf die offene Tür im gefahrlosen Wagen: hinlaufen
   } else if (ziel.art === 'feld') {
     const s = spiel.zustand.spieler;
     const dx = ziel.x - s.x;
@@ -4533,7 +4752,24 @@ function tippe(x, y) {
   }
 }
 
+// Der Takt des Leerlaufs: ein gewöhnlicher Zug nach dem anderen, solange alles glatt geht.
+function leerlauf(jetzt) {
+  if (lauf && jetzt >= lauf.naechster) {
+    const richtung = schrittZurTuer(spiel.zustand);
+    const e = richtung ? gibEin(richtung, 'lauf') : null;
+    if (!e || !istGlatt(e) || e.some((x) => x.typ === 'wagenwechsel')) lauf = null;
+    else lauf.naechster = jetzt + LEERLAUF_TAKT;
+  }
+  if (gehalten && stand.leerlauf === 'halten' && jetzt >= gehalten.naechster) {
+    if (!darfWeiterHalten(spiel.zustand, gehalten.richtung)) return;
+    const e = gibEin(gehalten.richtung, 'halten');
+    if (!istGlatt(e)) gehalten = null;
+    else gehalten.naechster = jetzt + LEERLAUF_TAKT;
+  }
+}
+
 function schleife(jetzt) {
+  leerlauf(jetzt);
   anzeige.zeichne(jetzt);
   window.requestAnimationFrame(schleife);
 }
@@ -4547,7 +4783,19 @@ anzeige.melder.takt = () => ton.takt();
 anzeige.passeAn();
 beginne(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
-verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
+verbindeEingabe(leinwand, {
+  aktion: gibEin,
+  tipp: tippe,
+  losgelassen: () => ton.wecke(),
+  karteOffen: () => anzeige.zeigtKarte(),
+  // jede neue Berührung und jede Taste beendet den Lauf zur Tür
+  beruehrt: () => {
+    lauf = null;
+  },
+  finger: (richtung) => {
+    gehalten = richtung ? { richtung, naechster: performance.now() + HALTEN_AB } : null;
+  },
+});
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());
 if (window.visualViewport) window.visualViewport.addEventListener('resize', () => anzeige.passeAn());
 window.requestAnimationFrame(schleife);

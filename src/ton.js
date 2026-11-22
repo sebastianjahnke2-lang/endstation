@@ -109,6 +109,9 @@ export function erzeugeTon() {
     },
     kontrolle: () => klang(2600, 2400, 0.02, 0.12, 'square'), // die Zange klickt
     sprint: () => hauch(1500, 0.12, 0.35),
+    // Sprint einführen: an den in der Engstelle stoßen, und wie er Platz macht
+    angestossen: () => klang(150, 130, 0.08, 0.3, 'triangle'),
+    platzGemacht: () => klang(392, 523, 0.16, 0.13, 'sine', 0.04),
     geheilt: () => {
       klang(523, 523, 0.3, 0.16, 'sine');
       klang(659, 659, 0.36, 0.14, 'sine', 0.12);
@@ -155,6 +158,7 @@ export function erzeugeTon() {
           schon.add('aufRot');
         }
         if (e.typ === 'schlag') KLAENGE.schlag();
+        if (e.typ === 'halt' && e.hell > 0) klang(2600, 2400, 0.02, 0.12, 'square', 0.57); // der Schaffner locht
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);
       }

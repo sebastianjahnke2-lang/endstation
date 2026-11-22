@@ -11,7 +11,7 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Gesichter: ja.** Verstandene Fahrgäste im Speisewagen haben ein Gesicht, wie im Fahrplan. Gegner und alle anderen Figuren bleiben ohne Gesicht, der Prototyp auch.
 - **Lob: nein.** Der Begleiter nennt nicht, was gelungen ist. Die Zeile im Fahrplan („nennt zuerst, was neu gelungen ist") gilt nicht mehr.
 - **Prototyp und Hauptspiel** (vom Auftraggeber an Claude übergeben): „Der freie Platz" bleibt ein eigener Versuch, bis der Spieltest gelaufen ist. Nennen mindestens drei von fünf Testpersonen den Schatten, wird er in Etappe 3 eine weitere Form des Autoritätswagens, neben Kontrolleur, Ruhebereich und erster Klasse. Damit ist auch „Rätsel oder Taktik" beantwortet: Das Hauptspiel bleibt ein Taktikspiel, Regelwagen wie dieser sind eine Szene darin. Die verbindlichen Vorgaben aus dem Prototyp-Auftrag gelten nur für den Prototyp. Fürs Hauptspiel entscheidet der Auftraggeber Punkt für Punkt, wie bei Gesichtern und Lob.
-- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt.
+- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt. **Geändert am 22.11. vom Auftraggeber (Schritt 4 der Leitsätze): Halt ohne Sperre, siehe unten.**
 
 ### Betrifft den Prototyp unmittelbar
 
@@ -57,7 +57,7 @@ Von Claude beim Prüfen gefunden:
 - **Leitsatz 8 und Belohnungen ohne Verwendung.** „Jede Belohnung hat sofort eine Verwendung." Rückhalt wirkt nur bei einem tödlichen Treffer und bleibt oft ungenutzt. Fahrkarte: Nach Schritt 4 (Halt ohne Sperre) sind Lochungen nur noch Spur für den Rückblick, ohne Verwendung in der Fahrt.
 - **Leitsatz 12 und Bestwerte.** Fahrplan Etappe 5: „Bestwerte nur gegen sich selbst". Leitsatz 12: nie ein Punktestand.
 - **Leitsatz 4 und Angebote.** Jeder Kampfwagen bekommt zusätzlich zu seinem Gedanken ein Angebot. Befund in `docs/WAGEN-PRUEFUNG.md`.
-- **Schritt 4 und die Entscheidung vom 19.11.** Der Auftraggeber hat angekündigt, „drei helle Lochungen am Halt" aufzuheben. Eingetragen wird es erst mit Schritt 4, nach seiner Rückmeldung.
+- **Schritt 4 und die Entscheidung vom 19.11.** Erledigt am 22.11.: Halt ohne Sperre ist gebaut, siehe „Halt ohne Sperre".
 
 ## Prototyp „Der freie Platz"
 
@@ -363,3 +363,32 @@ Leitsätze 2, 5 und 7. Am Boden liegen vier Arten: Angebot (Prüfungssymbol), ro
 - **Wirkung beim Betreten:** Angebot: Worte, warmer Ring um die Figur, eigener Klang, beim Lochen ein Zangenklick. Rotes Feld: Ausrufezeichen wie bisher, dazu ein tiefer doppelter Ton. Antwort: ein kurzer steigender Ton. „Noch mal" hatte schon einen.
 - **Ohne Farbe unterscheidbar:** Gefahr ist eckig und schräg gestreift, Nutzen ist rund mit dünnem Kreis und weichem Schein. Liegt ein Symbol vor der Tür, fehlen die Winkel des Türlichts, damit es lesbar bleibt.
 - **Zahlen:** `npm run balance` vorher und nachher gleich (86 / 55 / 73 %, Ausweicher 60 %, Kämpfer 0 %). Wagen 1 ist fast unverändert, nur der Kämpfer bekommt dort jetzt im Schnitt 0,3 Treffer, weil er in das Ausholen hineinläuft.
+
+## Sprint einführen (22.11., Warteschlange Abschnitt 1, Auftrag 1)
+Leitsätze 2 (gelernt wird im Spiel), 6 (Hilfe zeigt die Richtung) und 8 (jede Belohnung hat sofort eine Verwendung).
+- **Ort: die Engstelle im Speisewagen.** Er ist der einzige sichere Wagen und kommt in jeder Fahrt nach dem Verdienen des Sprints (Wagen 6) als Nächstes vor. In Reihe 5 des Wagens stehen jetzt Koffer bis auf ein Feld in der Mitte (`KK.KK`). Die Bauregel gilt dort nicht: Sie sichert das Ausweichen, und im sicheren Wagen wird nichts angekündigt. Der Test nimmt nur dieses eine Feld aus.
+- **Wer dort steht: der verstandene Drängler.** Nur wer den Sprint hat, findet ihn stehend in der Engstelle statt an seinem Tisch. Ohne Sprint ist die Engstelle frei, Erstspieler merken nichts außer den Koffern.
+- **Brauchen ohne Zwang.** Ein Sprint führt durch ihn hindurch, ohne Schaden, danach setzt er sich an seinen Tisch. Wer stattdessen vor ihm wartet oder ihn anstößt, dem macht er nach zwei Zügen Platz. Niemand hängt fest (Leitsatz 6), Abwarten kostet zwei Züge (Leitsatz 1). Anstoßen ist ein Zug, keine ungültige Eingabe, so wie das Stoßen gegen die Tür.
+- **Gefahrlos ausprobieren:** Im Speisewagen kostet ein Sprint keine Ruhe. Sonst könnte man ihn dort oft gar nicht ausprobieren, weil man mit leerer Ruhe ankommt. Überall sonst kostet er weiter eine.
+- **Hilfe ohne Wort:** Steht man direkt vor ihm, leuchtet das Feld hinter ihm rund auf, in der Form für Nutzen. Ein Tipp darauf ist der Sprint. Kein Hinweiswort.
+- **Wirkung:** Anstoßen: er schwankt, ein tiefer kurzer Ton. Platz machen: er geht an seinen Tisch, ein kleiner steigender Ton.
+- **Zahlen:** `npm run balance` ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 % wie vorher. Mit Fehlern 56 % statt 55 %: Die zufälligen Züge treffen im engeren Speisewagen anders, gefährlich ist er nicht.
+- **Für die Rückmeldung:** Am Rechner gibt es weiter keinen Sprint (nur Tippen). Dort macht er nach zwei Zügen Platz.
+
+## Halt ohne Sperre (22.11., Warteschlange Abschnitt 1, Auftrag 2; Schritt 4 aus `docs/auftraege/leitsaetze.md`)
+Ändert die Entscheidung vom 19.11. („am Halt drei helle Lochungen"), auf Wunsch des Auftraggebers. Leitsätze 12 (kein Zähler als Sperre) und 7 (Verstehen wird anerkannt, ohne Lobtext).
+- **Wer den letzten Wagen schafft, steigt aus**, mit beliebig vielen Lochungen, auch mit null. Danach beginnt eine neue Reise mit leerer Karte, die nächste Fahrt vorn. Gestrichen: das Weiterfahren ab dem Speisewagen bei fehlenden Lochungen, die Zeilen „Noch n helle Lochungen" und die Endkarte dazu.
+- **Der Schaffner locht oder nickt.** Trägt die Karte mindestens eine helle Lochung, hebt er in der ersten Sekunde die Zange, dazu ihr Klick. Sonst nickt er einmal (bei reduzierter Bewegung steht er still). Er hält niemanden auf, die Knöpfe kommen wie bisher nach dem Rückblick.
+- **Lochungen bleiben Spur:** Sie bestimmen nur, was der Rückblick zeigt, je Lochung eine Tatsache mit Ort. Ohne Lochung steht nur die Ankunftszeit.
+- **Verstehen locht:** neue Lochungsart `verstanden`, hell, je Gegner höchstens eine auf der Karte. Sie kommt, wenn der Kontrolleur durchwinkt und wenn eine Stärke neu verdient wird (Pendler, Drängler, Reisegruppe). Wer eine Stärke schon aus einer früheren Fahrt hat, verdient sie nicht noch einmal und bekommt dafür keine Lochung. Den Kontrolleur kann man auf jeder Reise neu durchschauen. In der Wiederholung beim Begleiter zählt nichts.
+- **Rückblick-Zeilen dazu** (Handlung statt Urteil): „Durchgewinkt", „Beim Pendler gewartet", „Drängler ausgewichen", „Mit einem Herz hinaus", darunter der Wagen.
+- **Zahlen:** `npm run balance` unverändert (86 / 56 / 73 %, Ausweicher 60 %, Kämpfer 0 %). Die Bots zählen nur das Erreichen des Halts.
+
+## Leerlauf vor der Tür (22.11., Warteschlange Abschnitt 1, Auftrag 3; Schritt 6 aus `docs/auftraege/leitsaetze.md`)
+Bauprinzip „Reibung ist ein Fehler" und Leitsatz 1 (nach der Entscheidung kein Weg ohne Entscheidung). Regeln in `src/kern/leerlauf.js`, Takt in `src/main.js`.
+- **Gefahrlos heißt: kein Gegner im Wagen.** Das ist der Speisewagen und jeder Kampfwagen, sobald der letzte Gegner fort ist. Im Mittelwagen bleibt es aus, solange nach dem Kontrolleur noch Pendler dort sind.
+- **Umschalten mit der Adresse**, kein Knopf im Spiel (keine Erklärung, kein Menü): `#leerlauf=tuer` oder `#leerlauf=halten`. Die Wahl wird gemerkt (Speicher `leerlauf`, Anfangswert `tuer`, mit Test). Warum `tuer` als Anfang: Die offene Tür leuchtet schon, ein Tipp darauf liegt nahe; den liegenden Finger findet man eher durch Zufall.
+- **Variante Tür:** Tipp auf die offene Tür (der Streifen über dem obersten Feld) läuft den kürzesten Weg hin und hindurch, ein Schritt alle 160 ms, jeder ein gewöhnlicher Zug. Hinter der Tür hält der Lauf an. Jede Berührung und jede Taste hält ihn sofort an.
+- **Variante Halten:** Nach einem Wisch den Finger liegen lassen: nach 280 ms ein Schritt alle 160 ms in dieselbe Richtung, bis etwas im Weg ist oder der Finger weg ist. Durch die offene Tür geht es mit; in einem Wagen mit Gegnern hört es auf.
+- **Der Lauf entscheidet nichts:** Er tritt nie auf ein Angebot, auf Antworten oder „Noch mal" beim Begleiter und stößt den Drängler in der Engstelle nicht an. Dort hält er davor an. Passiert unterwegs etwas anderes als ein Schritt (etwa das Gespräch mit dem Begleiter), hält er ebenfalls an.
+- **Zahlen:** unverändert, die Bots benutzen den Leerlauf nicht.

@@ -6,6 +6,7 @@ import { erzeugeSpiel, HERZEN_VOLL, RUHE_VOLL } from '../src/kern/spiel.js';
 import { neuerGegner } from '../src/kern/gegner.js';
 import { WAGENPLAENE, WAGENZAHL } from '../src/kern/wagen.js';
 import { istMarkiert } from '../src/kern/lage.js';
+import { TEXTE } from '../src/texte.js';
 
 const LEER = ['.....', '.....', '.....', '.....', '.....', '.....', '.....', '.....'];
 
@@ -547,8 +548,9 @@ test('Reisegruppe verstehen: Wer ihren Wagen mit einem Herz verlässt, bekommt R
   const spiel = szene({ spieler: [2, 0], herzen: 1 });
   spiel.zustand.wagen.mitGruppe = true;
   const e = spiel.act('hoch');
-  assert.deepEqual(typen(e), ['wagenwechsel', 'verstanden']);
+  assert.deepEqual(typen(e), ['wagenwechsel', 'verstanden', 'gelocht']);
   assert.equal(e[1].staerke, 'rueckhalt');
+  assert.equal(e[2].art, 'verstanden', 'Verstehen locht');
   const ohne = szene({ spieler: [2, 0], herzen: 2 });
   ohne.zustand.wagen.mitGruppe = true;
   assert.deepEqual(typen(ohne.act('hoch')), ['wagenwechsel'], 'mit zwei Herzen nicht');
@@ -642,7 +644,69 @@ test('Speisewagen: An den Tischen sitzt, wen der Spieler verstanden hat', () => 
   assert.deepEqual(ohne.wagen.fahrgaeste, []);
   const mit = erzeugeSpiel(9, { startWagen: 3, staerken: { warten: true, sprint: true } }).zustand;
   assert.deepEqual(mit.wagen.fahrgaeste.map((f) => f.typ).sort(), ['draengler', 'pendler']);
-  for (const f of mit.wagen.fahrgaeste) assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
+  for (const f of mit.wagen.fahrgaeste) {
+    if (f.typ === 'draengler') continue; // er steht zuerst in der Engstelle, siehe unten
+    assert.notEqual(mit.wagen.plan[f.y][f.x], '.', 'sie sitzen auf Plätzen, nicht im Gang');
+  }
+});
+
+// ---------------------------------------------------------------- Sprint einführen (22.11.)
+
+function vorDerEngstelle(staerken = { sprint: true }) {
+  const spiel = erzeugeSpiel(9, { startWagen: 3, staerken });
+  const z = spiel.zustand;
+  for (const r of ['hoch', 'hoch']) spiel.act(r); // vom Start (2,7) bis unter die Engstelle (2,5)
+  return { spiel, z };
+}
+
+test('Sprint einführen: Wer den Drängler verstanden hat, findet ihn stehend in der Engstelle des Speisewagens', () => {
+  const ohne = erzeugeSpiel(9, { startWagen: 3 }).zustand;
+  assert.equal(ohne.wagen.imWeg, null, 'ohne Sprint steht dort niemand');
+  assert.equal(ohne.wagen.plan[4], 'KK.KK', 'die Engstelle ist eng');
+  const { z } = vorDerEngstelle();
+  assert.deepEqual([z.wagen.imWeg.x, z.wagen.imWeg.y], [2, 4]);
+  const d = z.wagen.fahrgaeste.find((f) => f.typ === 'draengler');
+  assert.deepEqual([d.x, d.y], [2, 4]);
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5]);
+});
+
+test('Sprint einführen: Ein Sprint führt an ihm vorbei, kostet im Speisewagen keine Ruhe, dann setzt er sich', () => {
+  const { spiel, z } = vorDerEngstelle();
+  assert.equal(z.spieler.ruhe, 0, 'auch ohne Ruhe');
+  const herzen = z.spieler.herzen;
+  const e = spiel.act('sprint-hoch');
+  assert.ok(e.some((x) => x.typ === 'sprint'));
+  const platz = e.find((x) => x.typ === 'platzGemacht');
+  assert.equal(platz.wie, 'sprint');
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 3]);
+  assert.equal(z.spieler.ruhe, 0);
+  assert.equal(z.spieler.herzen, herzen);
+  assert.equal(z.wagen.imWeg, null);
+  const d = z.wagen.fahrgaeste.find((f) => f.typ === 'draengler');
+  assert.notEqual(z.wagen.plan[d.y][d.x], '.', 'er sitzt wieder');
+});
+
+test('Sprint einführen: Wer wartet oder ihn anstößt, dem macht er nach zwei Zügen Platz', () => {
+  const { spiel, z } = vorDerEngstelle();
+  const e1 = spiel.act('hoch');
+  assert.ok(e1.some((x) => x.typ === 'angestossen'));
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 5], 'man kommt nicht durch ihn hindurch');
+  assert.ok(z.wagen.imWeg);
+  const e2 = spiel.act('warten');
+  assert.equal(e2.find((x) => x.typ === 'platzGemacht').wie, 'geduld');
+  assert.equal(z.wagen.imWeg, null);
+  spiel.act('hoch');
+  assert.deepEqual([z.spieler.x, z.spieler.y], [2, 4], 'jetzt ist die Engstelle frei');
+});
+
+test('Sprint einführen: Außerhalb des Speisewagens kostet ein Sprint weiter eine Ruhe', () => {
+  const spiel = erzeugeSpiel(9, { staerken: { sprint: true } });
+  const z = spiel.zustand;
+  z.spieler.ruhe = 0;
+  assert.equal(spiel.act('sprint-hoch')[0].typ, 'ungueltig');
+  z.spieler.ruhe = 2;
+  spiel.act('sprint-hoch');
+  assert.equal(z.spieler.ruhe, 1);
 });
 
 // ---------------------------------------------------------------- Gönnen (Etappe 2)
@@ -1061,12 +1125,12 @@ test('Reise: Nach einem Tod hinter dem Speisewagen beginnt die nächste Fahrt do
   const vorn = optionenFuerFahrt(stand, { status: 'tot', wagenNr: 1, todDurch: 'pendler' });
   assert.equal(vorn.startWagen, undefined);
   assert.equal(vorn.begleiter, 'pendler');
-  const neu = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { genug: true } });
+  const neu = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { hell: 3 } });
   assert.deepEqual(neu.fahrkarte, { lochungen: [] }, 'nach dem Aussteigen beginnt eine neue Reise');
   assert.equal(neu.begleiter, undefined);
-  const weiter = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { genug: false } });
-  assert.equal(weiter.fahrkarte, stand.fahrkarte, 'fehlen Lochungen, bleibt die Karte');
-  assert.equal(weiter.startWagen, SPEISEWAGEN_NR, 'und es geht im Speisewagen weiter');
+  const ohne = optionenFuerFahrt(stand, { status: 'halt', wagenNr: WAGENZAHL - 1, halt: { hell: 0 } });
+  assert.deepEqual(ohne.fahrkarte, { lochungen: [] }, 'auch ohne helle Lochung: ausgestiegen, neue Reise');
+  assert.equal(ohne.startWagen, undefined, 'die nächste Fahrt beginnt vorn');
   assert.deepEqual(optionenFuerFahrt(stand, null).staerken, { warten: true });
 });
 
@@ -1083,14 +1147,55 @@ function amHalt(lochungen) {
   return { spiel, z, e: spiel.act('hoch') };
 }
 
-test('Halt: Der Schaffner verlangt drei helle Lochungen, egal welche', () => {
-  const genug = amHalt([{ art: 'pruefung', id: 'ruhe' }, { art: 'ehrlich', durch: 'pendler' }, { art: 'tod', durch: 'gruppe', hell: true }]);
-  assert.equal(genug.z.status, 'halt');
-  assert.deepEqual(genug.z.halt, { genug: true, hell: 3, fehlt: 0 });
-  assert.equal(genug.e.find((x) => x.typ === 'halt').genug, true);
-  // der Kontrolleur ist nicht im letzten Wagen: seine dunkle Lochung bleibt dunkel
+test('Halt ohne Sperre: Wer den letzten Wagen schafft, steigt aus, auch mit null hellen Lochungen', () => {
+  const leer = amHalt([]);
+  assert.equal(leer.z.status, 'halt');
+  assert.deepEqual(leer.z.halt, { hell: 0 });
+  const halt = leer.e.find((x) => x.typ === 'halt');
+  assert.equal(halt.hell, 0);
+  assert.equal(halt.genug, undefined, 'nichts verlangt eine Mindestzahl');
+  assert.equal(optionenFuerFahrt({ staerken: {}, mehrAmTisch: 0, fahrkarte: leer.z.fahrkarte }, leer.z).startWagen, undefined);
+  // der Kontrolleur ist nicht im letzten Wagen: seine dunkle Lochung bleibt dunkel und zählt nicht als hell
   const knapp = amHalt([{ art: 'pruefung', id: 'ruhe' }, { art: 'tod', durch: 'kontrolleur', hell: false }]);
-  assert.deepEqual(knapp.z.halt, { genug: false, hell: 1, fehlt: 2 }, 'dunkle Lochungen zählen nicht');
+  assert.deepEqual(knapp.z.halt, { hell: 1 });
+  assert.equal(knapp.z.status, 'halt');
+});
+
+test('Halt ohne Sperre: Kein Text verlangt noch helle Lochungen', () => {
+  assert.equal(TEXTE.ende.fehlt, undefined);
+  assert.equal(TEXTE.ende.fehltEine, undefined);
+});
+
+test('Verstehen locht: den Kontrolleur durchschaut, eine helle Lochung, je Karte einmal', () => {
+  const spiel = erzeugeSpiel(4, { startWagen: 2 });
+  const z = spiel.zustand;
+  z.gegner = z.gegner.filter((g) => g.typ === 'kontrolleur');
+  const k = z.gegner[0];
+  z.spieler.x = k.x;
+  z.spieler.y = k.y + 1; // in seiner Nähe
+  let e = [];
+  for (let i = 0; i < 6 && !e.some((x) => x.typ === 'durchgewinkt'); i++) e = spiel.act('warten');
+  assert.ok(e.some((x) => x.typ === 'durchgewinkt'), 'er winkt durch');
+  const l = z.fahrkarte.lochungen.find((x) => x.art === 'verstanden');
+  assert.deepEqual(l, { art: 'verstanden', durch: 'kontrolleur', hell: true, wagen: 'mittelwagen' });
+  assert.ok(e.some((x) => x.typ === 'gelocht' && x.art === 'verstanden' && x.hell));
+});
+
+test('Verstehen locht: eine Stärke verdient, eine helle Lochung', () => {
+  const spiel = szene({ spieler: [2, 4], gegner: [{ typ: 'pendler', x: 2, y: 3, mit: STILL }] });
+  const z = spiel.zustand;
+  let e = [];
+  for (let i = 0; i < 3; i++) e = spiel.act('warten');
+  assert.ok(e.some((x) => x.typ === 'verstanden'));
+  assert.ok(z.fahrkarte.lochungen.some((x) => x.art === 'verstanden' && x.durch === 'pendler' && x.hell));
+  // wer die Stärke schon hat, verdient sie nicht noch einmal und bekommt keine Lochung
+  const wieder = erzeugeSpiel(1, { staerken: { warten: true } });
+  assert.equal(wieder.zustand.fahrkarte.lochungen.length, 0);
+});
+
+test('Verstehen locht: Die Lochung übersteht den Speicher, Fremdes nicht', () => {
+  const k = erzeugeSpiel(1, { fahrkarte: { lochungen: [{ art: 'verstanden', durch: 'draengler', wagen: 'liegewagen' }, { art: 'verstanden', durch: 'tuer' }, { art: 'verstanden', durch: 'draengler' }] } }).zustand.fahrkarte;
+  assert.deepEqual(k.lochungen, [{ art: 'verstanden', durch: 'draengler', hell: true, wagen: 'liegewagen' }]);
 });
 
 test('Halt: Jede Lochung kennt ihren Ort, für den Rückblick', () => {

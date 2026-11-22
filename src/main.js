@@ -8,6 +8,7 @@ import { neueAufzeichnung, zeichneAuf, spieleNach } from './kern/fortsetzen.js';
 import { erzeugeAnzeige } from './anzeige/anzeige.js';
 import { verbindeEingabe } from './eingabe.js';
 import { ladeStand, sichereStand } from './speicher.js';
+import { LEERLAUF_ARTEN, LEERLAUF_TAKT, HALTEN_AB, schrittZurTuer, darfWeiterHalten, istGlatt } from './kern/leerlauf.js';
 import { erzeugeTon } from './ton.js';
 
 const leinwand = document.getElementById('bild');
@@ -15,6 +16,16 @@ const anzeige = erzeugeAnzeige(leinwand);
 const ton = erzeugeTon();
 
 const stand = ladeStand(); // immer vollständig, auch wenn der Speicher leer, gelöscht oder gesperrt ist
+
+// Leerlauf vor der Tür: Die Variante wählt der Auftraggeber am Gerät mit #leerlauf=halten oder #leerlauf=tuer.
+// Sie wird gemerkt. Siehe kern/leerlauf.js.
+const leerlaufWahl = /[#&]leerlauf=(\w+)/.exec(window.location.hash);
+if (leerlaufWahl && LEERLAUF_ARTEN.includes(leerlaufWahl[1])) {
+  stand.leerlauf = leerlaufWahl[1];
+  sichereStand(stand);
+}
+let lauf = null; // Tipp auf die offene Tür: { naechster } bis zur Tür und hindurch
+let gehalten = null; // Finger liegt nach dem Wisch: { richtung, naechster }
 
 const grobesZeigen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 let mitTasten = !grobesZeigen;
@@ -103,10 +114,11 @@ function gibEin(aktion, quelle) {
   }
   anzeige.beschleunige(jetzt);
   const ereignisse = spiel.act(aktion);
-  if (!ereignisse.length) return;
+  if (!ereignisse.length) return ereignisse;
   anzeige.spiele(ereignisse, jetzt);
   ton.spiele(ereignisse);
   merke(ereignisse, aktion);
+  return ereignisse;
 }
 
 function tippe(x, y) {
@@ -126,6 +138,8 @@ function tippe(x, y) {
     sichereStand(stand);
   } else if (ziel.art === 'uhr') {
     gibEin('warten', 'tipp');
+  } else if (ziel.art === 'feld' && ziel.y === -1 && stand.leerlauf === 'tuer' && abstand({ x: ziel.x, y: 0 }, spiel.zustand.spieler) > 1 && schrittZurTuer(spiel.zustand)) {
+    lauf = { naechster: performance.now() }; // Tipp auf die offene Tür im gefahrlosen Wagen: hinlaufen
   } else if (ziel.art === 'feld') {
     const s = spiel.zustand.spieler;
     const dx = ziel.x - s.x;
@@ -137,7 +151,24 @@ function tippe(x, y) {
   }
 }
 
+// Der Takt des Leerlaufs: ein gewöhnlicher Zug nach dem anderen, solange alles glatt geht.
+function leerlauf(jetzt) {
+  if (lauf && jetzt >= lauf.naechster) {
+    const richtung = schrittZurTuer(spiel.zustand);
+    const e = richtung ? gibEin(richtung, 'lauf') : null;
+    if (!e || !istGlatt(e) || e.some((x) => x.typ === 'wagenwechsel')) lauf = null;
+    else lauf.naechster = jetzt + LEERLAUF_TAKT;
+  }
+  if (gehalten && stand.leerlauf === 'halten' && jetzt >= gehalten.naechster) {
+    if (!darfWeiterHalten(spiel.zustand, gehalten.richtung)) return;
+    const e = gibEin(gehalten.richtung, 'halten');
+    if (!istGlatt(e)) gehalten = null;
+    else gehalten.naechster = jetzt + LEERLAUF_TAKT;
+  }
+}
+
 function schleife(jetzt) {
+  leerlauf(jetzt);
   anzeige.zeichne(jetzt);
   window.requestAnimationFrame(schleife);
 }
@@ -151,7 +182,19 @@ anzeige.melder.takt = () => ton.takt();
 anzeige.passeAn();
 beginne(performance.now());
 // Manche Browser geben den Ton erst frei, wenn ein Finger losgelassen wurde, nicht schon beim Wischen.
-verbindeEingabe(leinwand, { aktion: gibEin, tipp: tippe, losgelassen: () => ton.wecke(), karteOffen: () => anzeige.zeigtKarte() });
+verbindeEingabe(leinwand, {
+  aktion: gibEin,
+  tipp: tippe,
+  losgelassen: () => ton.wecke(),
+  karteOffen: () => anzeige.zeigtKarte(),
+  // jede neue Berührung und jede Taste beendet den Lauf zur Tür
+  beruehrt: () => {
+    lauf = null;
+  },
+  finger: (richtung) => {
+    gehalten = richtung ? { richtung, naechster: performance.now() + HALTEN_AB } : null;
+  },
+});
 for (const anlass of ['resize', 'orientationchange', 'pageshow']) window.addEventListener(anlass, () => anzeige.passeAn());
 if (window.visualViewport) window.visualViewport.addEventListener('resize', () => anzeige.passeAn());
 window.requestAnimationFrame(schleife);

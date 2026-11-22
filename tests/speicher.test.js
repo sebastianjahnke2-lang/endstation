@@ -32,7 +32,7 @@ test('ganz ohne Fenster und Speicher gibt es einen vollständigen leeren Stand',
 
 test('leerer Speicher: alles steht auf Anfang', () => {
   mitFenster({ localStorage: speicherMit({}) }, () => {
-    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] }, fahrt: null });
+    assert.deepEqual(ladeStand(), { gelernt: { wischen: false, ausweichen: false, anrempeln: false }, ton: true, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] }, fahrt: null, leerlauf: 'tuer' });
   });
 });
 
@@ -67,7 +67,7 @@ test('Unsinn im Speicher wird zu einem gültigen Stand', () => {
 test('ein gesicherter Stand kommt genauso zurück', () => {
   const speicher = speicherMit({});
   mitFenster({ localStorage: speicher }, () => {
-    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true }, mehrAmTisch: 2, fahrkarte: { lochungen: [{ art: 'pruefung', id: 'ruhe', hell: true }, { art: 'tod', durch: 'pendler', hell: false }] }, fahrt: { seed: 7, optionen: { staerken: { warten: true } }, eingaben: 'hhwlR', pruefsumme: '1a2b3c' } };
+    const stand = { gelernt: { wischen: true, ausweichen: false, anrempeln: true }, ton: false, staerken: { warten: true, sprint: false, rueckhalt: true }, mehrAmTisch: 2, fahrkarte: { lochungen: [{ art: 'pruefung', id: 'ruhe', hell: true }, { art: 'tod', durch: 'pendler', hell: false }] }, fahrt: { seed: 7, optionen: { staerken: { warten: true } }, eingaben: 'hhwlR', pruefsumme: '1a2b3c' }, leerlauf: 'halten' };
     assert.equal(sichereStand(stand), true);
     assert.deepEqual(ladeStand(), stand);
   });
@@ -75,7 +75,7 @@ test('ein gesicherter Stand kommt genauso zurück', () => {
 
 test('bereinigeStand übernimmt nur Bekanntes', () => {
   const stand = bereinigeStand({ gelernt: { wischen: true, ausweichen: 'ja', hacken: true }, ton: false, lochungen: 99 });
-  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] }, fahrt: null });
+  assert.deepEqual(stand, { gelernt: { wischen: true, ausweichen: false, anrempeln: false }, ton: false, staerken: { warten: false, sprint: false, rueckhalt: false }, mehrAmTisch: 0, fahrkarte: { lochungen: [] }, fahrt: null, leerlauf: 'tuer' });
 });
 
 test('Fahrkarte: Anfangswert leer, Unsinn fällt weg, Bekanntes bleibt', () => {
@@ -97,4 +97,11 @@ test('Stärken: Anfangswert ist keine, Unsinn wird zu keiner, Bekanntes bleibt',
   assert.deepEqual(bereinigeStand({ staerken: { sprint: true, warten: 1, fliegen: true } }).staerken, { warten: false, sprint: true, rueckhalt: false });
   // ein alter Stand aus Etappe 1 ohne Stärken
   assert.deepEqual(bereinigeStand({ gelernt: { wischen: true }, ton: true }).staerken, { warten: false, sprint: false, rueckhalt: false });
+});
+
+test('Leerlauf: Anfangswert ist der Tipp auf die Tür, nur bekannte Varianten werden übernommen', () => {
+  assert.equal(leererStand().leerlauf, 'tuer');
+  assert.equal(bereinigeStand({ leerlauf: 'halten' }).leerlauf, 'halten');
+  assert.equal(bereinigeStand({ leerlauf: 'fliegen' }).leerlauf, 'tuer');
+  assert.equal(bereinigeStand({ leerlauf: 3 }).leerlauf, 'tuer');
 });

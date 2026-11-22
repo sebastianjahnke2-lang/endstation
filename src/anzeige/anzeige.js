@@ -51,6 +51,8 @@ export function erzeugeAnzeige(leinwand) {
     schwenk: 0,
     blende: 0, // beim Wechsel in die Wiederholung und zurück: wie viel vom alten Bild noch zu sehen ist
     probe: false, // in der Wiederholung beim Begleiter
+    anstoss: -1e9, // wann man zuletzt den in der Engstelle angestoßen hat
+    platz: null, // er geht an seinen Tisch: { von, nach, seit }
   };
   let rede = null; // ein Satz über einem Feld, bis zur nächsten Eingabe: { text, x, y }
   let wartend = []; // Ereignisse, die noch dran sind: { zeit, liste }
@@ -195,6 +197,7 @@ export function erzeugeAnzeige(leinwand) {
     return fahrkarte.lochungen.map((l) => {
       const ort = TEXTE.wagen[l.wagen] || '';
       if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      if (l.art === 'verstanden') return [TEXTE.verstanden[l.durch], ort];
       const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
       return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
     });
@@ -239,6 +242,18 @@ export function erzeugeAnzeige(leinwand) {
         s.sx = r.x * hinUndHer(p) * 0.13;
         s.sy = r.y * hinUndHer(p) * 0.13;
       });
+    } else if (e.typ === 'angestossen') {
+      // gegen den, der in der Engstelle steht: Man stößt an, er schwankt ein wenig
+      const r = RICHTUNG[e.richtung];
+      bild.zug += 1;
+      bild.anstoss = jetzt;
+      bewege(jetzt, 110, (p) => {
+        s.sx = r.x * hinUndHer(p) * 0.2;
+        s.sy = r.y * hinUndHer(p) * 0.2;
+      });
+    } else if (e.typ === 'platzGemacht') {
+      // er geht an seinen Tisch und setzt sich
+      bild.platz = { von: e.von, nach: e.nach, seit: jetzt };
     } else if (e.typ === 'schlag') {
       const r = RICHTUNG[e.richtung];
       bild.zug += 1;
@@ -307,14 +322,11 @@ export function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      if (e.genug) {
-        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
-        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
-        karte.knopftexte = TEXTE.knopf;
-      } else {
-        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
-        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
-      }
+      // jeder steigt aus; der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er
+      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+      karte.knopftexte = TEXTE.knopf;
+      karte.schaffner = e.hell > 0 ? 'locht' : 'nickt';
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -801,9 +813,21 @@ export function erzeugeAnzeige(leinwand) {
         stift.fillStyle = FARBE.herz;
         stift.fill();
       }
+      const w = z.wagen.imWeg;
+      if (w && !imWechselNoch()) maleSprintZiel(w, oy, t);
       for (const f of z.wagen.fahrgaeste) {
-        const cx = boden.x + (f.x + 0.5) * s;
-        const fy = boden.y + (f.y + 0.8) * s + oy;
+        let fx = f.x;
+        let fyy = f.y;
+        const pl = bild.platz;
+        if (pl && f.x === pl.nach.x && f.y === pl.nach.y && jetzt - pl.seit < 260) {
+          const q = sanft(Math.min(1, (jetzt - pl.seit) / 260));
+          fx = pl.von.x + (pl.nach.x - pl.von.x) * q;
+          fyy = pl.von.y + (pl.nach.y - pl.von.y) * q;
+        }
+        let schwank = 0;
+        if (w && f.x === w.x && f.y === w.y && jetzt - bild.anstoss < 200 && !ruhig) schwank = Math.sin((jetzt - bild.anstoss) / 20) * s * 0.04;
+        const cx = boden.x + (fx + 0.5) * s + schwank;
+        const fy = boden.y + (fyy + 0.8) * s + oy;
         maleFigur(stift, f.typ, cx, fy, s * 0.82, { t, takt: f.x * 3 + f.y, ruhig, pausiert: false, gesicht: true });
       }
       const b = bild.begleiter;
@@ -900,6 +924,25 @@ export function erzeugeAnzeige(leinwand) {
     const halb = Math.max(s / 2, (textBreite(TEXTE.begleiter.nochmal) * 2 + 14) / 2);
     const seite = Math.sign(b.x - f.x);
     maleSchild(TEXTE.begleiter.nochmal, cx + seite * (s / 2 - halb - 2), cy);
+  }
+
+  function imWechselNoch() {
+    return bild.schwenk > 0.01;
+  }
+
+  // Sprint einführen: Steht man direkt vor dem in der Engstelle, leuchtet das Feld hinter ihm rund auf.
+  // Ein Tipp darauf ist der Sprint. Es zeigt die Richtung, kein Wort.
+  function maleSprintZiel(w, oy, t) {
+    const p = bild.spieler;
+    const dx = w.x - p.x;
+    const dy = w.y - p.y;
+    if (Math.abs(dx) + Math.abs(dy) !== 1 || p.sx || p.sy || p.px !== p.x || p.py !== p.y) return;
+    const x = w.x + dx;
+    const y = w.y + dy;
+    if (x < 0 || y < 0 || y >= z.wagen.plan.length || x >= z.wagen.plan[y].length || z.wagen.plan[y][x] !== '.') return;
+    const { boden, s } = layout;
+    const puls = ruhig ? 0.8 : 0.65 + Math.sin(t * 2.4) * 0.2;
+    maleNutzschein(boden.x + (x + 0.5) * s, boden.y + (y + 0.5) * s + oy, puls);
   }
 
   // Was nützt, liegt rund auf dem Boden: ein weicher Schein und ein dünner Kreis, nie Streifen.
@@ -1033,6 +1076,7 @@ export function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      karte.seit = jetzt - karte.start;
       // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
       if (karte.rueckblick && !karte.rueckblickFertig) {
         const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);

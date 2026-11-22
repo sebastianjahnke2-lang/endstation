@@ -4,7 +4,7 @@ Was nicht im Fahrplan steht, wird hier notiert und nicht gebaut. Jede Idee mit e
 
 - **Nur das Spiel ausliefern.** GitHub Pages liefert derzeit den ganzen Zweig aus, also auch `docs/VISION.md` unter der Spieladresse. Ein kleiner Veröffentlichungsschritt könnte nur `index.html` hochladen. Löst: Wer das Spiel spielt, stößt nicht auf die Auflösung. Löst nicht: Das Repo selbst bleibt öffentlich lesbar.
 - **Halten statt mehrfach wischen.** Finger nach dem Wisch liegen lassen, die Figur geht weiter. Löst: weniger Wischen auf dem Weg zur offenen Tür. Gefahr: versehentliche Schritte ins Rote.
-- **Weg zur Tür abkürzen.** Ist der Wagen leer, sind es bis zu zehn Schritte ohne Entscheidung. Löst: Leerlauf. Offen ist, wie, ohne dem Spieler die Figur aus der Hand zu nehmen.
+- **Weg zur Tür abkürzen.** Gebaut am 22.11. als „Leerlauf vor der Tür", zwei Varianten zum Umschalten (siehe `docs/ENTSCHEIDUNGEN.md`).
 - **Kämpfen belohnen.** Der Kämpfer-Bot erreicht den Halt in Etappe 1 nie. Falls das nach Etappe 2 (Speisewagen, Tür aufbrechen) so bleibt, braucht der Weg des Kämpfens etwas Eigenes.
 
 - **Parallelzug.** Vom Auftraggeber am 21.11., im Wortlaut: „Parallelzug: ein Wagen, durch dessen Fenster ein weiterentwickeltes Japan zu sehen ist. Nur Idee." Hinweis: Der Prototyp-Auftrag verbietet für den freien Platz ausdrücklich Landschaft vor den Fenstern. Das gilt dort, für einen eigenen Wagen wäre es neu zu entscheiden.
