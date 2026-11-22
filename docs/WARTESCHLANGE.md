@@ -18,4 +18,8 @@ Aufträge in Reihenfolge, von oben nach unten. Claude arbeitet sie ohne Warten a
 
 ## Abschnitt 4 (bis zum Spieltest, ein Pull Request)
 1. [x] Nachbesserung „Falsche Farben": Spur und Verhör, wörtlich in `docs/auftraege/falsche-farben-spur-verhoer.md`. Nur die zwei Punkte. Die dort genannte Nachbesserung „Druck, den man abbauen kann" ist nie angekommen, sie liegt weder hier noch in `docs/auftraege/`.
-2. [ ] SPIELTEST (hier angehalten)
+2. [x] SPIELTEST (Pull Request #11 in `main`)
+
+## Abschnitt 5
+1. [x] Übersicht zu den Angeboten in Endstation, wörtlich in `docs/auftraege/angebote-uebersicht.md`. Nur Bericht, nichts gebaut.
+2. [ ] Entscheidung des Auftraggebers abwarten (hier angehalten)
