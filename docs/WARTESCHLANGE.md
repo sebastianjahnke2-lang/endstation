@@ -4,6 +4,6 @@ Aufträge in Reihenfolge, von oben nach unten. Claude arbeitet sie ohne Warten a
 
 ## Abschnitt 1 (bis zum Spieltest, ein Pull Request)
 1. [x] Sprint an einer engen, sicheren Stelle einführen, an der man ihn braucht und gefahrlos ausprobiert
-2. [ ] Schritt 4 aus „Leitsätze und die ersten zehn Minuten" (Halt ohne Sperre), wörtlich in `docs/auftraege/leitsaetze.md`
+2. [x] Schritt 4 aus „Leitsätze und die ersten zehn Minuten" (Halt ohne Sperre), wörtlich in `docs/auftraege/leitsaetze.md`
 3. [ ] Schritt 6 aus demselben Auftrag (Leerlauf vor der Tür, auch die acht Schritte im Speisewagen)
 4. [ ] SPIELTEST

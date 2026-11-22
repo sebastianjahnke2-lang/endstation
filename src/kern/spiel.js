@@ -17,7 +17,7 @@ import { RICHTUNG, STARTFELD, TUERFELD, imFeld } from './feld.js';
 import { istHindernis, gegnerAuf, istMarkiert, tuerFrei } from './lage.js';
 import { WAGENZAHL, baueWagen } from './wagen.js';
 import { wuerfle } from './zufall.js';
-import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod, helleLochungen, HALT_VERLANGT } from './fahrkarte.js';
+import { bereinigeFahrkarte, stelleAngebot, nimmAn, beobachte, werteWagenAus, lochungFuerTod, lochungFuerVerstehen, helleLochungen } from './fahrkarte.js';
 import { ANTWORTARTEN, bereinigeSzene, setzeBegleiter, sprichMitBegleiter } from './begleiter.js';
 import { neuerGegner, loeseAnsagenEin, planeGegner, schadenVon } from './gegner.js';
 
@@ -187,13 +187,16 @@ function wechsleWagen(z) {
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
   const gruppe = z.wagen.mitGruppe && z.spieler.herzen === 1 ? verstehe(z, 'rueckhalt', 'gruppe', 0) : null;
   const karte = [];
+  if (gruppe) {
+    karte.push(gruppe);
+    lochungFuerVerstehen(z, 'gruppe', karte, 0); // noch im Wagen der Reisegruppe
+  }
   werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
-    // Halt: Der Schaffner verlangt drei helle Lochungen, egal welche.
+    // Halt: Jeder steigt aus. Der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er.
     z.status = 'halt';
-    const hell = helleLochungen(z.fahrkarte);
-    z.halt = { genug: hell >= HALT_VERLANGT, hell, fehlt: Math.max(0, HALT_VERLANGT - hell) };
+    z.halt = { hell: helleLochungen(z.fahrkarte) };
     ereignisse.push({ typ: 'halt', phase: 0, ...z.halt });
   } else {
     z.wagenNr += 1;
@@ -205,7 +208,6 @@ function wechsleWagen(z) {
       ereignisse.push({ typ: 'geheilt', phase: 0, herzen: z.spieler.herzen, plus: z.spieler.herzen - vorher });
     }
   }
-  if (gruppe) ereignisse.push(gruppe);
   return ereignisse.concat(karte);
 }
 
@@ -422,10 +424,15 @@ function fuehreAus(z, aktion) {
   // Phase 2: Gegner bewegen sich oder kündigen an
   planeGegner(z, dran, ereignisse, tat);
   oeffneTuer(z, ereignisse, 2); // der Kontrolleur kann gegangen sein
-  // neue Stärken gelten ab dem nächsten Zug
+  // Verstehen locht: den Kontrolleur durchschaut
+  if (ereignisse.some((e) => e.typ === 'durchgewinkt')) lochungFuerVerstehen(z, 'kontrolleur', ereignisse, 2);
+  // neue Stärken gelten ab dem nächsten Zug, und jede neue locht
   for (const [staerke, gegner] of spaeter) {
     const e = verstehe(z, staerke, gegner, 2);
-    if (e) ereignisse.push(e);
+    if (e) {
+      ereignisse.push(e);
+      lochungFuerVerstehen(z, gegner, ereignisse, 2);
+    }
   }
   return ereignisse;
 }
@@ -464,7 +471,7 @@ export function erzeugeSpiel(seed, optionen = {}) {
     probe: null, // die Wiederholung: { zurueck } mit allem, was danach wieder gilt
     todDurch: null,
     todSzene: null, // { nr, zufall }: der Wagen, in dem die Fahrt endete
-    halt: null, // { genug, hell, fehlt } am Ende der Fahrt
+    halt: null, // { hell } am Ende der Fahrt: so viele helle Lochungen trägt die Karte
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);

@@ -158,6 +158,7 @@ export function erzeugeTon() {
           schon.add('aufRot');
         }
         if (e.typ === 'schlag') KLAENGE.schlag();
+        if (e.typ === 'halt' && e.hell > 0) klang(2600, 2400, 0.02, 0.12, 'square', 0.57); // der Schaffner locht
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);
       }

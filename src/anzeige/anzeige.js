@@ -197,6 +197,7 @@ export function erzeugeAnzeige(leinwand) {
     return fahrkarte.lochungen.map((l) => {
       const ort = TEXTE.wagen[l.wagen] || '';
       if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      if (l.art === 'verstanden') return [TEXTE.verstanden[l.durch], ort];
       const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
       return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
     });
@@ -321,14 +322,11 @@ export function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      if (e.genug) {
-        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
-        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
-        karte.knopftexte = TEXTE.knopf;
-      } else {
-        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
-        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
-      }
+      // jeder steigt aus; der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er
+      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+      karte.knopftexte = TEXTE.knopf;
+      karte.schaffner = e.hell > 0 ? 'locht' : 'nickt';
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -1078,6 +1076,7 @@ export function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      karte.seit = jetzt - karte.start;
       // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
       if (karte.rueckblick && !karte.rueckblickFertig) {
         const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);

@@ -37,7 +37,7 @@ Nichts an Schwierigkeit und Abwechslung ändern.
 - Auftrag „Leitsätze und die ersten zehn Minuten" (21.11., `docs/auftraege/leitsaetze.md`): Schritt 1 bis 3 gebaut (Leitsätze, `docs/WAGEN-PRUEFUNG.md`, Fahrt fortsetzen), wartet auf Rückmeldung. Schritt 4 bis 7 erst danach.
 - Prototyp „Kontrolle" (21.11., `docs/auftraege/kontrolle.md`, Nachbesserungen `kontrolle-einstieg.md`, `kontrolle-schicht.md`): **Schicht gebaut, wartet auf den Test am iPhone.** Der Spieler ist der Kontrolleur, Halt folgt auf Halt, drei Maschen. Eigener Ordner `prototyp/kontrolle/`.
 - Auftrag „Bodensymbole lesbar machen" (22.11., `docs/auftraege/bodensymbole.md`): gebaut, in `main` (Pull Request #7), wartet auf den Test am iPhone.
-- Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut.
+- Warteschlange Abschnitt 1 (22.11., `docs/WARTESCHLANGE.md`): Sprint an der Engstelle im Speisewagen gebaut, Halt ohne Sperre gebaut (Entscheidung vom 19.11. geändert).
 - Etappen 3 bis 5: offen. Sie sind Fahrplan, kein Auftrag.
 - Prototyp „Der freie Platz" (außerhalb der Etappen, Auftrag vom 18.11.): **gebaut, am 19.11. geprüft und nachgebessert, wartet auf den Spieltest.** Am 21.11. kam Abschnitt 18 dazu, Musik als Echo: gebaut, wartet auf Übernahme in `main` und den Test mit Ton. Spielbar erst, wenn der Auftraggeber den Pull Request in `main` übernimmt und GitHub Pages aktiv ist. Auftrag in `docs/PROTOTYP-freier-platz.md`, Spieltestplan in `docs/SPIELTEST-freier-platz.md`. Offene Widersprüche zu Vision und Fahrplan stehen in `docs/ENTSCHEIDUNGEN.md` unter „Offen" und sind Sache des Auftraggebers.
 
@@ -115,7 +115,7 @@ src/
     wagen.js        die sieben Wagen: Plan, Gegner, Bauregel; der dritte ist der Mittelwagen, der vierte der Speisewagen
     lage.js         Fragen an den Zustand (frei, markiert, Vorderster)
     gegner.js       Verhalten von Pendler, Reisegruppe, Drängler, Kontrolleur
-    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen
+    fahrkarte.js    Prüfungen, Angebote, helle und dunkle Lochungen, Verstehen locht, keine Sperre am Halt
     begleiter.js    der Begleiter im Speisewagen nach einem Tod, „Noch mal" (die Wiederholung selbst in spiel.js)
     reise.js        was eine neue Fahrt mitnimmt (für main.js und die Werkzeuge)
     fortsetzen.js   Fahrt fortsetzen: Seed und Eingaben aufzeichnen, beim Öffnen nachspielen
@@ -194,6 +194,7 @@ node werkzeug/schau.mjs <bot> <seed> <breite> <hoehe>    Fahrt im Browser mit Bi
 node werkzeug/begleiter.mjs 390x844    Tod, Begleiter, „Noch mal", Wiederholung im Browser mit Bildern
 node werkzeug/fortsetzen.mjs 390x844   Fahrt fortsetzen nach dem Neuladen, kaputter Speicher
 node werkzeug/sprint.mjs 390x844       Sprint an der Engstelle im Speisewagen, beide Wege, mit Bildern
+node werkzeug/halt.mjs 390x844         Halt ohne Sperre: Schaffner nickt (leere Karte) und locht, mit Bildern
 node prototyp/freier-platz/werkzeug/fotos.mjs 390x844    Prototyp: Hauptweg im Browser mit Bildern
 node prototyp/freier-platz/werkzeug/szene.mjs 390x844 "W,W,W,W,T,A"    Prototyp: beliebige Eingabefolge mit Bildern
 node prototyp/kontrolle/werkzeug/fotos.mjs 390x844    Prototyp Kontrolle: Lernhalt und eine Schicht im Browser mit Bildern

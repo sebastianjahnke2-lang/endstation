@@ -1,7 +1,7 @@
 // Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
 // Nach oben wegwischen beginnt die nächste Fahrt.
-// Arten: 'tod'; 'fehlt' (Halt, aber dem Schaffner fehlen helle Lochungen);
-// 'halt' (ausgestiegen: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Arten: 'tod'; 'halt' (jeder steigt aus: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Am Halt locht der Schaffner (karte.schaffner 'locht'), oder er nickt ('nickt'), wenn die Karte keine helle Lochung trägt.
 
 import { FARBE, rundesRechteck, kreis, sanft } from './formen.js';
 import { maleFigur, maleSymbol } from './figuren.js';
@@ -41,7 +41,7 @@ export function kartenMasse(layout, art) {
 }
 
 function maleBahnsteig(stift, r, karte, t) {
-  const halt = karte.art === 'halt' || karte.art === 'fehlt';
+  const halt = karte.art === 'halt';
   stift.save();
   rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
   stift.clip();
@@ -159,7 +159,15 @@ function maleBahnsteig(stift, r, karte, t) {
 
   maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
   // am Halt steht der Schaffner am Zug: der Begleiter, jetzt mit Mütze
-  if (halt) maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben: karte.art === 'fehlt' ? 0.8 : 0 });
+  if (halt) {
+    // in der ersten Sekunde: Er hebt die Zange und locht, oder er nickt einmal
+    const seit = karte.seit || 0;
+    const zug = Math.max(0, Math.min(1, seit / 900));
+    const auf = Math.sin(zug * Math.PI);
+    const heben = karte.schaffner === 'locht' ? 0.8 * auf : 0;
+    const nicken = karte.schaffner === 'nickt' && !karte.ruhig ? auf * 3 : 0;
+    maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3 + nicken, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben });
+  }
 
   if (halt) {
     // die Uhr am Bahnsteig zeigt die Ankunft

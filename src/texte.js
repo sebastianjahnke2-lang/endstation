@@ -51,9 +51,6 @@ export const TEXTE = {
     einWagen: 'Noch ein Wagen / bis zum Halt',
     mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
     halt: 'Halt / Ankunft {zeit} Uhr',
-    // am Halt, wenn dem Schaffner helle Lochungen fehlen; danach geht es im Speisewagen weiter
-    fehltEine: 'Noch eine helle / Lochung',
-    fehlt: 'Noch {n} helle / Lochungen',
   },
 
   // Knöpfe am Halt
@@ -67,6 +64,13 @@ export const TEXTE = {
   rueckblick: {
     tod: 'Ende durch {wer}',
     ehrlich: 'Antwort: {wer}',
+  },
+  // Rückblick für „Verstehen locht": die Handlung, durch die man den Gegner verstanden hat
+  verstanden: {
+    kontrolleur: 'Durchgewinkt',
+    pendler: 'Beim Pendler gewartet',
+    draengler: 'Drängler ausgewichen',
+    gruppe: 'Mit einem Herz hinaus',
   },
   wer: {
     pendler: 'Pendler',

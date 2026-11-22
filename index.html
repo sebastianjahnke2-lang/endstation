@@ -396,6 +396,9 @@ function baueWagen(nr, z) {
 //   { art: 'pruefung', id, hell: true }            eine erfüllte Prüfung
 //   { art: 'tod', durch, hell: false }             ein Tod; wird hell, wenn man es einmal anders macht
 //   { art: 'ehrlich', durch, hell: true }          die ehrliche Antwort an den Begleiter, je Ursache eine
+//   { art: 'verstanden', durch, hell: true }       den Kontrolleur durchschaut oder eine Stärke verdient, je Gegner eine
+//
+// Lochungen sind eine Spur, keine Sperre: Am Halt steigt jeder aus. Sie bestimmen nur, was der Rückblick zeigt.
 //
 // Angebot: In jedem Wagen außer dem sicheren leuchtet ein Symbol auf einem Feld. Drauftreten heißt
 // annehmen. Die Prüfung gilt bis zum Verlassen des Wagens, dann wird ausgewertet. Vorbeigehen kostet nichts,
@@ -423,8 +426,8 @@ function ort(l, roh) {
 const PRUEFUNGEN = ['aufregen', 'aussteigen', 'rempeln', 'draengeln', 'puenktlich', 'ruhe'];
 const AUSSTEIGEN_ZUEGE = 3;
 const PUENKTLICH_ZUEGE = 12;
-const HALT_VERLANGT = 3; // so viele helle Lochungen verlangt der Schaffner am Halt
 const TODESARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
+const VERSTEHBAR = ['pendler', 'gruppe', 'draengler', 'kontrolleur'];
 const SONDER_HOECHSTENS = 6;
 // Einführung: Solange die Fahrkarte keine Prüfung trägt, liegt das erste Angebot in Wagen 1 auf dem Feld
 // vor der Tür. Daran kommt niemand vorbei, und dort ist der Wagen schon ruhig. "Erst aussteigen lassen"
@@ -447,6 +450,8 @@ function bereinigeFahrkarte(roh) {
       karte.lochungen.push(ort({ art: 'tod', durch: l.durch, hell: l.hell === true }, l));
     } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
       karte.lochungen.push(ort({ art: 'ehrlich', durch: l.durch, hell: true }, l));
+    } else if (l.art === 'verstanden' && VERSTEHBAR.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'verstanden' && x.durch === l.durch)) {
+      karte.lochungen.push(ort({ art: 'verstanden', durch: l.durch, hell: true }, l));
     }
   }
   return karte;
@@ -547,6 +552,16 @@ function lochungFuerTod(z, durch, ereignisse, phase) {
   if (karte.lochungen.filter((l) => l.art === 'tod').length >= SONDER_HOECHSTENS) return;
   karte.lochungen.push({ art: 'tod', durch, hell: false, wagen: z.wagen.art });
   ereignisse.push({ typ: 'gelocht', phase, art: 'tod', durch, hell: false });
+}
+
+// Verstehen locht: wer den Kontrolleur durchschaut oder eine Stärke verdient, bekommt eine helle Lochung,
+// je Gegner eine auf der Karte. In der Wiederholung zählt nichts.
+function lochungFuerVerstehen(z, durch, ereignisse, phase) {
+  if (z.probe || !VERSTEHBAR.includes(durch)) return;
+  const karte = z.fahrkarte;
+  if (karte.lochungen.some((l) => l.art === 'verstanden' && l.durch === durch)) return;
+  karte.lochungen.push({ art: 'verstanden', durch, hell: true, wagen: z.wagen.art });
+  ereignisse.push({ typ: 'gelocht', phase, art: 'verstanden', durch, hell: true });
 }
 
 // --- kern/begleiter.js
@@ -1152,13 +1167,16 @@ function wechsleWagen(z) {
   // die Reisegruppe versteht, wer ihren Wagen mit einem Herz verlässt
   const gruppe = z.wagen.mitGruppe && z.spieler.herzen === 1 ? verstehe(z, 'rueckhalt', 'gruppe', 0) : null;
   const karte = [];
+  if (gruppe) {
+    karte.push(gruppe);
+    lochungFuerVerstehen(z, 'gruppe', karte, 0); // noch im Wagen der Reisegruppe
+  }
   werteWagenAus(z, karte, 0); // laufende Prüfung und dunkle Lochungen, solange der alte Wagen noch gilt
   const ereignisse = [];
   if (z.wagenNr + 1 >= WAGENZAHL) {
-    // Halt: Der Schaffner verlangt drei helle Lochungen, egal welche.
+    // Halt: Jeder steigt aus. Der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er.
     z.status = 'halt';
-    const hell = helleLochungen(z.fahrkarte);
-    z.halt = { genug: hell >= HALT_VERLANGT, hell, fehlt: Math.max(0, HALT_VERLANGT - hell) };
+    z.halt = { hell: helleLochungen(z.fahrkarte) };
     ereignisse.push({ typ: 'halt', phase: 0, ...z.halt });
   } else {
     z.wagenNr += 1;
@@ -1170,7 +1188,6 @@ function wechsleWagen(z) {
       ereignisse.push({ typ: 'geheilt', phase: 0, herzen: z.spieler.herzen, plus: z.spieler.herzen - vorher });
     }
   }
-  if (gruppe) ereignisse.push(gruppe);
   return ereignisse.concat(karte);
 }
 
@@ -1387,10 +1404,15 @@ function fuehreAus(z, aktion) {
   // Phase 2: Gegner bewegen sich oder kündigen an
   planeGegner(z, dran, ereignisse, tat);
   oeffneTuer(z, ereignisse, 2); // der Kontrolleur kann gegangen sein
-  // neue Stärken gelten ab dem nächsten Zug
+  // Verstehen locht: den Kontrolleur durchschaut
+  if (ereignisse.some((e) => e.typ === 'durchgewinkt')) lochungFuerVerstehen(z, 'kontrolleur', ereignisse, 2);
+  // neue Stärken gelten ab dem nächsten Zug, und jede neue locht
   for (const [staerke, gegner] of spaeter) {
     const e = verstehe(z, staerke, gegner, 2);
-    if (e) ereignisse.push(e);
+    if (e) {
+      ereignisse.push(e);
+      lochungFuerVerstehen(z, gegner, ereignisse, 2);
+    }
   }
   return ereignisse;
 }
@@ -1429,7 +1451,7 @@ function erzeugeSpiel(seed, optionen = {}) {
     probe: null, // die Wiederholung: { zurueck } mit allem, was danach wieder gilt
     todDurch: null,
     todSzene: null, // { nr, zufall }: der Wagen, in dem die Fahrt endete
-    halt: null, // { genug, hell, fehlt } am Ende der Fahrt
+    halt: null, // { hell } am Ende der Fahrt: so viele helle Lochungen trägt die Karte
   };
   for (const name of STAERKEN) z.staerken[name] = !!(optionen.staerken && optionen.staerken[name] === true);
   richteWagenEin(z);
@@ -1441,7 +1463,7 @@ function erzeugeSpiel(seed, optionen = {}) {
 // und für die Prüfwerkzeuge, damit beide dieselbe Fahrt beginnen.
 //
 // Eine Reise geht vom ersten Wagen bis zum Halt. Solange behält die Fahrkarte ihre Lochungen.
-// Am Halt verlangt der Schaffner drei helle Lochungen. Fehlen welche, geht es im Speisewagen weiter.
+// Am Halt steigt jeder aus, danach beginnt eine neue Reise mit leerer Karte.
 // Nach einem Tod sitzt der Begleiter im Speisewagen. Lag der Tod hinter dem Speisewagen,
 // beginnt die nächste Fahrt dort, sonst vorn: Niemand überspringt einen Wagen.
 
@@ -1453,10 +1475,7 @@ const SPEISEWAGEN_NR = WAGENPLAENE.findIndex((w) => w.sicher);
 // stand: { staerken, mehrAmTisch, fahrkarte }, vorige: der Zustand der vorigen Fahrt oder null
 function optionenFuerFahrt(stand, vorige) {
   const optionen = { staerken: { ...stand.staerken }, mehrAmTisch: stand.mehrAmTisch, fahrkarte: stand.fahrkarte };
-  if (vorige && vorige.status === 'halt') {
-    if (vorige.halt && vorige.halt.genug === false) optionen.startWagen = SPEISEWAGEN_NR;
-    else optionen.fahrkarte = neueFahrkarte(); // ausgestiegen: eine neue Reise
-  }
+  if (vorige && vorige.status === 'halt') optionen.fahrkarte = neueFahrkarte(); // ausgestiegen: eine neue Reise
   if (vorige && vorige.status === 'tot') {
     optionen.begleiter = vorige.todDurch;
     optionen.szene = vorige.todSzene; // den Wagen kann er auf Wunsch wiederholen
@@ -1601,9 +1620,6 @@ const TEXTE = {
     einWagen: 'Noch ein Wagen / bis zum Halt',
     mehrereWagen: 'Noch {n} Wagen / bis zum Halt',
     halt: 'Halt / Ankunft {zeit} Uhr',
-    // am Halt, wenn dem Schaffner helle Lochungen fehlen; danach geht es im Speisewagen weiter
-    fehltEine: 'Noch eine helle / Lochung',
-    fehlt: 'Noch {n} helle / Lochungen',
   },
 
   // Knöpfe am Halt
@@ -1617,6 +1633,13 @@ const TEXTE = {
   rueckblick: {
     tod: 'Ende durch {wer}',
     ehrlich: 'Antwort: {wer}',
+  },
+  // Rückblick für „Verstehen locht": die Handlung, durch die man den Gegner verstanden hat
+  verstanden: {
+    kontrolleur: 'Durchgewinkt',
+    pendler: 'Beim Pendler gewartet',
+    draengler: 'Drängler ausgewichen',
+    gruppe: 'Mit einem Herz hinaus',
   },
   wer: {
     pendler: 'Pendler',
@@ -2740,8 +2763,8 @@ function maleTonknopf(stift, ton, an) {
 // --- anzeige/karte.js
 // Die Endkarte: ein warmes Bild vom Bahnsteig, darunter eine wahre Zeile.
 // Nach oben wegwischen beginnt die nächste Fahrt.
-// Arten: 'tod'; 'fehlt' (Halt, aber dem Schaffner fehlen helle Lochungen);
-// 'halt' (ausgestiegen: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Arten: 'tod'; 'halt' (jeder steigt aus: erst der Rückblick, dann die Knöpfe „Aussteigen" und „Noch eine Fahrt").
+// Am Halt locht der Schaffner (karte.schaffner 'locht'), oder er nickt ('nickt'), wenn die Karte keine helle Lochung trägt.
 
 
 
@@ -2781,7 +2804,7 @@ function kartenMasse(layout, art) {
 }
 
 function maleBahnsteig(stift, r, karte, t) {
-  const halt = karte.art === 'halt' || karte.art === 'fehlt';
+  const halt = karte.art === 'halt';
   stift.save();
   rundesRechteck(stift, r.x, r.y, r.b, r.h, 10);
   stift.clip();
@@ -2899,7 +2922,15 @@ function maleBahnsteig(stift, r, karte, t) {
 
   maleFigur(stift, 'spieler', lx + r.b * (halt ? 0.2 : 0.2) + bb * 0.42, boden + 3, 62, { t, takt: 0, ruhig: karte.ruhig, fluss: false });
   // am Halt steht der Schaffner am Zug: der Begleiter, jetzt mit Mütze
-  if (halt) maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben: karte.art === 'fehlt' ? 0.8 : 0 });
+  if (halt) {
+    // in der ersten Sekunde: Er hebt die Zange und locht, oder er nickt einmal
+    const seit = karte.seit || 0;
+    const zug = Math.max(0, Math.min(1, seit / 900));
+    const auf = Math.sin(zug * Math.PI);
+    const heben = karte.schaffner === 'locht' ? 0.8 * auf : 0;
+    const nicken = karte.schaffner === 'nickt' && !karte.ruhig ? auf * 3 : 0;
+    maleFigur(stift, 'kontrolleur', lx + r.b * 0.2 + bb * 0.42 + 46, boden + 3 + nicken, 62, { t, takt: 3, ruhig: karte.ruhig, zeigt: { x: -1, y: 0 }, heben });
+  }
 
   if (halt) {
     // die Uhr am Bahnsteig zeigt die Ankunft
@@ -3234,6 +3265,7 @@ function erzeugeAnzeige(leinwand) {
     return fahrkarte.lochungen.map((l) => {
       const ort = TEXTE.wagen[l.wagen] || '';
       if (l.art === 'pruefung') return [TEXTE.pruefung[l.id], ort];
+      if (l.art === 'verstanden') return [TEXTE.verstanden[l.durch], ort];
       const text = l.art === 'tod' ? TEXTE.rueckblick.tod : TEXTE.rueckblick.ehrlich;
       return [fuelle(text, { wer: TEXTE.wer[l.durch] }), ort];
     });
@@ -3358,14 +3390,11 @@ function erzeugeAnzeige(leinwand) {
       }
     } else if (e.typ === 'halt') {
       bild.zug += 1;
-      if (e.genug) {
-        zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
-        karte.rueckblick = rueckblickZeilen(z.fahrkarte);
-        karte.knopftexte = TEXTE.knopf;
-      } else {
-        const text = e.fehlt === 1 ? TEXTE.ende.fehltEine : fuelle(TEXTE.ende.fehlt, { n: TEXTE.zahlwort[e.fehlt] });
-        zeigeKarte('fehlt', text.split(' / '), jetzt, 120);
-      }
+      // jeder steigt aus; der Schaffner locht, wenn helle Lochungen da sind, sonst nickt er
+      zeigeKarte('halt', fuelle(TEXTE.ende.halt, { zeit: uhrzeit(z.zug) }).split(' / '), jetzt, 120);
+      karte.rueckblick = rueckblickZeilen(z.fahrkarte);
+      karte.knopftexte = TEXTE.knopf;
+      karte.schaffner = e.hell > 0 ? 'locht' : 'nickt';
     } else if (e.typ === 'hieb') {
       const g = findeGegner(e.id);
       if (g) {
@@ -4115,6 +4144,7 @@ function erzeugeAnzeige(leinwand) {
 
     if (karte) {
       karte.einblenden = begrenze((jetzt - karte.start) / 150, 0, 1);
+      karte.seit = jetzt - karte.start;
       // Rückblick: alle 1,4 Sekunden die nächste Tatsache, ein Tipp überspringt ihn
       if (karte.rueckblick && !karte.rueckblickFertig) {
         const i = Math.floor((jetzt - karte.start - 600) / RUECKBLICK_TAKT);
@@ -4483,6 +4513,7 @@ function erzeugeTon() {
           schon.add('aufRot');
         }
         if (e.typ === 'schlag') KLAENGE.schlag();
+        if (e.typ === 'halt' && e.hell > 0) klang(2600, 2400, 0.02, 0.12, 'square', 0.57); // der Schaffner locht
         if (KLAENGE[name] && !schon.has(name) && name !== 'schlag') KLAENGE[name]();
         schon.add(name);
       }

@@ -11,7 +11,7 @@ Widersprüche zwischen dem Auftrag für den Prototyp „Der freie Platz" (`docs/
 - **Gesichter: ja.** Verstandene Fahrgäste im Speisewagen haben ein Gesicht, wie im Fahrplan. Gegner und alle anderen Figuren bleiben ohne Gesicht, der Prototyp auch.
 - **Lob: nein.** Der Begleiter nennt nicht, was gelungen ist. Die Zeile im Fahrplan („nennt zuerst, was neu gelungen ist") gilt nicht mehr.
 - **Prototyp und Hauptspiel** (vom Auftraggeber an Claude übergeben): „Der freie Platz" bleibt ein eigener Versuch, bis der Spieltest gelaufen ist. Nennen mindestens drei von fünf Testpersonen den Schatten, wird er in Etappe 3 eine weitere Form des Autoritätswagens, neben Kontrolleur, Ruhebereich und erster Klasse. Damit ist auch „Rätsel oder Taktik" beantwortet: Das Hauptspiel bleibt ein Taktikspiel, Regelwagen wie dieser sind eine Szene darin. Die verbindlichen Vorgaben aus dem Prototyp-Auftrag gelten nur für den Prototyp. Fürs Hauptspiel entscheidet der Auftraggeber Punkt für Punkt, wie bei Gesichtern und Lob.
-- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt.
+- **Fahrkarte: wie im Fahrplan** (auf Nachfrage bestätigt): sechs Prüfungs-Symbole, helle und dunkle Lochungen, am Halt drei helle verlangt. **Geändert am 22.11. vom Auftraggeber (Schritt 4 der Leitsätze): Halt ohne Sperre, siehe unten.**
 
 ### Betrifft den Prototyp unmittelbar
 
@@ -57,7 +57,7 @@ Von Claude beim Prüfen gefunden:
 - **Leitsatz 8 und Belohnungen ohne Verwendung.** „Jede Belohnung hat sofort eine Verwendung." Rückhalt wirkt nur bei einem tödlichen Treffer und bleibt oft ungenutzt. Fahrkarte: Nach Schritt 4 (Halt ohne Sperre) sind Lochungen nur noch Spur für den Rückblick, ohne Verwendung in der Fahrt.
 - **Leitsatz 12 und Bestwerte.** Fahrplan Etappe 5: „Bestwerte nur gegen sich selbst". Leitsatz 12: nie ein Punktestand.
 - **Leitsatz 4 und Angebote.** Jeder Kampfwagen bekommt zusätzlich zu seinem Gedanken ein Angebot. Befund in `docs/WAGEN-PRUEFUNG.md`.
-- **Schritt 4 und die Entscheidung vom 19.11.** Der Auftraggeber hat angekündigt, „drei helle Lochungen am Halt" aufzuheben. Eingetragen wird es erst mit Schritt 4, nach seiner Rückmeldung.
+- **Schritt 4 und die Entscheidung vom 19.11.** Erledigt am 22.11.: Halt ohne Sperre ist gebaut, siehe „Halt ohne Sperre".
 
 ## Prototyp „Der freie Platz"
 
@@ -374,3 +374,12 @@ Leitsätze 2 (gelernt wird im Spiel), 6 (Hilfe zeigt die Richtung) und 8 (jede B
 - **Wirkung:** Anstoßen: er schwankt, ein tiefer kurzer Ton. Platz machen: er geht an seinen Tisch, ein kleiner steigender Ton.
 - **Zahlen:** `npm run balance` ohne Fehler 86 %, mit allen Stärken 73 %, Ausweicher 60 %, Kämpfer 0 % wie vorher. Mit Fehlern 56 % statt 55 %: Die zufälligen Züge treffen im engeren Speisewagen anders, gefährlich ist er nicht.
 - **Für die Rückmeldung:** Am Rechner gibt es weiter keinen Sprint (nur Tippen). Dort macht er nach zwei Zügen Platz.
+
+## Halt ohne Sperre (22.11., Warteschlange Abschnitt 1, Auftrag 2; Schritt 4 aus `docs/auftraege/leitsaetze.md`)
+Ändert die Entscheidung vom 19.11. („am Halt drei helle Lochungen"), auf Wunsch des Auftraggebers. Leitsätze 12 (kein Zähler als Sperre) und 7 (Verstehen wird anerkannt, ohne Lobtext).
+- **Wer den letzten Wagen schafft, steigt aus**, mit beliebig vielen Lochungen, auch mit null. Danach beginnt eine neue Reise mit leerer Karte, die nächste Fahrt vorn. Gestrichen: das Weiterfahren ab dem Speisewagen bei fehlenden Lochungen, die Zeilen „Noch n helle Lochungen" und die Endkarte dazu.
+- **Der Schaffner locht oder nickt.** Trägt die Karte mindestens eine helle Lochung, hebt er in der ersten Sekunde die Zange, dazu ihr Klick. Sonst nickt er einmal (bei reduzierter Bewegung steht er still). Er hält niemanden auf, die Knöpfe kommen wie bisher nach dem Rückblick.
+- **Lochungen bleiben Spur:** Sie bestimmen nur, was der Rückblick zeigt, je Lochung eine Tatsache mit Ort. Ohne Lochung steht nur die Ankunftszeit.
+- **Verstehen locht:** neue Lochungsart `verstanden`, hell, je Gegner höchstens eine auf der Karte. Sie kommt, wenn der Kontrolleur durchwinkt und wenn eine Stärke neu verdient wird (Pendler, Drängler, Reisegruppe). Wer eine Stärke schon aus einer früheren Fahrt hat, verdient sie nicht noch einmal und bekommt dafür keine Lochung. Den Kontrolleur kann man auf jeder Reise neu durchschauen. In der Wiederholung beim Begleiter zählt nichts.
+- **Rückblick-Zeilen dazu** (Handlung statt Urteil): „Durchgewinkt", „Beim Pendler gewartet", „Drängler ausgewichen", „Mit einem Herz hinaus", darunter der Wagen.
+- **Zahlen:** `npm run balance` unverändert (86 / 56 / 73 %, Ausweicher 60 %, Kämpfer 0 %). Die Bots zählen nur das Erreichen des Halts.

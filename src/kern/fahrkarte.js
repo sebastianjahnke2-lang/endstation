@@ -5,6 +5,9 @@
 //   { art: 'pruefung', id, hell: true }            eine erfüllte Prüfung
 //   { art: 'tod', durch, hell: false }             ein Tod; wird hell, wenn man es einmal anders macht
 //   { art: 'ehrlich', durch, hell: true }          die ehrliche Antwort an den Begleiter, je Ursache eine
+//   { art: 'verstanden', durch, hell: true }       den Kontrolleur durchschaut oder eine Stärke verdient, je Gegner eine
+//
+// Lochungen sind eine Spur, keine Sperre: Am Halt steigt jeder aus. Sie bestimmen nur, was der Rückblick zeigt.
 //
 // Angebot: In jedem Wagen außer dem sicheren leuchtet ein Symbol auf einem Feld. Drauftreten heißt
 // annehmen. Die Prüfung gilt bis zum Verlassen des Wagens, dann wird ausgewertet. Vorbeigehen kostet nichts,
@@ -32,8 +35,8 @@ function ort(l, roh) {
 export const PRUEFUNGEN = ['aufregen', 'aussteigen', 'rempeln', 'draengeln', 'puenktlich', 'ruhe'];
 export const AUSSTEIGEN_ZUEGE = 3;
 export const PUENKTLICH_ZUEGE = 12;
-export const HALT_VERLANGT = 3; // so viele helle Lochungen verlangt der Schaffner am Halt
 const TODESARTEN = ['pendler', 'gruppe', 'draengler', 'kontrolleur', 'tuer'];
+export const VERSTEHBAR = ['pendler', 'gruppe', 'draengler', 'kontrolleur'];
 const SONDER_HOECHSTENS = 6;
 // Einführung: Solange die Fahrkarte keine Prüfung trägt, liegt das erste Angebot in Wagen 1 auf dem Feld
 // vor der Tür. Daran kommt niemand vorbei, und dort ist der Wagen schon ruhig. "Erst aussteigen lassen"
@@ -56,6 +59,8 @@ export function bereinigeFahrkarte(roh) {
       karte.lochungen.push(ort({ art: 'tod', durch: l.durch, hell: l.hell === true }, l));
     } else if (l.art === 'ehrlich' && TODESARTEN.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'ehrlich' && x.durch === l.durch)) {
       karte.lochungen.push(ort({ art: 'ehrlich', durch: l.durch, hell: true }, l));
+    } else if (l.art === 'verstanden' && VERSTEHBAR.includes(l.durch) && !karte.lochungen.some((x) => x.art === 'verstanden' && x.durch === l.durch)) {
+      karte.lochungen.push(ort({ art: 'verstanden', durch: l.durch, hell: true }, l));
     }
   }
   return karte;
@@ -156,4 +161,14 @@ export function lochungFuerTod(z, durch, ereignisse, phase) {
   if (karte.lochungen.filter((l) => l.art === 'tod').length >= SONDER_HOECHSTENS) return;
   karte.lochungen.push({ art: 'tod', durch, hell: false, wagen: z.wagen.art });
   ereignisse.push({ typ: 'gelocht', phase, art: 'tod', durch, hell: false });
+}
+
+// Verstehen locht: wer den Kontrolleur durchschaut oder eine Stärke verdient, bekommt eine helle Lochung,
+// je Gegner eine auf der Karte. In der Wiederholung zählt nichts.
+export function lochungFuerVerstehen(z, durch, ereignisse, phase) {
+  if (z.probe || !VERSTEHBAR.includes(durch)) return;
+  const karte = z.fahrkarte;
+  if (karte.lochungen.some((l) => l.art === 'verstanden' && l.durch === durch)) return;
+  karte.lochungen.push({ art: 'verstanden', durch, hell: true, wagen: z.wagen.art });
+  ereignisse.push({ typ: 'gelocht', phase, art: 'verstanden', durch, hell: true });
 }
